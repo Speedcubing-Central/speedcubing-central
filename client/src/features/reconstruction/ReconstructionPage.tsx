@@ -9,7 +9,7 @@ import { ReconstructionPlayer, type ReconstructionHandle, type ReconstructionPro
 import { api, apiError } from '../../lib/api';
 import { getScramble } from '../../lib/scramble';
 import { copyText } from '../../lib/clipboard';
-import { parseMoves, countMoveMetrics, calculateTps } from '../../lib/moveMetrics';
+import { parseMoves, countMoveMetrics, calculateTps, moveIndexAtCursor } from '../../lib/moveMetrics';
 import { useAuth } from '../../store/auth';
 import { useUi } from '../../store/ui';
 import { toast } from '../../store/toast';
@@ -150,6 +150,14 @@ export default function ReconstructionPage() {
     } finally {
       setScrambling(false);
     }
+  };
+
+  // Jumps the player to whichever move the cursor is in/next to, so clicking
+  // or arrow-keying around the solution text drives the 3D view directly.
+  const handleSolutionCursor = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (moves.length === 0) return;
+    const pos = e.currentTarget.selectionStart ?? 0;
+    handleRef.current?.jumpToMoveIndex(moveIndexAtCursor(solution, pos));
   };
 
   const handleShare = () => {
@@ -349,6 +357,9 @@ export default function ReconstructionPage() {
                     className="input font-mono text-sm flex-1 min-h-[6rem] resize-none"
                     value={solution}
                     onChange={(e) => setSolution(e.target.value)}
+                    onSelect={handleSolutionCursor}
+                    onClick={handleSolutionCursor}
+                    onKeyUp={handleSolutionCursor}
                     placeholder="Paste your solution here..."
                   />
                 </div>
@@ -397,9 +408,7 @@ export default function ReconstructionPage() {
             )}
           </div>
 
-          {/* RIGHT: 3D visualization + controls, sized to exactly what it needs. The
-              move-chip list is the one flexible element — the cube and every button
-              stay fully visible and only the chip list scrolls internally. */}
+          {/* RIGHT: 3D visualization + controls, sized to exactly what it needs. */}
           <div
             className="card p-6 flex flex-col items-center gap-4 min-h-0 overflow-y-auto mx-auto lg:mx-0"
             style={{ width: cubeSize + 48, maxWidth: '100%' }}
@@ -468,25 +477,6 @@ export default function ReconstructionPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="w-full flex-1 min-h-[2.25rem] overflow-y-auto flex flex-wrap content-start gap-1.5 justify-center px-1">
-                  {moves.map((m, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleRef.current?.jumpToMoveIndex(i)}
-                      className={clsx(
-                        'font-mono text-xs px-2 py-1 rounded transition-colors shrink-0',
-                        i === progress.index
-                          ? 'bg-accent text-white'
-                          : i < progress.index
-                            ? 'bg-card-hover text-muted'
-                            : 'bg-card-hover text-gray-300 hover:bg-border',
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
                 </div>
               </>
             )}

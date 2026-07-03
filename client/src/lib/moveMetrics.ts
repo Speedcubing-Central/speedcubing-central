@@ -48,6 +48,38 @@ export function parseMoves(solution: string): string[] {
   return solution.trim().split(/\s+/).filter(Boolean);
 }
 
+export interface MoveToken {
+  text: string;
+  start: number;
+  end: number;
+}
+
+// Tokenizes on whitespace like parseMoves, but keeps each token's character
+// offsets in the original (untrimmed) string — needed to map a textarea
+// cursor position back to the move it's sitting in.
+export function tokenizeMoves(input: string): MoveToken[] {
+  const tokens: MoveToken[] = [];
+  const re = /\S+/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(input))) {
+    tokens.push({ text: match[0], start: match.index, end: match.index + match[0].length });
+  }
+  return tokens;
+}
+
+// Maps a cursor offset (e.g. a textarea's selectionStart) to the index of the
+// move it's inside or about to type into. A cursor sitting in whitespace
+// between moves resolves to the next move; past the last move resolves to
+// that last move.
+export function moveIndexAtCursor(input: string, cursorPos: number): number {
+  const tokens = tokenizeMoves(input);
+  if (tokens.length === 0) return 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (cursorPos <= tokens[i].end) return i;
+  }
+  return tokens.length - 1;
+}
+
 export function countMoveMetrics(solution: string): MoveMetrics {
   const moves = parseMoves(solution);
   let qtm = 0;
