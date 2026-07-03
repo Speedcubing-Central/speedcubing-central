@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { getEvent, type ReconstructionDTO } from '@scc/shared';
-import { PageHeader, EventSelector, EmptyState, Skeleton } from '../../components/ui';
+import { WCA_EVENTS, UNOFFICIAL_EVENTS, getEvent, type ReconstructionDTO } from '@scc/shared';
+import { PageHeader, EmptyState, Skeleton } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { ReconstructionPlayer, type ReconstructionHandle, type ReconstructionProgress } from '../../components/CubeDiagram';
@@ -11,10 +11,13 @@ import { getScramble } from '../../lib/scramble';
 import { copyText } from '../../lib/clipboard';
 import { parseMoves, countMoveMetrics, calculateTps } from '../../lib/moveMetrics';
 import { useAuth } from '../../store/auth';
+import { useUi } from '../../store/ui';
 import { toast } from '../../store/toast';
 
 // Maps a WCA/unofficial event id to the cubing.js puzzle identifier used by
-// <twisty-player puzzle="...">. BF/OH events share their base puzzle's shape.
+// <twisty-player puzzle="...">. BF/OH events share their base puzzle's shape,
+// so they're kept here for old saved/shared links even though they're no
+// longer offered in the event picker below.
 const EVENT_TO_PUZZLE: Record<string, string> = {
   '222': '2x2x2', '333': '3x3x3', '444': '4x4x4', '555': '5x5x5', '666': '6x6x6', '777': '7x7x7',
   '333oh': '3x3x3', '333bf': '3x3x3', '444bf': '4x4x4', '555bf': '5x5x5',
@@ -25,18 +28,26 @@ function puzzleForEvent(eventId: string): string {
   return EVENT_TO_PUZZLE[eventId] ?? '3x3x3';
 }
 
+// 3x3 one-handed and the blindfolded events use the same puzzle as their main
+// event, so there's nothing to reconstruct differently — point people at 333/
+// 444/555 instead of offering redundant options.
+const REDUNDANT_EVENT_IDS = ['333oh', '333bf', '444bf', '555bf'];
+const RECONSTRUCTION_WCA_EVENTS = WCA_EVENTS.filter((e) => !REDUNDANT_EVENT_IDS.includes(e.id));
+
 const SPEEDS = [0.5, 1, 1.5, 2];
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Keeps the cube a good size at any viewport without ever overflowing its
-// column — recalculated on resize (e.g. toggling the sidebar).
+// The cube tile is sized to content (not stretched), so it just needs a
+// reasonable size per viewport tier — recalculated on resize (e.g. toggling
+// the sidebar changes how much width is left for the input column).
 function useResponsiveCubeSize(): number {
-  const [size, setSize] = useState(() => (typeof window === 'undefined' ? 320 : window.innerWidth < 640 ? 240 : 340));
+  const pick = () => (window.innerWidth < 640 ? 240 : window.innerWidth < 1024 ? 300 : 360);
+  const [size, setSize] = useState(() => (typeof window === 'undefined' ? 300 : pick()));
   useEffect(() => {
-    const onResize = () => setSize(window.innerWidth < 640 ? 240 : 340);
+    const onResize = () => setSize(pick());
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -48,6 +59,7 @@ export default function ReconstructionPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { focusMode } = useUi();
 
   const [title, setTitle] = useState('');
   const [eventId, setEventId] = useState('333');
@@ -82,6 +94,7 @@ export default function ReconstructionPage() {
         setEventId(r.data.eventId);
         setScramble(r.data.scramble);
         setSolution(r.data.solution);
+        setTimeInput(r.data.timeMs != null ? String(r.data.timeMs / 1000) : '');
         setSavedId(r.data.id);
       })
       .catch(() => setNotFound(true))
@@ -100,6 +113,8 @@ export default function ReconstructionPage() {
     if (ev) setEventId(ev);
     const t = searchParams.get('title');
     if (t) setTitle(t);
+    const time = searchParams.get('time');
+    if (time) setTimeInput(time);
     // Only ever consume the initial URL once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,6 +140,7 @@ export default function ReconstructionPage() {
   const moves = useMemo(() => parseMoves(solution), [solution]);
   const metrics = useMemo(() => countMoveMetrics(solution), [solution]);
   const seconds = parseFloat(timeInput.replace(',', '.'));
+  const hasValidTime = isFinite(seconds) && seconds > 0;
   const tps = calculateTps(metrics.htm, seconds);
 
   const handleGenerateScramble = async () => {
@@ -147,6 +163,7 @@ export default function ReconstructionPage() {
     params.set('solution', solution);
     params.set('event', eventId);
     if (title) params.set('title', title);
+    if (hasValidTime) params.set('time', timeInput);
     copyText(`${origin}/reconstruction?${params.toString()}`, 'Share link copied');
   };
 
@@ -155,6 +172,7 @@ export default function ReconstructionPage() {
   const handleSave = async () => {
     if (!user || !solution.trim()) return;
     setSaving(true);
+    const timeMs = hasValidTime ? Math.round(seconds * 1000) : null;
     try {
       if (savedId) {
         const { data } = await api.patch<ReconstructionDTO>(`/reconstructions/${savedId}`, {
@@ -162,11 +180,18 @@ export default function ReconstructionPage() {
           eventId,
           scramble,
           solution,
+          timeMs,
         });
         setSavedId(data.id);
         toast.success('Reconstruction updated');
       } else {
-        const { data } = await api.post<ReconstructionDTO>('/reconstructions', { title, eventId, scramble, solution });
+        const { data } = await api.post<ReconstructionDTO>('/reconstructions', {
+          title,
+          eventId,
+          scramble,
+          solution,
+          timeMs,
+        });
         setSavedId(data.id);
         toast.success('Reconstruction saved');
         navigate(`/reconstruction/${data.id}`, { replace: true });
@@ -184,6 +209,7 @@ export default function ReconstructionPage() {
     setEventId(r.eventId);
     setScramble(r.scramble);
     setSolution(r.solution);
+    setTimeInput(r.timeMs != null ? String(r.timeMs / 1000) : '');
     setSavedId(r.id);
     setShowSaved(false);
     navigate(`/reconstruction/${r.id}`);
@@ -209,26 +235,46 @@ export default function ReconstructionPage() {
     // the height to the viewport (each column scrolls internally instead of
     // the whole page). Below lg the columns stack and the page scrolls normally.
     <div className="flex flex-col gap-4 lg:h-[calc(100dvh-2rem)]">
-      <PageHeader
-        title="Reconstruction"
-        subtitle="3D playback of any scramble + solution, move by move."
-        action={
-          user && (
-            <button className="btn-ghost" onClick={() => setShowSaved(true)}>
-              <Icon name="book" size={16} />
-              My Reconstructions{mine.length > 0 ? ` (${mine.length})` : ''}
-            </button>
-          )
-        }
-      />
+      {/* Extra left padding when the sidebar is hidden — otherwise the floating
+          restore-sidebar button sits directly on top of the page title. */}
+      <div className={clsx(focusMode && 'md:pl-10')}>
+        <PageHeader
+          title="Reconstruction"
+          subtitle="3D playback of any scramble + solution, move by move."
+          action={
+            <div className="flex items-center gap-2 flex-wrap">
+              <button className="btn-ghost" onClick={handleShare}>
+                <Icon name="copy" size={16} />
+                Share
+              </button>
+              {user ? (
+                <button className="btn-primary" onClick={handleSave} disabled={saving || !solution.trim()}>
+                  <Icon name="check" size={16} />
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              ) : (
+                <Link to="/login" className="btn-ghost">
+                  Log in to save
+                </Link>
+              )}
+              {user && (
+                <button className="btn-ghost" onClick={() => setShowSaved(true)}>
+                  <Icon name="book" size={16} />
+                  My Reconstructions{mine.length > 0 ? ` (${mine.length})` : ''}
+                </button>
+              )}
+            </div>
+          }
+        />
+      </div>
 
       {notFound && (
         <EmptyState title="Reconstruction not found" hint="This link may be invalid, or the reconstruction was deleted." />
       )}
 
       {!notFound && (
-        <div className="grid lg:grid-cols-[minmax(0,380px)_1fr] gap-6 flex-1 min-h-0">
-          {/* LEFT: inputs */}
+        <div className="grid lg:grid-cols-[1fr_auto] gap-6 flex-1 min-h-0">
+          {/* LEFT: inputs — takes up whatever space the visualization doesn't need */}
           <div className="space-y-6 min-w-0 min-h-0 overflow-y-auto">
             {loadingShared ? (
               <div className="card p-5 space-y-3">
@@ -238,19 +284,36 @@ export default function ReconstructionPage() {
               </div>
             ) : (
               <div className="card p-5 space-y-4">
-                <div>
-                  <label className="label">Title (optional)</label>
-                  <input
-                    className="input"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Sub-10 single"
-                    maxLength={80}
-                  />
-                </div>
-                <div>
-                  <label className="label">Event</label>
-                  <EventSelector value={eventId} onChange={setEventId} />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Title (optional)</label>
+                    <input
+                      className="input"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. My reconstruction"
+                      maxLength={80}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Event</label>
+                    <select className="input" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+                      <optgroup label="WCA Events">
+                        {RECONSTRUCTION_WCA_EVENTS.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Unofficial Events">
+                        {UNOFFICIAL_EVENTS.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -270,7 +333,7 @@ export default function ReconstructionPage() {
                     rows={2}
                     value={scramble}
                     onChange={(e) => setScramble(e.target.value)}
-                    placeholder="R U R' U' F2 ..."
+                    placeholder="Paste your scramble here..."
                   />
                 </div>
 
@@ -278,10 +341,10 @@ export default function ReconstructionPage() {
                   <label className="label">Solution</label>
                   <textarea
                     className="input font-mono text-sm"
-                    rows={6}
+                    rows={8}
                     value={solution}
                     onChange={(e) => setSolution(e.target.value)}
-                    placeholder="Paste or type the moves that solve the scramble above..."
+                    placeholder="Paste your solution here..."
                   />
                 </div>
               </div>
@@ -329,8 +392,11 @@ export default function ReconstructionPage() {
             )}
           </div>
 
-          {/* RIGHT: 3D visualization + controls */}
-          <div className="card p-6 flex flex-col items-center gap-5 min-w-0 min-h-0 overflow-y-auto">
+          {/* RIGHT: 3D visualization + controls — sized to exactly what it needs */}
+          <div
+            className="card p-6 flex flex-col items-center gap-5 min-h-0 overflow-y-auto mx-auto lg:mx-0"
+            style={{ width: cubeSize + 48, maxWidth: '100%' }}
+          >
             {title && <h2 className="font-bold text-lg text-center">{title}</h2>}
 
             <ReconstructionPlayer
@@ -366,8 +432,8 @@ export default function ReconstructionPage() {
                   </button>
                 </div>
 
-                <div className="w-full max-w-md flex items-center gap-3">
-                  <span className="text-xs text-muted font-mono w-12 text-right shrink-0">
+                <div className="w-full flex items-center gap-2">
+                  <span className="text-xs text-muted font-mono w-10 text-right shrink-0">
                     {progress.index}/{progress.total}
                   </span>
                   <input
@@ -376,7 +442,7 @@ export default function ReconstructionPage() {
                     max={1000}
                     value={Math.round(progress.fraction * 1000)}
                     onChange={(e) => handleRef.current?.seekFraction(Number(e.target.value) / 1000)}
-                    className="flex-1 accent-accent"
+                    className="flex-1 accent-accent min-w-0"
                   />
                   <select
                     className="input !w-auto !py-1 text-xs shrink-0"
@@ -415,26 +481,6 @@ export default function ReconstructionPage() {
                 </div>
               </>
             )}
-
-            <div className="flex items-center gap-2 pt-4 border-t border-border w-full justify-center flex-wrap">
-              <button className="btn-ghost" onClick={handleShare}>
-                <Icon name="copy" size={16} />
-                Share
-              </button>
-              {user ? (
-                <button className="btn-primary" onClick={handleSave} disabled={saving || !solution.trim()}>
-                  <Icon name="check" size={16} />
-                  {saving ? (savedId ? 'Updating…' : 'Saving…') : savedId ? 'Update' : 'Save to my account'}
-                </button>
-              ) : (
-                <span className="text-xs text-muted">
-                  <Link to="/login" className="text-accent font-semibold">
-                    Log in
-                  </Link>{' '}
-                  to save reconstructions to your account.
-                </span>
-              )}
-            </div>
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ const createSchema = z.object({
   eventId: z.string().refine((id) => EVENT_IDS.includes(id), 'Invalid event'),
   scramble: z.string().max(2000),
   solution: z.string().min(1).max(20000),
+  timeMs: z.number().int().nonnegative().nullable().optional(),
 });
 
 const updateSchema = z.object({
@@ -19,6 +20,7 @@ const updateSchema = z.object({
   eventId: z.string().refine((id) => EVENT_IDS.includes(id), 'Invalid event').optional(),
   scramble: z.string().max(2000).optional(),
   solution: z.string().min(1).max(20000).optional(),
+  timeMs: z.number().int().nonnegative().nullable().optional(),
 });
 
 // GET /api/reconstructions — list current user's saved reconstructions
@@ -37,9 +39,9 @@ router.get('/', requireAuth, async (req, res, next) => {
 // POST /api/reconstructions — save a reconstruction
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { title, eventId, scramble, solution } = createSchema.parse(req.body);
+    const { title, eventId, scramble, solution, timeMs } = createSchema.parse(req.body);
     const reconstruction = await prisma.reconstruction.create({
-      data: { title, eventId, scramble, solution, userId: req.user!.sub },
+      data: { title, eventId, scramble, solution, timeMs, userId: req.user!.sub },
     });
     res.status(201).json(toReconstructionDTO(reconstruction));
   } catch (e) {

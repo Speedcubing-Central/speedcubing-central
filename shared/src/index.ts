@@ -100,6 +100,7 @@ export interface ReconstructionDTO {
   eventId: string;
   scramble: string;
   solution: string;
+  timeMs: number | null;
   createdAt: string;
 }
 

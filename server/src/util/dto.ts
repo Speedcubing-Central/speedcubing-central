@@ -45,6 +45,7 @@ export function toReconstructionDTO(r: Reconstruction): ReconstructionDTO {
     eventId: r.eventId,
     scramble: r.scramble,
     solution: r.solution,
+    timeMs: r.timeMs,
     createdAt: r.createdAt.toISOString(),
   };
 }
