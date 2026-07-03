@@ -246,30 +246,35 @@ export default function TimerPage() {
             </button>
           </div>
 
-          {/* Timer card — fills remaining vertical space */}
+          {/* Timer card — fills remaining vertical space. The digit display and
+              whatever sits below it (hint text, or the manual-entry input row)
+              are both shrink-0 so neither ever gets visually compressed to make
+              room for the other; min(8vw, 18vh) makes the digit size itself
+              height-aware so a short viewport shrinks it proactively instead of
+              relying on the overflow-y-auto fallback to catch the difference. */}
           {entryMode === 'keyboard' ? (
             <div
-              className="card flex-1 min-h-0 select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+              className="card flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
               onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen) engine.press(); }}
               onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen) engine.release(); }}
             >
               <div
-                className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8', colorClass)}
-                style={{ fontSize: 'clamp(3rem, 8vw, 9rem)' }}
+                className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
+                style={{ fontSize: 'clamp(3rem, min(8vw, 18vh), 9rem)' }}
               >
                 {display}
               </div>
-              <p className="text-muted text-sm mt-6 text-center px-4">{hintText}</p>
+              <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
             </div>
           ) : (
-            <div className="card flex-1 min-h-0 flex flex-col items-center justify-center gap-6">
+            <div className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6">
               <div
-                className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8', entryColorClass)}
-                style={{ fontSize: 'clamp(3rem, 8vw, 9rem)' }}
+                className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
+                style={{ fontSize: 'clamp(3rem, min(8vw, 18vh), 9rem)' }}
               >
                 {entryDisplay}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0">
                 <input
                   className="input font-mono text-center text-xl w-40"
                   placeholder="10.00"
