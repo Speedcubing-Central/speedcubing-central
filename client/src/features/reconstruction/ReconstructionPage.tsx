@@ -273,9 +273,15 @@ export default function ReconstructionPage() {
       )}
 
       {!notFound && (
-        <div className="grid lg:grid-cols-[1fr_auto] gap-6 flex-1 min-h-0">
-          {/* LEFT: inputs — takes up whatever space the visualization doesn't need */}
-          <div className="space-y-6 min-w-0 min-h-0 overflow-y-auto">
+        // grid-rows-[minmax(0,1fr)] is the key to fitting exactly: without it, the
+        // implicit row sizes to its tallest child's natural content height (ignoring
+        // the flex-1 height budget above), which is what let both columns overflow
+        // the page instead of scrolling internally within their own bounds.
+        <div className="grid lg:grid-cols-[1fr_auto] lg:grid-rows-[minmax(0,1fr)] gap-6 flex-1 min-h-0">
+          {/* LEFT: inputs — takes up whatever space the visualization doesn't need.
+              The solution textarea is the one flexible element, so Move Count & TPS
+              stays pinned in view instead of requiring a scroll to reach. */}
+          <div className="flex flex-col gap-4 min-w-0 min-h-0 overflow-y-auto">
             {loadingShared ? (
               <div className="card p-5 space-y-3">
                 <Skeleton className="h-5 w-1/3" />
@@ -283,8 +289,8 @@ export default function ReconstructionPage() {
                 <Skeleton className="h-20" />
               </div>
             ) : (
-              <div className="card p-5 space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
+              <div className="card p-5 flex flex-col gap-4 flex-1 min-h-0">
+                <div className="grid sm:grid-cols-2 gap-4 shrink-0">
                   <div>
                     <label className="label">Title (optional)</label>
                     <input
@@ -316,7 +322,7 @@ export default function ReconstructionPage() {
                   </div>
                 </div>
 
-                <div>
+                <div className="shrink-0">
                   <div className="flex items-center justify-between mb-1">
                     <label className="label mb-0">Scramble</label>
                     <button
@@ -329,7 +335,7 @@ export default function ReconstructionPage() {
                     </button>
                   </div>
                   <textarea
-                    className="input font-mono text-sm"
+                    className="input font-mono text-sm resize-none"
                     rows={2}
                     value={scramble}
                     onChange={(e) => setScramble(e.target.value)}
@@ -337,11 +343,10 @@ export default function ReconstructionPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="label">Solution</label>
+                <div className="flex flex-col gap-1 flex-1 min-h-0">
+                  <label className="label mb-0">Solution</label>
                   <textarea
-                    className="input font-mono text-sm"
-                    rows={8}
+                    className="input font-mono text-sm flex-1 min-h-[6rem] resize-none"
                     value={solution}
                     onChange={(e) => setSolution(e.target.value)}
                     placeholder="Paste your solution here..."
@@ -351,7 +356,7 @@ export default function ReconstructionPage() {
             )}
 
             {moves.length > 0 && (
-              <div className="card p-5 space-y-4">
+              <div className="card p-5 space-y-3 shrink-0">
                 <h3 className="font-bold">Move Count & TPS</h3>
                 <div className="grid grid-cols-5 gap-2">
                   {(
@@ -392,25 +397,29 @@ export default function ReconstructionPage() {
             )}
           </div>
 
-          {/* RIGHT: 3D visualization + controls — sized to exactly what it needs */}
+          {/* RIGHT: 3D visualization + controls, sized to exactly what it needs. The
+              move-chip list is the one flexible element — the cube and every button
+              stay fully visible and only the chip list scrolls internally. */}
           <div
-            className="card p-6 flex flex-col items-center gap-5 min-h-0 overflow-y-auto mx-auto lg:mx-0"
+            className="card p-6 flex flex-col items-center gap-4 min-h-0 overflow-y-auto mx-auto lg:mx-0"
             style={{ width: cubeSize + 48, maxWidth: '100%' }}
           >
-            {title && <h2 className="font-bold text-lg text-center">{title}</h2>}
+            {title && <h2 className="font-bold text-lg text-center shrink-0">{title}</h2>}
 
-            <ReconstructionPlayer
-              ref={handleRef}
-              scramble={scramble}
-              solution={solution}
-              puzzle={puzzle}
-              size={cubeSize}
-              onProgress={setProgress}
-            />
+            <div className="shrink-0">
+              <ReconstructionPlayer
+                ref={handleRef}
+                scramble={scramble}
+                solution={solution}
+                puzzle={puzzle}
+                size={cubeSize}
+                onProgress={setProgress}
+              />
+            </div>
 
             {moves.length > 0 && (
               <>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button className="btn-ghost !p-2" title="Jump to start" onClick={() => handleRef.current?.jumpToStart()}>
                     <Icon name="skipBack" size={18} />
                   </button>
@@ -432,7 +441,7 @@ export default function ReconstructionPage() {
                   </button>
                 </div>
 
-                <div className="w-full flex items-center gap-2">
+                <div className="w-full flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted font-mono w-10 text-right shrink-0">
                     {progress.index}/{progress.total}
                   </span>
@@ -461,13 +470,13 @@ export default function ReconstructionPage() {
                   </select>
                 </div>
 
-                <div className="w-full max-h-28 overflow-y-auto flex flex-wrap gap-1.5 justify-center px-1">
+                <div className="w-full flex-1 min-h-[2.25rem] overflow-y-auto flex flex-wrap content-start gap-1.5 justify-center px-1">
                   {moves.map((m, i) => (
                     <button
                       key={i}
                       onClick={() => handleRef.current?.jumpToMoveIndex(i)}
                       className={clsx(
-                        'font-mono text-xs px-2 py-1 rounded transition-colors',
+                        'font-mono text-xs px-2 py-1 rounded transition-colors shrink-0',
                         i === progress.index
                           ? 'bg-accent text-white'
                           : i < progress.index
