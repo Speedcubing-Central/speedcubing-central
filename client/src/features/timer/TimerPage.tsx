@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { formatTime, getEvent, type Penalty, type SolveDTO } from '@scc/shared';
 import { useSettings } from '../../store/settings';
@@ -20,6 +20,29 @@ import { AverageDetail } from './AverageDetail';
 import { copyText, formatSolveCopy } from './copy';
 
 const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
+
+// Sizes the timer digits to whatever room is actually left in the card,
+// instead of guessing at viewport-relative units. `reservedBelow` is the
+// pixel height of whatever else shares the card (hint text or the manual-
+// entry input row) — measuring the real container avoids ever having to
+// re-guess a vh percentage against a screen we can't see.
+function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reservedBelow: number): number {
+  const [size, setSize] = useState(144); // 9rem, matches the old max
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const recompute = () => {
+      const heightCap = el.clientHeight - reservedBelow;
+      const widthCap = el.clientWidth * 0.34;
+      setSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [containerRef, reservedBelow]);
+  return size;
+}
 
 function scrambleFontSize(scramble: string): string {
   const n = scramble.length;
@@ -84,6 +107,11 @@ export default function TimerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const anyModalOpen = showSessions || showSettings || detailIndex !== null || avgView !== null;
+
+  // Keyboard mode only reserves room for the hint line below the digits;
+  // manual mode also needs the input + button row, so it gets less headroom.
+  const timerCardRef = useRef<HTMLDivElement>(null);
+  const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -249,28 +277,30 @@ export default function TimerPage() {
           {/* Timer card — fills remaining vertical space. The digit display and
               whatever sits below it (hint text, or the manual-entry input row)
               are both shrink-0 so neither ever gets visually compressed to make
-              room for the other; min(8vw, 18vh) makes the digit size itself
-              height-aware so a short viewport shrinks it proactively instead of
-              relying on the overflow-y-auto fallback to catch the difference. */}
+              room for the other; digitFontSize is measured against the card's
+              actual rendered height (see useFittedFontSize) rather than guessed
+              viewport-relative units, so it can't overflow regardless of screen
+              size. overflow-y-auto stays as a last-resort fallback. */}
           {entryMode === 'keyboard' ? (
             <div
+              ref={timerCardRef}
               className="card flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
               onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen) engine.press(); }}
               onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen) engine.release(); }}
             >
               <div
                 className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
-                style={{ fontSize: 'clamp(3rem, min(8vw, 18vh), 9rem)' }}
+                style={{ fontSize: digitFontSize }}
               >
                 {display}
               </div>
               <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
             </div>
           ) : (
-            <div className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6">
+            <div ref={timerCardRef} className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6">
               <div
                 className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
-                style={{ fontSize: 'clamp(3rem, min(8vw, 18vh), 9rem)' }}
+                style={{ fontSize: digitFontSize }}
               >
                 {entryDisplay}
               </div>
