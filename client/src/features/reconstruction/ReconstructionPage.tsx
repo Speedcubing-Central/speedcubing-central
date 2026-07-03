@@ -366,46 +366,44 @@ export default function ReconstructionPage() {
               </div>
             )}
 
-            {moves.length > 0 && (
-              <div className="card p-5 space-y-3 shrink-0">
-                <h3 className="font-bold">Move Count & TPS</h3>
-                <div className="grid grid-cols-5 gap-2">
-                  {(
-                    [
-                      ['QTM', metrics.qtm],
-                      ['HTM', metrics.htm],
-                      ['STM', metrics.stm],
-                      ['QSTM', metrics.qstm],
-                      ['ETM', metrics.etm],
-                    ] as const
-                  ).map(([label, value]) => (
-                    <div key={label} className="bg-card-hover rounded-lg p-2 text-center">
-                      <div className="text-lg font-bold">{value}</div>
-                      <div className="text-[10px] text-muted font-semibold mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-end gap-3 flex-wrap">
-                  <div>
-                    <label className="label">Your time (seconds)</label>
-                    <input
-                      className="input max-w-[140px]"
-                      value={timeInput}
-                      onChange={(e) => setTimeInput(e.target.value)}
-                      placeholder="e.g. 12.34"
-                      inputMode="decimal"
-                    />
+            <div className="card p-5 space-y-3 shrink-0">
+              <h3 className="font-bold">Move Count & TPS</h3>
+              <div className="grid grid-cols-5 gap-2">
+                {(
+                  [
+                    ['QTM', metrics.qtm],
+                    ['HTM', metrics.htm],
+                    ['STM', metrics.stm],
+                    ['QSTM', metrics.qstm],
+                    ['ETM', metrics.etm],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label} className="bg-card-hover rounded-lg p-2 text-center">
+                    <div className="text-lg font-bold">{moves.length > 0 ? value : '—'}</div>
+                    <div className="text-[10px] text-muted font-semibold mt-0.5">{label}</div>
                   </div>
-                  {tps !== null && (
-                    <div className="bg-accent/15 text-accent rounded-lg px-4 py-2">
-                      <div className="text-2xl font-bold leading-tight">{tps.toFixed(2)}</div>
-                      <div className="text-xs font-semibold">TPS (HTM ÷ time)</div>
-                    </div>
-                  )}
-                </div>
+                ))}
               </div>
-            )}
+
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="label">Your time (seconds)</label>
+                  <input
+                    className="input max-w-[140px]"
+                    value={timeInput}
+                    onChange={(e) => setTimeInput(e.target.value)}
+                    placeholder="e.g. 12.34"
+                    inputMode="decimal"
+                  />
+                </div>
+                {moves.length > 0 && tps !== null && (
+                  <div className="bg-accent/15 text-accent rounded-lg px-4 py-2">
+                    <div className="text-2xl font-bold leading-tight">{tps.toFixed(2)}</div>
+                    <div className="text-xs font-semibold">TPS (HTM ÷ time)</div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* RIGHT: 3D visualization + controls, sized to exactly what it needs. */}
