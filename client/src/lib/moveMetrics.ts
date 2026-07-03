@@ -67,17 +67,18 @@ export function tokenizeMoves(input: string): MoveToken[] {
   return tokens;
 }
 
-// Maps a cursor offset (e.g. a textarea's selectionStart) to the index of the
-// move it's inside or about to type into. A cursor sitting in whitespace
-// between moves resolves to the next move; past the last move resolves to
-// that last move.
+// Maps a cursor offset (e.g. a textarea's selectionStart) to a "moves
+// completed" count, for jumping a player to match: every move that ends at or
+// before the cursor counts as done (so a cursor right after "R2" counts R2
+// itself as done), and a move the cursor is still inside of does not.
 export function moveIndexAtCursor(input: string, cursorPos: number): number {
   const tokens = tokenizeMoves(input);
-  if (tokens.length === 0) return 0;
-  for (let i = 0; i < tokens.length; i++) {
-    if (cursorPos <= tokens[i].end) return i;
+  let completed = 0;
+  for (const token of tokens) {
+    if (token.end > cursorPos) break;
+    completed++;
   }
-  return tokens.length - 1;
+  return completed;
 }
 
 export function countMoveMetrics(solution: string): MoveMetrics {
