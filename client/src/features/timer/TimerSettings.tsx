@@ -25,6 +25,37 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
   );
 }
 
+// Two/three-way pill selector — same style as the Battle settings modal.
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+}) {
+  return (
+    <div className={clsx('flex gap-1 rounded-lg bg-card-hover p-1', disabled && 'opacity-40')}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          disabled={disabled}
+          onClick={() => onChange(opt.value)}
+          className={clsx(
+            'px-3 py-1 rounded text-xs font-medium transition-colors',
+            value === opt.value ? 'bg-accent text-white' : 'text-muted hover:text-gray-200',
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Row({ label, hint, children, disabled }: { label: string; hint?: string; children: React.ReactNode; disabled?: boolean }) {
   return (
     <div className={clsx('flex items-center justify-between gap-4 py-2.5 border-b border-border/60 last:border-0', disabled && 'opacity-50')}>
@@ -50,15 +81,15 @@ export function TimerSettings({ open, onClose }: { open: boolean; onClose: () =>
         </Row>
 
         <Row label="Inspection counting" hint="Count down from 15 or up from 0" disabled={!s.inspection}>
-          <select
-            className={selectCls}
+          <Segmented
             disabled={!s.inspection}
             value={s.inspectionDirection}
-            onChange={(e) => s.set({ inspectionDirection: e.target.value as 'down' | 'up' })}
-          >
-            <option value="down">Count down</option>
-            <option value="up">Count up</option>
-          </select>
+            onChange={(v) => s.set({ inspectionDirection: v })}
+            options={[
+              { value: 'down', label: 'Count down' },
+              { value: 'up', label: 'Count up' },
+            ]}
+          />
         </Row>
 
         <Row label="Inspection voice alerts" hint='Speaks "8 seconds" and "12 seconds"' disabled={!s.inspection}>
@@ -66,10 +97,14 @@ export function TimerSettings({ open, onClose }: { open: boolean; onClose: () =>
         </Row>
 
         <Row label="Time entry" hint="Spacebar/touch timing or type your times">
-          <select className={selectCls} value={s.entryMode} onChange={(e) => s.set({ entryMode: e.target.value as 'keyboard' | 'typing' })}>
-            <option value="keyboard">Keyboard / touch</option>
-            <option value="typing">Type times</option>
-          </select>
+          <Segmented
+            value={s.entryMode}
+            onChange={(v) => s.set({ entryMode: v })}
+            options={[
+              { value: 'keyboard', label: 'Timer' },
+              { value: 'typing', label: 'Type in' },
+            ]}
+          />
         </Row>
 
         <Row label="Hold to start" hint="Require holding before the timer arms">
