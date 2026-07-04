@@ -252,7 +252,7 @@ export default function TimerPage() {
       </div>
 
       {!user && (
-        <div className="shrink-0 text-xs text-muted bg-card border border-border rounded-lg px-3 py-2">
+        <div className="shrink-0 text-xs text-muted bg-gray-100 dark:bg-card border border-gray-200 dark:border-border rounded-lg px-3 py-2">
           You're not logged in — solves are saved locally in this browser only.
         </div>
       )}

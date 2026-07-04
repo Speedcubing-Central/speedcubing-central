@@ -497,7 +497,7 @@ export default function ReconstructionPage() {
               onClick={() => handleLoadSaved(r)}
               className={clsx(
                 'w-full text-left p-3 rounded-lg border transition-colors flex items-start justify-between gap-2',
-                savedId === r.id ? 'border-accent bg-accent/10' : 'border-border hover:bg-card-hover',
+                savedId === r.id ? 'border-accent bg-accent/10' : 'border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover',
               )}
             >
               <div className="min-w-0">

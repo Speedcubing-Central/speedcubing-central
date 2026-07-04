@@ -55,7 +55,7 @@ export function StatsTable({
         </thead>
         <tbody className="font-mono">
           {/* Single row */}
-          <tr className="border-t border-border/60 text-right">
+          <tr className="border-t border-gray-200 dark:border-border/60 text-right">
             <td className="text-left font-sans font-semibold py-2">single</td>
             <Cell value={fmt(currentSingle, solvePrecision)} onClick={solves.length ? () => onOpenSolve(0) : undefined} accent />
             <Cell value={fmt(single.best, solvePrecision)} onClick={bestSingleIdx != null ? () => onOpenSolve(bestSingleIdx) : undefined} />
@@ -68,7 +68,7 @@ export function StatsTable({
             const label = isMo3 ? 'mo3' : `ao${r.size}`;
             const bestIdx = bestAverageIndex(solves, r.size);
             return (
-              <tr key={r.size} className="border-t border-border/60 text-right">
+              <tr key={r.size} className="border-t border-gray-200 dark:border-border/60 text-right">
                 <td className="text-left font-sans font-semibold py-2">{label}</td>
                 <Cell
                   value={fmt(r.current, solvePrecision)}

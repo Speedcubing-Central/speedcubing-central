@@ -36,7 +36,7 @@ export default function Landing() {
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
         {FEATURES.map((f) => (
-          <div key={f.title} className="card p-6 hover:bg-card-hover transition-colors">
+          <div key={f.title} className="card p-6 hover:bg-gray-100 dark:hover:bg-card-hover transition-colors">
             <div className="w-11 h-11 rounded-lg bg-accent/15 text-accent grid place-items-center mb-3">
               <Icon name={f.icon} size={24} />
             </div>

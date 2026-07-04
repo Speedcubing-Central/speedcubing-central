@@ -79,7 +79,7 @@ export function SolveDetail({
               <button
                 key={a.size}
                 onClick={() => onOpenAverage(a)}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:border-accent"
+                className="rounded-lg border border-gray-200 dark:border-border px-3 py-1.5 text-sm hover:border-accent"
               >
                 <span className="text-muted">{a.size === 3 ? 'mo3' : `ao${a.size}`}: </span>
                 <span className="font-mono">
@@ -91,7 +91,7 @@ export function SolveDetail({
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-border pt-3">
+      <div className="flex items-center justify-between border-t border-gray-200 dark:border-border pt-3">
         <button className="btn-ghost" onClick={() => copyText(formatSolveCopy(solve, solvePrecision), 'Solve copied')}>
           <Icon name="copy" size={15} /> Copy solve
         </button>

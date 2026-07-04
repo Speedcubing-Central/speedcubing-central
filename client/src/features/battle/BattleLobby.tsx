@@ -104,7 +104,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
             onClick={() => setIsPublic((v) => !v)}
             className={clsx(
               'relative w-10 h-6 rounded-full transition-colors shrink-0',
-              isPublic ? 'bg-accent' : 'bg-card-hover',
+              isPublic ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover',
             )}
           >
             <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', isPublic && 'translate-x-4')} />
@@ -216,7 +216,7 @@ export default function BattleLobby() {
             <Icon name="plus" size={16} />
             Create Room
           </button>
-          <button className="btn flex items-center gap-2 border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-card-hover transition-colors" onClick={() => setShowJoin(true)}>
+          <button className="btn flex items-center gap-2 border border-gray-200 dark:border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-card-hover transition-colors" onClick={() => setShowJoin(true)}>
             <Icon name="arrowRight" size={16} />
             Join Private Room
           </button>
@@ -264,7 +264,7 @@ export default function BattleLobby() {
           <div>🥉 3rd place — <span className="text-gray-900 dark:text-white">+2 pts</span></div>
           <div>4th+ place — <span className="text-gray-900 dark:text-white">+1 pt</span></div>
           <div>DNF — <span className="text-gray-900 dark:text-white">+0 pts</span></div>
-          <div className="pt-1 border-t border-border mt-2">Points are tracked for the lifetime of the room session.</div>
+          <div className="pt-1 border-t border-gray-200 dark:border-border mt-2">Points are tracked for the lifetime of the room session.</div>
         </div>
       </div>
 

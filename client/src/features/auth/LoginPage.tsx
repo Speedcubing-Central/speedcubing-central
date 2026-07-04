@@ -76,7 +76,7 @@ export default function LoginPage() {
             Continue with WCA
           </a>
         ) : (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-border bg-card-hover/40 px-3 py-2 text-xs text-muted">
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-gray-200 dark:border-border bg-gray-100 dark:bg-card-hover/40 px-3 py-2 text-xs text-muted">
             <Icon name="cube" size={16} className="mt-0.5 shrink-0" />
             <span>
               WCA sign-in is unavailable on this server (no <span className="font-mono">WCA_CLIENT_ID</span>{' '}

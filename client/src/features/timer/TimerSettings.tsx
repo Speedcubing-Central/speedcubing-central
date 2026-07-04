@@ -11,7 +11,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       onClick={() => onChange(!checked)}
       className={clsx(
         'relative w-10 h-6 rounded-full transition-colors shrink-0',
-        checked ? 'bg-accent' : 'bg-card-hover',
+        checked ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover',
         disabled && 'opacity-40 cursor-not-allowed',
       )}
     >

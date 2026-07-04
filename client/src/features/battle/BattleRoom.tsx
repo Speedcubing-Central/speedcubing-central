@@ -50,7 +50,7 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
             role="switch"
             aria-checked={settings.inspection}
             onClick={() => settings.set({ inspection: !settings.inspection })}
-            className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.inspection ? 'bg-accent' : 'bg-card-hover')}
+            className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.inspection ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover')}
           >
             <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', settings.inspection && 'translate-x-4')} />
           </button>
@@ -77,7 +77,7 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
                 role="switch"
                 aria-checked={settings.inspectionVoice}
                 onClick={() => settings.set({ inspectionVoice: !settings.inspectionVoice })}
-                className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.inspectionVoice ? 'bg-accent' : 'bg-card-hover')}
+                className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.inspectionVoice ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover')}
               >
                 <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', settings.inspectionVoice && 'translate-x-4')} />
               </button>
@@ -108,7 +108,7 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
               role="switch"
               aria-checked={settings.holdToStart}
               onClick={() => settings.set({ holdToStart: !settings.holdToStart })}
-              className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.holdToStart ? 'bg-accent' : 'bg-card-hover')}
+              className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.holdToStart ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover')}
             >
               <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', settings.holdToStart && 'translate-x-4')} />
             </button>
@@ -322,9 +322,9 @@ export default function BattleRoom() {
     if (engine.phase === 'holding') return 'text-red-400';
     if (engine.phase === 'ready') return 'text-green-400';
     if (engine.phase === 'inspecting') return 'text-yellow-400';
-    if (engine.phase === 'running') return 'text-white';
+    if (engine.phase === 'running') return 'text-gray-900 dark:text-white';
     if (submitted) return 'text-green-400';
-    return 'text-gray-300';
+    return 'text-gray-600 dark:text-gray-300';
   }
 
   function timerDisplay() {
@@ -366,7 +366,7 @@ export default function BattleRoom() {
             onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
           />
           <button className="btn-primary w-full" onClick={handleNameSubmit}>Join</button>
-          <button className="w-full text-sm text-muted hover:text-gray-200 transition-colors" onClick={() => navigate('/battle')}>
+          <button className="w-full text-sm text-muted hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onClick={() => navigate('/battle')}>
             Back to lobby
           </button>
         </div>
@@ -400,7 +400,7 @@ export default function BattleRoom() {
           </div>
           {!connected && <span className="text-xs text-red-400">Disconnected</span>}
           <button
-            className="text-muted hover:text-gray-200 transition-colors p-1"
+            className="text-muted hover:text-gray-700 dark:hover:text-gray-200 transition-colors p-1"
             title="Settings"
             onClick={() => setShowSettings(true)}
           >
@@ -469,13 +469,13 @@ export default function BattleRoom() {
               </div>
               <div className="flex gap-2">
                 <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-border hover:bg-card-hover transition-colors"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors"
                   onClick={() => submitSolve('PLUS2')}
                 >
                   +2
                 </button>
                 <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-border hover:bg-card-hover transition-colors text-red-400"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
                   onClick={() => submitSolve('DNF')}
                 >
                   DNF
@@ -502,7 +502,7 @@ export default function BattleRoom() {
               />
               <div className="flex gap-2">
                 <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-border hover:bg-card-hover transition-colors text-red-400"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
                   onClick={() => { setPendingTime(0); setPendingPenalty('DNF'); setAwaitingSubmit(true); setTypingInput(''); }}
                 >
                   DNF
@@ -595,7 +595,7 @@ export default function BattleRoom() {
                     key={p.id}
                     className={clsx(
                       'flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
-                      isMe ? 'bg-accent/10 border border-accent/30' : 'hover:bg-card-hover',
+                      isMe ? 'bg-accent/10 border border-accent/30' : 'hover:bg-gray-100 dark:hover:bg-card-hover',
                     )}
                   >
                     <span className="w-5 text-center text-sm">{MEDALS[i] ?? `${i + 1}.`}</span>

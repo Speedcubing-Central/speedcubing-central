@@ -25,7 +25,7 @@ export function AverageDetail({ view, event, onClose }: { view: SolveAverage; ev
           return (
             <div
               key={s.id}
-              className={`grid grid-cols-[28px_72px_1fr] items-baseline gap-2 rounded-lg border border-border px-3 py-2 ${dropped ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[28px_72px_1fr] items-baseline gap-2 rounded-lg border border-gray-200 dark:border-border px-3 py-2 ${dropped ? 'opacity-50' : ''}`}
             >
               <span className="text-muted text-xs">{i + 1}.</span>
               <span className="font-mono">
