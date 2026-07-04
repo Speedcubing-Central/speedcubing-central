@@ -199,70 +199,77 @@ export default function BattleLobby() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold mb-1">Battle Mode</h1>
-        <p className="text-muted text-sm">Race against others on identical scrambles and climb the leaderboard.</p>
-      </div>
-
-      <div className="flex gap-3">
-        <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
-          <Icon name="plus" size={16} />
-          Create Room
-        </button>
-        <button className="btn flex items-center gap-2 border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-card-hover transition-colors" onClick={() => setShowJoin(true)}>
-          <Icon name="arrowRight" size={16} />
-          Join Private Room
-        </button>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="label">Public Rooms</h2>
-          <span className="text-xs text-muted">Refreshes every 5 s</span>
+    // The modals are rendered as siblings OUTSIDE this space-y-8 wrapper on
+    // purpose: space-y's margin-top selector doesn't exclude position:fixed
+    // children, so a modal rendered as a later child here would get pushed
+    // down from the viewport's top edge by that margin — leaving a gap at
+    // the very top of the screen that the modal's backdrop doesn't cover.
+    <>
+      <div className="max-w-3xl mx-auto space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Battle Mode</h1>
+          <p className="text-muted text-sm">Race against others on identical scrambles and climb the leaderboard.</p>
         </div>
 
-        {publicRooms.length === 0 ? (
-          <div className="card p-4 text-sm text-muted text-center">No rooms found</div>
-        ) : (
-          <div className="space-y-2">
-            {publicRooms.map((room) => (
-              <div key={room.code} className="card p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{room.name}</div>
-                  <div className="text-xs text-muted mt-0.5">
-                    {[...WCA_EVENTS, ...UNOFFICIAL_EVENTS].find((e) => e.id === room.eventId)?.name ?? room.eventId}
-                    {' · '}
-                    {room.participantCount} / 10 player{room.participantCount !== 1 ? 's' : ''}
-                  </div>
-                </div>
-                <StatusBadge status={room.status} />
-                <div className="text-xs font-mono text-muted">{room.code}</div>
-                <button
-                  className="btn-primary text-sm px-3 py-1.5"
-                  onClick={() => joinPublic(room.code)}
-                  disabled={room.participantCount >= 10}
-                >
-                  {room.participantCount >= 10 ? 'Full' : 'Join'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        <div className="flex gap-3">
+          <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
+            <Icon name="plus" size={16} />
+            Create Room
+          </button>
+          <button className="btn flex items-center gap-2 border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-card-hover transition-colors" onClick={() => setShowJoin(true)}>
+            <Icon name="arrowRight" size={16} />
+            Join Private Room
+          </button>
+        </div>
 
-      <div className="card p-4 text-xs text-muted space-y-1">
-        <div className="font-medium text-sm text-gray-900 dark:text-gray-200 mb-2">How points work</div>
-        <div>🥇 1st place — <span className="text-gray-900 dark:text-white">+5 pts</span></div>
-        <div>🥈 2nd place — <span className="text-gray-900 dark:text-white">+3 pts</span></div>
-        <div>🥉 3rd place — <span className="text-gray-900 dark:text-white">+2 pts</span></div>
-        <div>4th+ place — <span className="text-gray-900 dark:text-white">+1 pt</span></div>
-        <div>DNF — <span className="text-gray-900 dark:text-white">+0 pts</span></div>
-        <div className="pt-1 border-t border-border mt-2">Points are tracked for the lifetime of the room session.</div>
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="label">Public Rooms</h2>
+            <span className="text-xs text-muted">Refreshes every 5 s</span>
+          </div>
+
+          {publicRooms.length === 0 ? (
+            <div className="card p-4 text-sm text-muted text-center">No rooms found</div>
+          ) : (
+            <div className="space-y-2">
+              {publicRooms.map((room) => (
+                <div key={room.code} className="card p-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{room.name}</div>
+                    <div className="text-xs text-muted mt-0.5">
+                      {[...WCA_EVENTS, ...UNOFFICIAL_EVENTS].find((e) => e.id === room.eventId)?.name ?? room.eventId}
+                      {' · '}
+                      {room.participantCount} / 10 player{room.participantCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <StatusBadge status={room.status} />
+                  <div className="text-xs font-mono text-muted">{room.code}</div>
+                  <button
+                    className="btn-primary text-sm px-3 py-1.5"
+                    onClick={() => joinPublic(room.code)}
+                    disabled={room.participantCount >= 10}
+                  >
+                    {room.participantCount >= 10 ? 'Full' : 'Join'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card p-4 text-xs text-muted space-y-1">
+          <div className="font-medium text-sm text-gray-900 dark:text-gray-200 mb-2">How points work</div>
+          <div>🥇 1st place — <span className="text-gray-900 dark:text-white">+5 pts</span></div>
+          <div>🥈 2nd place — <span className="text-gray-900 dark:text-white">+3 pts</span></div>
+          <div>🥉 3rd place — <span className="text-gray-900 dark:text-white">+2 pts</span></div>
+          <div>4th+ place — <span className="text-gray-900 dark:text-white">+1 pt</span></div>
+          <div>DNF — <span className="text-gray-900 dark:text-white">+0 pts</span></div>
+          <div className="pt-1 border-t border-border mt-2">Points are tracked for the lifetime of the room session.</div>
+        </div>
       </div>
 
       <CreateRoomModal open={showCreate} onClose={() => setShowCreate(false)} />
       <JoinRoomModal open={showJoin} onClose={() => setShowJoin(false)} />
-    </div>
+    </>
   );
 }
