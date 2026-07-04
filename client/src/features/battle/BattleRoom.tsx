@@ -59,12 +59,12 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
           <>
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium">Count direction</div>
-              <div className="flex gap-1 rounded-lg bg-card-hover p-1">
+              <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-card-hover p-1">
                 {(['down', 'up'] as const).map((v) => (
                   <button
                     key={v}
                     onClick={() => settings.set({ inspectionDirection: v })}
-                    className={clsx('px-3 py-1 rounded text-xs font-medium transition-colors', settings.inspectionDirection === v ? 'bg-accent text-white' : 'text-muted hover:text-gray-200')}
+                    className={clsx('px-3 py-1 rounded text-xs font-medium transition-colors', settings.inspectionDirection === v ? 'bg-accent text-white' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200')}
                   >
                     {v === 'down' ? 'Count down' : 'Count up'}
                   </button>
@@ -86,12 +86,12 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
         )}
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">Time entry</div>
-          <div className="flex gap-1 rounded-lg bg-card-hover p-1">
+          <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-card-hover p-1">
             {(['keyboard', 'typing'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => settings.set({ entryMode: v })}
-                className={clsx('px-3 py-1 rounded text-xs font-medium transition-colors', settings.entryMode === v ? 'bg-accent text-white' : 'text-muted hover:text-gray-200')}
+                className={clsx('px-3 py-1 rounded text-xs font-medium transition-colors', settings.entryMode === v ? 'bg-accent text-white' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200')}
               >
                 {v === 'keyboard' ? 'Timer' : 'Type in'}
               </button>

@@ -38,7 +38,7 @@ function Segmented<T extends string>({
   disabled?: boolean;
 }) {
   return (
-    <div className={clsx('flex gap-1 rounded-lg bg-card-hover p-1', disabled && 'opacity-40')}>
+    <div className={clsx('flex gap-1 rounded-lg bg-gray-100 dark:bg-card-hover p-1', disabled && 'opacity-40')}>
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -46,7 +46,7 @@ function Segmented<T extends string>({
           onClick={() => onChange(opt.value)}
           className={clsx(
             'px-3 py-1 rounded text-xs font-medium transition-colors',
-            value === opt.value ? 'bg-accent text-white' : 'text-muted hover:text-gray-200',
+            value === opt.value ? 'bg-accent text-white' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200',
           )}
         >
           {opt.label}

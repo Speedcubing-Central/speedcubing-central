@@ -268,7 +268,7 @@ function StatCard({
     accent === 'red' ? 'text-red-400' : accent === 'green' ? 'text-green-400' : '',
   ].join(' ');
   return (
-    <div className="bg-bg border border-border rounded-lg p-3">
+    <div className="bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3">
       <div className="text-xs text-muted mb-1">{label}</div>
       <div className={valueClass}>{value}</div>
     </div>

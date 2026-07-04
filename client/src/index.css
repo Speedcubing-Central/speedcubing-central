@@ -53,8 +53,14 @@ html:not(.dark) body {
   .skeleton {
     @apply animate-pulse bg-card-hover rounded;
   }
+  html:not(.dark) .skeleton {
+    @apply bg-gray-200;
+  }
   .kbd {
     @apply inline-block bg-card-hover border border-border rounded px-1.5 py-0.5 text-xs font-mono font-semibold text-muted;
+  }
+  html:not(.dark) .kbd {
+    @apply bg-gray-100 border-gray-300;
   }
 }
 

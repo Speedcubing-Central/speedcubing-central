@@ -62,7 +62,7 @@ export function SolveDetail({
               <Icon name="copy" size={12} /> copy
             </button>
           </div>
-          <div className="font-mono text-sm bg-bg border border-border rounded-lg p-3 break-words">
+          <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words">
             {normalizeScramble(solve.scramble) || '—'}
           </div>
         </div>

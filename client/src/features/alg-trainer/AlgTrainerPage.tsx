@@ -224,8 +224,8 @@ function AlgChip({ alg, selected, onClick }: { alg: string; selected?: boolean; 
       className={clsx(
         'font-mono text-sm rounded px-3 py-2 break-all leading-relaxed',
         onClick ? 'cursor-pointer transition-colors' : '',
-        selected ? 'bg-accent/20 ring-1 ring-accent' : 'bg-card-hover',
-        onClick && !selected ? 'hover:bg-card-hover/80' : '',
+        selected ? 'bg-accent/20 ring-1 ring-accent' : 'bg-gray-100 dark:bg-card-hover',
+        onClick && !selected ? 'hover:bg-gray-200 dark:hover:bg-card-hover/80' : '',
       )}
     >
       {alg}
@@ -243,7 +243,7 @@ function SlotTabs({ slotAlts }: { slotAlts: Record<string, string[]> }) {
         {slots.map((s) => (
           <button key={s} onClick={() => setActive(s)}
             className={clsx('px-2.5 py-1 rounded text-xs font-semibold transition-colors',
-              active === s ? 'bg-accent text-white' : 'bg-card-hover text-muted hover:text-primary')}>
+              active === s ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
             {s}
           </button>
         ))}
@@ -295,7 +295,7 @@ function CaseModal({
                   onClick={() => onPrefChange({ status: s })}
                   className={clsx(
                     'px-3 py-1.5 rounded text-xs font-semibold transition-colors',
-                    currentStatus === s ? STATUS_COLORS[s] + ' ring-1 ring-current' : 'bg-card-hover text-muted hover:text-primary',
+                    currentStatus === s ? STATUS_COLORS[s] + ' ring-1 ring-current' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary',
                   )}
                 >
                   {STATUS_LABELS[s]}
@@ -428,7 +428,7 @@ function CaseBrowser({
         {groups.length > 2 && groups.map((g) => (
           <button key={g} onClick={() => setGroup(g)}
             className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
-              group === g ? 'bg-accent text-white' : 'bg-card-hover text-muted hover:text-primary')}>
+              group === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
             {g}
           </button>
         ))}
@@ -441,7 +441,7 @@ function CaseBrowser({
               className={clsx('px-2.5 py-1 rounded text-xs font-semibold transition-colors',
                 statusFilter === s
                   ? s === 'All' ? 'bg-accent text-white' : STATUS_COLORS[s] + ' ring-1 ring-current'
-                  : 'bg-card-hover text-muted hover:text-primary')}>
+                  : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
               {s === 'All' ? 'All' : STATUS_LABELS[s]}
             </button>
           ))}
@@ -528,7 +528,7 @@ function CaseSelector({
           {['All', ...groups].map((g) => (
             <button key={g} onClick={() => setGroupFilter(g)}
               className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
-                groupFilter === g ? 'bg-accent text-white' : 'bg-card-hover text-muted hover:text-primary')}>
+                groupFilter === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
               {g}
             </button>
           ))}
@@ -539,7 +539,7 @@ function CaseSelector({
               className={clsx('px-2.5 py-1 rounded text-xs font-semibold transition-colors',
                 statusFilter === s
                   ? s === 'All' ? 'bg-accent text-white' : STATUS_COLORS[s] + ' ring-1 ring-current'
-                  : 'bg-card-hover text-muted hover:text-primary')}>
+                  : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
               {s === 'All' ? 'All' : STATUS_LABELS[s]}
             </button>
           ))}
@@ -726,7 +726,7 @@ function TrainingSession({
                   key={m}
                   onClick={() => setSetting('inputMethod', m)}
                   className={clsx('px-3 py-1.5 rounded text-sm font-semibold capitalize transition-colors',
-                    settings.inputMethod === m ? 'bg-accent text-white' : 'bg-card-hover text-muted hover:text-primary')}
+                    settings.inputMethod === m ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}
                 >
                   {m === 'keyboard' ? 'Keyboard (spacebar)' : 'Manual input'}
                 </button>
@@ -741,7 +741,7 @@ function TrainingSession({
                   key={String(v)}
                   onClick={() => setSetting('showCaseName', v)}
                   className={clsx('px-3 py-1.5 rounded text-sm font-semibold transition-colors',
-                    settings.showCaseName === v ? 'bg-accent text-white' : 'bg-card-hover text-muted hover:text-primary')}
+                    settings.showCaseName === v ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}
                 >
                   {v ? 'Show case name' : 'Hide case name'}
                 </button>

@@ -378,7 +378,7 @@ export default function ReconstructionPage() {
                     ['ETM', metrics.etm],
                   ] as const
                 ).map(([label, value]) => (
-                  <div key={label} className="bg-card-hover rounded-lg p-2 text-center">
+                  <div key={label} className="bg-gray-100 dark:bg-card-hover rounded-lg p-2 text-center">
                     <div className="text-lg font-bold">{moves.length > 0 ? value : '—'}</div>
                     <div className="text-[10px] text-muted font-semibold mt-0.5">{label}</div>
                   </div>
