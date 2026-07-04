@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/ToastContainer';
 import { useAuth } from './store/auth';
-import { useSettings, applyTheme } from './store/settings';
+import { useSettings, applyTheme, applyAccentColor } from './store/settings';
 
 import Landing from './features/landing/Landing';
 import Dashboard from './features/landing/Dashboard';
@@ -33,6 +33,7 @@ function HomeRoute() {
 export default function App() {
   const init = useAuth((s) => s.init);
   const theme = useSettings((s) => s.theme);
+  const accentColor = useSettings((s) => s.accentColor);
 
   useEffect(() => {
     init();
@@ -41,6 +42,10 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    applyAccentColor(accentColor);
+  }, [accentColor]);
 
   return (
     <Layout>

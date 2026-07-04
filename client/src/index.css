@@ -4,6 +4,9 @@
 
 :root {
   color-scheme: dark;
+  /* Default accent: #2b72ff — overridden at runtime via applyAccentColor() */
+  --color-accent: 43 114 255;
+  --color-accent-hover: 37 97 217;
 }
 
 html,

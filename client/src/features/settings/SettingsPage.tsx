@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { useAuth } from '../../store/auth';
-import { useSettings } from '../../store/settings';
+import { useSettings, DEFAULT_ACCENT } from '../../store/settings';
 import { api } from '../../lib/api';
 import { toast } from '../../store/toast';
 
@@ -28,7 +28,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 export default function SettingsPage() {
   const { user, setUser, logout } = useAuth();
-  const { theme, setTheme } = useSettings();
+  const { theme, setTheme, accentColor, set } = useSettings();
   const navigate = useNavigate();
 
   // Display name
@@ -116,6 +116,32 @@ export default function SettingsPage() {
                 {t === 'dark' ? 'Dark' : 'Light'}
               </button>
             ))}
+          </div>
+        </Field>
+
+        <Field label="Accent color" hint="Primary highlight color used throughout the app.">
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer relative shrink-0" title="Pick a color">
+              <div
+                className="w-10 h-10 rounded-lg border-2 border-white/20 dark:border-white/10 shadow-sm"
+                style={{ backgroundColor: accentColor }}
+              />
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => set({ accentColor: e.target.value })}
+                className="sr-only"
+              />
+            </label>
+            <span className="font-mono text-sm text-muted">{accentColor.toUpperCase()}</span>
+            {accentColor.toLowerCase() !== DEFAULT_ACCENT && (
+              <button
+                className="btn-ghost text-xs px-3 py-1.5"
+                onClick={() => set({ accentColor: DEFAULT_ACCENT })}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </Field>
       </Section>

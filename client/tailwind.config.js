@@ -9,8 +9,8 @@ export default {
         card: '#1e2130',
         'card-hover': '#272b3d',
         border: '#2c3142',
-        accent: '#7c5cfc',
-        'accent-hover': '#6b4ce0',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        'accent-hover': 'rgb(var(--color-accent-hover) / <alpha-value>)',
         muted: '#8b91a7',
       },
       fontFamily: {
