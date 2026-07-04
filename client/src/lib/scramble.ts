@@ -31,9 +31,10 @@ export function generateScramble(eventId: string): string {
 
 // Fetch a WCA-quality random-state scramble from the server (cubing.js runs
 // server-side via Node.js worker_threads, avoiding browser Web Worker issues).
+// If the server doesn't respond within 5 s, fall back to client-side scrambow.
 export async function getScramble(eventId: string): Promise<string> {
   try {
-    const { data } = await api.get<{ scramble: string }>(`/scramble/${eventId}`);
+    const { data } = await api.get<{ scramble: string }>(`/scramble/${eventId}`, { timeout: 5000 });
     if (data.scramble) return data.scramble;
   } catch (e) {
     console.warn('Server scramble failed, falling back:', e);
