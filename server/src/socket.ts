@@ -145,6 +145,30 @@ export function attachSocket(server: HttpServer): IOServer {
     }, 5000);
   }
 
+  // Remove a participant from their room, handling in-progress round cleanup.
+  // Used by leave_room, disconnect, and the single-room enforcement in join_room.
+  async function leaveRoomCleanup(participantId: string, code: string): Promise<void> {
+    const room = await prisma.battleRoom.findUnique({
+      where: { code },
+      include: { participants: true },
+    });
+    if (room?.status === 'ACTIVE') {
+      const me = room.participants.find((p) => p.id === participantId);
+      if (me && !me.finishedAt) {
+        await prisma.battleParticipant.update({
+          where: { id: participantId },
+          data: { finishedAt: new Date(), penalty: 'DNF', time: null },
+        });
+      }
+    }
+    await prisma.battleParticipant.deleteMany({ where: { id: participantId } });
+    if (room?.status === 'ACTIVE') {
+      await checkRoundCompletion(code);
+    }
+    await deleteRoomIfEmpty(code);
+    await emitRoomState(code);
+  }
+
   io.on('connection', (socket) => {
     let myParticipantId: string | null = null;
     let myCode: string | null = null;
@@ -194,6 +218,28 @@ export function attachSocket(server: HttpServer): IOServer {
           socket.emit('error_msg', { message: 'Room is full (max 10 players)' });
           return;
         }
+
+        // ── Single-room enforcement ───────────────────────────────────────
+        // If this socket is already in a different room, leave it first.
+        if (myParticipantId && myCode && myCode !== code) {
+          await leaveRoomCleanup(myParticipantId, myCode);
+          socket.leave(myCode);
+          myParticipantId = null;
+          myCode = null;
+        }
+
+        // If this logged-in user has participant records elsewhere (second tab),
+        // remove them so they can only be in one room at a time.
+        if (safeUserId && !existing) {
+          const elsewhere = await prisma.battleParticipant.findMany({
+            where: { userId: safeUserId, room: { code: { not: code } } },
+            include: { room: { select: { code: true } } },
+          });
+          for (const p of elsewhere) {
+            await leaveRoomCleanup(p.id, p.room.code);
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────
 
         let participant = existing;
         if (!participant) {
@@ -254,56 +300,17 @@ export function attachSocket(server: HttpServer): IOServer {
       safe(async ({ code }) => {
         code = code.toUpperCase();
         if (!myParticipantId) return;
-
-        const room = await prisma.battleRoom.findUnique({
-          where: { code },
-          include: { participants: true },
-        });
-
-        if (room?.status === 'ACTIVE') {
-          const me = room.participants.find((p) => p.id === myParticipantId);
-          if (me && !me.finishedAt) {
-            await prisma.battleParticipant.update({
-              where: { id: myParticipantId },
-              data: { finishedAt: new Date(), penalty: 'DNF', time: null },
-            });
-          }
-        }
-
-        await prisma.battleParticipant.deleteMany({ where: { id: myParticipantId } });
+        await leaveRoomCleanup(myParticipantId, code);
         socket.leave(code);
         myParticipantId = null;
-
-        if (room?.status === 'ACTIVE') {
-          await checkRoundCompletion(code);
-        }
-        await deleteRoomIfEmpty(code);
-        await emitRoomState(code);
         myCode = null;
       }),
     );
 
     socket.on('disconnect', async () => {
       if (!myParticipantId || !myCode) return;
-      const code = myCode;
       try {
-        const room = await prisma.battleRoom.findUnique({
-          where: { code },
-          include: { participants: true },
-        });
-        if (room?.status === 'ACTIVE') {
-          const me = room.participants.find((p) => p.id === myParticipantId);
-          if (me && !me.finishedAt) {
-            await prisma.battleParticipant.update({
-              where: { id: myParticipantId },
-              data: { finishedAt: new Date(), penalty: 'DNF', time: null },
-            });
-            await checkRoundCompletion(code);
-          }
-        }
-        await prisma.battleParticipant.deleteMany({ where: { id: myParticipantId } });
-        await deleteRoomIfEmpty(code);
-        await emitRoomState(code);
+        await leaveRoomCleanup(myParticipantId, myCode);
       } catch {
         /* room may be gone */
       }
