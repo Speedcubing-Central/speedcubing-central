@@ -572,7 +572,7 @@ export default function BattleRoom() {
                 value: personalStats.avg !== null ? formatTime(Math.round(personalStats.avg), 'NONE', settings.solvePrecision) : '—',
               },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-card-hover rounded-lg p-3">
+              <div key={label} className="bg-gray-100 dark:bg-card-hover rounded-lg p-3">
                 <div className="text-xs text-muted mb-1">{label}</div>
                 <div className="font-mono font-semibold text-sm">{value}</div>
               </div>
