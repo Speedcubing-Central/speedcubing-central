@@ -79,14 +79,15 @@ function rotatingStickering(kind: AlgSet['kind']): StickeringKind {
 
 const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'eg1', 'eg2'].includes(kind);
 
-function CaseImage({ c, set, size = 80 }: { c: AlgCase; set: AlgSet; size?: number }) {
-  if (set.kind === 'pll') return <PllDiagram alg={c.moves} size={size} />;
-  if (set.kind === 'oll') return <OllDiagram alg={c.moves} size={size} />;
-  if (set.kind === 'coll') return <CollDiagram alg={c.moves} size={size} />;
+function CaseImage({ c, set, size = 80, pref }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref }) {
+  const alg = effectiveAlg(c, pref);
+  if (set.kind === 'pll') return <PllDiagram alg={alg} size={size} />;
+  if (set.kind === 'oll') return <OllDiagram alg={alg} size={size} />;
+  if (set.kind === 'coll') return <CollDiagram alg={alg} size={size} />;
   if (IS_2x2(set.kind)) {
-    return <TwoByTwoDiagram alg={c.moves} size={size} diagramPrefix={c.diagramPrefix} stickering={twoByTwoStickering(set.kind)} />;
+    return <TwoByTwoDiagram alg={alg} size={size} diagramPrefix={c.diagramPrefix} stickering={twoByTwoStickering(set.kind)} />;
   }
-  return <F2LDiagram alg={c.moves} size={size} />;
+  return <F2LDiagram alg={alg} size={size} />;
 }
 
 function effectiveAlg(c: AlgCase, pref: AlgPref | undefined): string {
@@ -378,7 +379,7 @@ function CaseCard({
       }}
       onClick={() => { if (!dragged.current) onSelect(c); }}
     >
-      <div className="shrink-0"><CaseImage c={c} set={set} size={80} /></div>
+      <div className="shrink-0"><CaseImage c={c} set={set} size={80} pref={pref} /></div>
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-sm flex items-center gap-2 flex-wrap">
           {c.name}
@@ -565,7 +566,7 @@ function CaseSelector({
                 on ? 'border-accent/60 bg-accent/5' : 'opacity-50',
               )}
             >
-              <div className="pointer-events-none"><CaseImage c={c} set={set} size={64} /></div>
+              <div className="pointer-events-none"><CaseImage c={c} set={set} size={64} pref={prefs[c.id]} /></div>
               <div className="font-semibold leading-tight">{c.name}</div>
               {prefs[c.id]?.status && prefs[c.id].status !== 'NEW' && (
                 <StatusBadge status={prefs[c.id].status} />
