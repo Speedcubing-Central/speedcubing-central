@@ -83,6 +83,12 @@ export const guestStore = {
     if (solve) solve.penalty = penalty;
     write(data);
   },
+  updateTime(sessionId: string, solveId: string, time: number) {
+    const data = read();
+    const solve = data.solves[sessionId]?.find((x) => x.id === solveId);
+    if (solve) solve.time = time;
+    write(data);
+  },
   deleteSolve(sessionId: string, solveId: string) {
     const data = read();
     if (data.solves[sessionId]) {

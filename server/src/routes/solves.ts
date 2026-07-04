@@ -8,10 +8,11 @@ const router = Router();
 router.use(requireAuth);
 
 const patchSchema = z.object({
-  penalty: z.enum(['NONE', 'PLUS2', 'DNF']),
+  penalty: z.enum(['NONE', 'PLUS2', 'DNF']).optional(),
+  time: z.number().int().positive().optional(),
 });
 
-// PATCH /api/solves/:id — update penalty
+// PATCH /api/solves/:id — update penalty and/or time
 router.patch('/:id', async (req, res, next) => {
   try {
     const solve = await prisma.solve.findUnique({ where: { id: req.params.id } });
@@ -19,8 +20,8 @@ router.patch('/:id', async (req, res, next) => {
       res.status(404).json({ error: 'Solve not found' });
       return;
     }
-    const { penalty } = patchSchema.parse(req.body);
-    const updated = await prisma.solve.update({ where: { id: solve.id }, data: { penalty } });
+    const patch = patchSchema.parse(req.body);
+    const updated = await prisma.solve.update({ where: { id: solve.id }, data: patch });
     res.json(toSolveDTO(updated));
   } catch (e) {
     next(e);

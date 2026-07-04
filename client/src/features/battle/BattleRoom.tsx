@@ -278,6 +278,20 @@ export default function BattleRoom() {
     }
   }, [error, setError]);
 
+  // Enter key submits OK when awaiting penalty choice (unless an input is focused)
+  useEffect(() => {
+    if (!awaitingSubmit) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+      submitSolve('NONE');
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingSubmit]);
+
   function handleLeave() {
     if (code) leaveRoom(code.toUpperCase());
     navigate('/battle');

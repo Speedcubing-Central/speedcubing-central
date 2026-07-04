@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
 import { ScrambleImage } from '../../components/ScrambleImage';
@@ -7,6 +8,19 @@ import { useSettings } from '../../store/settings';
 import { copyText, formatSolveCopy } from './copy';
 import { averagesForSolve, type SolveAverage } from './stats';
 
+function parseEditTime(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  let ms: number;
+  if (s.includes(':')) {
+    const [m, rest] = s.split(':');
+    ms = (parseInt(m, 10) * 60 + parseFloat(rest)) * 1000;
+  } else {
+    ms = parseFloat(s) * 1000;
+  }
+  return isNaN(ms) || ms <= 0 ? null : Math.round(ms);
+}
+
 export function SolveDetail({
   open,
   onClose,
@@ -14,6 +28,7 @@ export function SolveDetail({
   index,
   event,
   onUpdatePenalty,
+  onUpdateTime,
   onDelete,
   onOpenAverage,
 }: {
@@ -23,15 +38,32 @@ export function SolveDetail({
   index: number;
   event: string;
   onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
+  onUpdateTime?: (solveId: string, time: number) => void;
   onDelete: (solveId: string) => void;
   onOpenAverage: (view: SolveAverage) => void;
 }) {
   const { solvePrecision } = useSettings();
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+
   const solve = solves[index];
   if (!solve) return null;
 
   const total = solves.length;
   const averages = averagesForSolve(solves, index);
+  const editValid = parseEditTime(editValue) !== null;
+
+  function startEdit() {
+    setEditValue(formatTime(solve.time, 'NONE', solvePrecision));
+    setEditing(true);
+  }
+
+  function saveEdit() {
+    const parsed = parseEditTime(editValue);
+    if (parsed === null) return;
+    onUpdateTime!(solve.id, parsed);
+    setEditing(false);
+  }
 
   function del() {
     if (confirm('Delete this solve? This cannot be undone.')) {
@@ -43,7 +75,48 @@ export function SolveDetail({
   return (
     <Modal open={open} onClose={onClose} title={`Solve #${total - index}`} size="md">
       <div className="text-center mb-4">
-        <div className="font-mono text-5xl font-bold">{formatTime(solve.time, solve.penalty, solvePrecision)}</div>
+        {editing ? (
+          <div className="flex items-center justify-center gap-2">
+            <input
+              className="input font-mono text-center text-3xl w-36"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveEdit();
+                if (e.key === 'Escape') setEditing(false);
+              }}
+              autoFocus
+            />
+            <button
+              onClick={saveEdit}
+              disabled={!editValid}
+              className="text-green-500 hover:text-green-400 disabled:text-muted disabled:cursor-not-allowed transition-colors"
+              title="Save"
+            >
+              <Icon name="check" size={18} />
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="text-muted hover:text-primary transition-colors"
+              title="Cancel"
+            >
+              <Icon name="x" size={18} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-2">
+            <div className="font-mono text-5xl font-bold">{formatTime(solve.time, solve.penalty, solvePrecision)}</div>
+            {onUpdateTime && (
+              <button
+                onClick={startEdit}
+                className="text-muted hover:text-accent transition-colors self-start mt-2"
+                title="Edit time"
+              >
+                <Icon name="pencil" size={14} />
+              </button>
+            )}
+          </div>
+        )}
         <div className="text-xs text-muted mt-1">{new Date(solve.createdAt).toLocaleString()}</div>
       </div>
 

@@ -39,7 +39,8 @@ export type IconName =
   | 'arrowLeft'
   | 'circle'
   | 'panel'
-  | 'copy';
+  | 'copy'
+  | 'pencil';
 
 const PATHS: Record<IconName, JSX.Element> = {
   home: (
@@ -217,6 +218,7 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M5.5 15.5H4.5a2 2 0 0 1-2-2V4.5a2 2 0 0 1 2-2H13a2 2 0 0 1 2 2v1" />
     </>
   ),
+  pencil: <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />,
 };
 
 export function Icon({
