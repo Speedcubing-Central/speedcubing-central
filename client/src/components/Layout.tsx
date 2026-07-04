@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useAuth } from '../store/auth';
 import { useUi } from '../store/ui';
 import { Icon, type IconName } from './Icon';
+import { Logo } from './Logo';
 
 interface NavItem {
   to: string;
@@ -59,7 +60,7 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         <div className="flex items-center justify-between mb-6">
           <NavLink to="/" className="flex items-center gap-2 px-2">
-            <div className="w-8 h-8 rounded-lg bg-accent grid place-items-center font-bold text-white">S</div>
+            <Logo size={32} className="shrink-0" />
             <span className="font-extrabold text-lg leading-tight">
               Speedcubing
               <br />
