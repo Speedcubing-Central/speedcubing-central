@@ -18,7 +18,10 @@ export function generateScramble(eventId: string): string {
   if (!type) return ''; // no scrambow support for this event
   try {
     const scrambles = new Scrambow().setType(type).get(1);
-    return normalizeScramble(scrambles[0]?.scramble_string ?? '');
+    let s = normalizeScramble(scrambles[0]?.scramble_string ?? '');
+    // WCA no longer requires pre-set pins; strip trailing pin tokens (UR/DR/DL/UL).
+    if (eventId === 'clock') s = s.replace(/(\s+(UR|DR|DL|UL))+$/, '');
+    return s;
   } catch (e) {
     console.warn('[scramble] generation failed for', eventId, e);
     return '';

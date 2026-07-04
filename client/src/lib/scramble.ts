@@ -23,7 +23,9 @@ export function generateScramble(eventId: string): string {
   if (!type) return '';
   try {
     const s = new Scrambow().setType(type).get(1);
-    return normalizeScramble(s[0]?.scramble_string ?? '');
+    let scramble = normalizeScramble(s[0]?.scramble_string ?? '');
+    if (eventId === 'clock') scramble = scramble.replace(/(\s+(UR|DR|DL|UL))+$/, '');
+    return scramble;
   } catch {
     return '';
   }
