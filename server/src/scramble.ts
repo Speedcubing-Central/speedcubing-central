@@ -23,6 +23,20 @@ export function generateScramble(eventId: string): string {
   }
 }
 
+// Pre-initialize cubing.js on server startup so the first real scramble
+// request (timer page load, Battle round start) doesn't pay the cold-start
+// cost of loading the WASM module and spawning worker threads.
+export async function warmUpScrambler(): Promise<void> {
+  if (SCRAMBOW_PREFERRED.has('333')) return; // shouldn't happen, but guard
+  try {
+    const { randomScrambleForEvent } = await import('cubing/scramble');
+    await randomScrambleForEvent('333');
+    console.log('[scramble] cubing.js warmed up');
+  } catch (e) {
+    console.warn('[scramble] warm-up failed (non-fatal):', e instanceof Error ? e.message : e);
+  }
+}
+
 // WCA-quality random-state scramble via cubing.js; scrambow fallback.
 export async function getScramble(eventId: string): Promise<string> {
   if (SCRAMBOW_PREFERRED.has(eventId)) {

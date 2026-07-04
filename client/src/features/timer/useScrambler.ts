@@ -1,42 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getScramble } from '../../lib/scramble';
 
-// Manages the current scramble and prefetches the next one so the wait for
-// slow random-state events (4x4+) is hidden while the user is solving.
+// How many scrambles to keep pre-fetched and ready. All requests in the queue
+// fire concurrently, so on a fast event they all resolve nearly simultaneously.
+const QUEUE_SIZE = 3;
+
+// Manages the current scramble and keeps a queue of pre-fetched next ones so
+// the wait for slow random-state events (4x4+) is hidden while the user is
+// solving. Rapid skips stay instant as long as the queue hasn't been drained.
 export function useScrambler(eventId: string) {
   const [scramble, setScramble] = useState('');
   const [loading, setLoading] = useState(true);
-  const nextRef = useRef<Promise<string> | null>(null);
+  const queueRef = useRef<Promise<string>[]>([]);
   const reqId = useRef(0);
 
-  const prefetch = useCallback(() => {
-    nextRef.current = getScramble(eventId);
+  // Start one new prefetch request and push it to the back of the queue.
+  const enqueue = useCallback(() => {
+    queueRef.current.push(getScramble(eventId));
   }, [eventId]);
 
-  // Fetch a fresh current scramble (and queue a next one).
-  const refresh = useCallback(async () => {
-    const id = ++reqId.current;
-    setLoading(true);
-    const s = await getScramble(eventId);
-    if (id === reqId.current) {
-      setScramble(s);
-      setLoading(false);
-      prefetch();
+  // Top up the queue to QUEUE_SIZE concurrent in-flight requests.
+  const fillQueue = useCallback(() => {
+    while (queueRef.current.length < QUEUE_SIZE) {
+      enqueue();
     }
-  }, [eventId, prefetch]);
+  }, [enqueue]);
 
-  // Advance to the prefetched next scramble (instant), then queue another.
+  // Advance to the next queued scramble (instant if already resolved), then
+  // refill so there's always something ready for the following advance.
   const advance = useCallback(async () => {
     const id = ++reqId.current;
-    const pending = nextRef.current ?? getScramble(eventId);
+    if (queueRef.current.length === 0) enqueue();
+    const pending = queueRef.current.shift()!;
+    fillQueue();
     setLoading(true);
     const s = await pending;
     if (id === reqId.current) {
       setScramble(s);
       setLoading(false);
-      prefetch();
     }
-  }, [eventId, prefetch]);
+  }, [enqueue, fillQueue]);
+
+  // Fetch a fresh scramble and repopulate the queue. Used when the event
+  // changes or the user explicitly requests a new scramble via the button.
+  const refresh = useCallback(async () => {
+    const id = ++reqId.current;
+    queueRef.current = [];
+    setLoading(true);
+    const s = await getScramble(eventId);
+    if (id === reqId.current) {
+      setScramble(s);
+      setLoading(false);
+      fillQueue();
+    }
+  }, [eventId, fillQueue]);
 
   // (Re)initialise whenever the event changes.
   useEffect(() => {

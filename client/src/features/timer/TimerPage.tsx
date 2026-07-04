@@ -183,11 +183,33 @@ export default function TimerPage() {
   }
 
   function addTyped() {
+    if (!typed.trim()) {
+      scr.advance();
+      return;
+    }
     const parsed = parseTimeInput(typed, solvePrecision);
     if (!parsed) return;
     onComplete(parsed.time, parsed.penalty);
     setTyped('');
   }
+
+  // In keyboard mode, Enter advances to the next scramble when the timer is
+  // idle or stopped and no modal is open.
+  useEffect(() => {
+    if (entryMode !== 'keyboard') return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      if (anyModalOpen) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+      if (engine.phase === 'idle' || engine.phase === 'stopped') {
+        e.preventDefault();
+        scr.advance();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [entryMode, anyModalOpen, engine.phase, scr.advance]);
 
   const openAverage = useCallback(
     (size: AvgSize, startIndex: number) => {
