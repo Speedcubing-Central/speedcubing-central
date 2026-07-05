@@ -103,7 +103,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <div className="pt-4 border-t border-gray-200 dark:border-border mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
           {user ? (
             <div className="px-2 text-xs text-gray-500 dark:text-muted truncate">{user.displayName}</div>
           ) : (
@@ -115,7 +115,7 @@ export function Layout({ children }: { children: ReactNode }) {
             href="https://discord.com/invite/Zhq6q6WKfH"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 px-2 text-xs text-gray-500 hover:text-[#5865F2] dark:text-muted dark:hover:text-[#5865F2] transition-colors"
+            className="flex items-center gap-2 px-2 text-xs text-gray-500 hover:text-[#5865F2] dark:text-muted dark:hover:text-[#5865F2] transition-colors border-t border-gray-200 dark:border-border pt-3"
           >
             <DiscordIcon size={16} />
             Join our Discord
