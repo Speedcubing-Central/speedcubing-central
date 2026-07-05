@@ -278,10 +278,15 @@ export default function BattleRoom() {
     }
   }, [error, setError]);
 
-  // Enter key submits OK when awaiting penalty choice (unless an input is focused)
+  // Enter/Escape when awaiting penalty choice (unless an input is focused)
   useEffect(() => {
     if (!awaitingSubmit) return;
     const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setAwaitingSubmit(false);
+        engine.cancel();
+        return;
+      }
       if (e.key !== 'Enter') return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
