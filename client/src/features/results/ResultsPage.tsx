@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import '@cubing/icons';
@@ -368,7 +368,7 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
   const eventIds = CC_EVENTS.map((e) => e.id).filter((id) => prMap.has(id));
 
   if (!eventIds.length) {
-    return <p className="text-sm text-muted">No Cubing Contests results found for your WCA ID.</p>;
+    return <p className="text-sm text-muted">No Cubing Contests results found.</p>;
   }
 
   return (
@@ -425,114 +425,244 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
 
 export default function ResultsPage() {
   const { user } = useAuth();
-  const wcaId = user?.wcaId;
+  const wcaId = user?.wcaId ?? null;
+
+  // Search
+  const searchRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [viewingWcaId, setViewingWcaId] = useState<string | null>(null);
+
+  // Page state
   const [source, setSource] = useState<'official' | 'unofficial'>('official');
   const [eventFilter, setEventFilter] = useState<string | null>(null);
 
+  const effectiveWcaId = viewingWcaId ?? wcaId;
+  const isViewingOther = !!viewingWcaId && viewingWcaId !== wcaId;
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Reset page state when switching profiles
+  useEffect(() => {
+    setSource('official');
+    setEventFilter(null);
+  }, [effectiveWcaId]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  // WCA person search
+  const { data: searchData } = useQuery({
+    queryKey: ['wca-search', debouncedQuery],
+    queryFn: () => api.get(`/wca/search?q=${encodeURIComponent(debouncedQuery)}`).then((r) => r.data),
+    enabled: debouncedQuery.length >= 2,
+    staleTime: 1000 * 60 * 5,
+  });
+  const searchResults: any[] = (searchData as any)?.result ?? [];
+
+  // Main data queries — keyed on effectiveWcaId so search works for any person
   const { data: personData, isLoading: personLoading, error: personError } = useQuery<PersonData>({
-    queryKey: ['wca-person', wcaId],
-    queryFn: () => api.get(`/wca/competitor/${wcaId}`).then((r) => r.data),
-    enabled: !!wcaId,
+    queryKey: ['wca-person', effectiveWcaId],
+    queryFn: () => api.get(`/wca/competitor/${effectiveWcaId}`).then((r) => r.data),
+    enabled: !!effectiveWcaId,
     staleTime: 1000 * 60 * 60,
   });
 
   const { data: resultsData, isLoading: resultsLoading } = useQuery<CompResult[]>({
-    queryKey: ['wca-results', wcaId],
-    queryFn: () => api.get(`/wca/competitor/${wcaId}/results`).then((r) => r.data),
-    enabled: !!wcaId,
+    queryKey: ['wca-results', effectiveWcaId],
+    queryFn: () => api.get(`/wca/competitor/${effectiveWcaId}/results`).then((r) => r.data),
+    enabled: !!effectiveWcaId,
     staleTime: 1000 * 60 * 60,
   });
 
   const { data: ccData, isLoading: ccLoading } = useQuery<CCRow[]>({
-    queryKey: ['cc-results', wcaId],
-    queryFn: () => api.get(`/cc/competitor/${wcaId}/results`).then((r) => r.data),
-    enabled: !!wcaId,
+    queryKey: ['cc-results', effectiveWcaId],
+    queryFn: () => api.get(`/cc/competitor/${effectiveWcaId}/results`).then((r) => r.data),
+    enabled: !!effectiveWcaId,
     staleTime: 1000 * 60 * 60,
   });
 
-  if (!user) {
+  function selectPerson(wca_id: string, name: string) {
+    setViewingWcaId(wca_id);
+    setSearchQuery(name);
+    setShowDropdown(false);
+  }
+
+  function clearSearch() {
+    setSearchQuery('');
+    setDebouncedQuery('');
+    setShowDropdown(false);
+    setViewingWcaId(null);
+  }
+
+  const searchBar = (
+    <div ref={searchRef} className="relative">
+      <div className="relative">
+        <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => { setSearchQuery(e.target.value); setShowDropdown(true); }}
+          onFocus={() => { if (searchQuery.length >= 2) setShowDropdown(true); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowDropdown(false); }}
+          placeholder="Search competitor by name or WCA ID…"
+          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-lg border border-gray-200 dark:border-border bg-card text-foreground placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+        />
+        {searchQuery && (
+          <button
+            onClick={clearSearch}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition-colors"
+          >
+            <Icon name="x" size={14} />
+          </button>
+        )}
+      </div>
+      {showDropdown && searchResults.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 dark:border-border bg-card shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+          {searchResults.map((r: any) => (
+            <button
+              key={r.wca_id}
+              onMouseDown={(e) => { e.preventDefault(); selectPerson(r.wca_id, r.name); }}
+              className="w-full px-4 py-2.5 flex items-center justify-between gap-4 hover:bg-gray-50 dark:hover:bg-card-hover text-left transition-colors border-b border-gray-100 dark:border-border/40 last:border-0"
+            >
+              <span className="font-medium text-sm truncate">{r.name}</span>
+              <div className="flex items-center gap-2 shrink-0 text-xs text-muted">
+                <span className="font-mono">{r.wca_id}</span>
+                {r.country_iso2 && <span>{r.country_iso2}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Empty state (no one selected yet) ──────────────────────────────────────
+  if (!effectiveWcaId) {
     return (
-      <div className="max-w-md mx-auto mt-20 text-center space-y-3">
-        <Icon name="trophy" size={36} className="mx-auto text-muted" />
-        <h2 className="text-xl font-bold">Competition Results</h2>
-        <p className="text-muted text-sm">Log in to view your official WCA results.</p>
+      <div className="space-y-5 max-w-4xl">
+        {searchBar}
+        <div className="max-w-md mx-auto mt-16 text-center space-y-3">
+          <Icon name="user" size={36} className="mx-auto text-muted" />
+          <h2 className="text-xl font-bold">Competition Results</h2>
+          <p className="text-muted text-sm">
+            {user
+              ? 'Link your WCA account to see your results, or search for any competitor above.'
+              : 'Log in to view your results, or search for any competitor above.'}
+          </p>
+        </div>
       </div>
     );
   }
 
-  if (!wcaId) {
+  // ── Loading / error ─────────────────────────────────────────────────────────
+  if (personLoading) {
     return (
-      <div className="max-w-md mx-auto mt-20 text-center space-y-3">
-        <Icon name="trophy" size={36} className="mx-auto text-muted" />
-        <h2 className="text-xl font-bold">No WCA ID linked</h2>
-        <p className="text-muted text-sm">Log in with WCA OAuth to link your official results.</p>
+      <div className="space-y-5 max-w-4xl">
+        {searchBar}
+        <div className="p-8 text-muted text-center text-sm">Loading…</div>
       </div>
     );
   }
-
-  if (personLoading) return <div className="p-8 text-muted text-center text-sm">Loading…</div>;
   if (personError || !personData) {
     return (
-      <div className="p-8 text-center space-y-1">
-        <p className="text-red-400 font-medium text-sm">Could not load WCA profile.</p>
-        <p className="text-muted text-xs">WCA ID: {wcaId}</p>
+      <div className="space-y-5 max-w-4xl">
+        {searchBar}
+        <div className="p-8 text-center space-y-1">
+          <p className="text-red-400 font-medium text-sm">Could not load WCA profile.</p>
+          <p className="text-muted text-xs">WCA ID: {effectiveWcaId}</p>
+        </div>
       </div>
     );
   }
 
   const { person, competition_count, personal_records, medals, records } = personData;
+
   return (
     <div className="space-y-5 max-w-4xl">
 
+      {searchBar}
+
+      {/* Viewing-another-person banner */}
+      {isViewingOther && (
+        <div className="flex items-center justify-between bg-accent/10 border border-accent/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm">
+            Viewing <span className="font-semibold">{person.name}</span>
+          </span>
+          {wcaId && (
+            <button
+              onClick={() => { setViewingWcaId(null); setSearchQuery(''); }}
+              className="flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+            >
+              <Icon name="arrowLeft" size={13} />
+              Back to my results
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Profile header */}
       <div className="rounded-xl bg-card border-2 border-accent p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-              <h1 className="text-2xl font-bold leading-tight">{person.name}</h1>
-              <span className="font-mono text-xs font-semibold bg-accent/10 text-accent px-2 py-0.5 rounded shrink-0">
-                {person.wca_id}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {person.country_iso2 && (
-                <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  {person.country_iso2}
-                </span>
-              )}
-              <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
-                <Icon name="trophy" size={11} className="text-muted" />
-                {competition_count} competition{competition_count !== 1 ? 's' : ''}
-              </span>
-              {medals.gold > 0 && (
-                <span className="flex items-center gap-1 bg-yellow-400/10 text-yellow-600 dark:text-yellow-400 rounded-lg px-2.5 py-1 text-xs font-medium">
-                  🥇 {medals.gold}
-                </span>
-              )}
-              {medals.silver > 0 && (
-                <span className="flex items-center gap-1 bg-gray-400/10 text-gray-600 dark:text-gray-300 rounded-lg px-2.5 py-1 text-xs font-medium">
-                  🥈 {medals.silver}
-                </span>
-              )}
-              {medals.bronze > 0 && (
-                <span className="flex items-center gap-1 bg-orange-400/10 text-orange-600 dark:text-orange-400 rounded-lg px-2.5 py-1 text-xs font-medium">
-                  🥉 {medals.bronze}
-                </span>
-              )}
-              {(records.world + records.continental + records.national) > 0 && (
-                <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs">
-                  {records.world       > 0 && <RecBadge level="WR" />}
-                  {records.continental > 0 && <RecBadge level="CR" />}
-                  {records.national    > 0 && <RecBadge level="NR" />}
-                </span>
-              )}
-            </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <h1 className="text-2xl font-bold leading-tight">{person.name}</h1>
+            <span className="font-mono text-xs font-semibold bg-accent/10 text-accent px-2 py-0.5 rounded shrink-0">
+              {person.wca_id}
+            </span>
           </div>
-          <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
-            target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors border border-gray-200 dark:border-border rounded-lg px-3 py-1.5 shrink-0">
-            <Icon name="external" size={13} />
-            WCA Profile
-          </a>
+          <div className="flex flex-wrap gap-2">
+            {person.country_iso2 && (
+              <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                {person.country_iso2}
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+              <Icon name="trophy" size={11} className="text-muted" />
+              {competition_count} competition{competition_count !== 1 ? 's' : ''}
+            </span>
+            {medals.gold > 0 && (
+              <span className="flex items-center gap-1 bg-yellow-400/10 text-yellow-600 dark:text-yellow-400 rounded-lg px-2.5 py-1 text-xs font-medium">
+                🥇 {medals.gold}
+              </span>
+            )}
+            {medals.silver > 0 && (
+              <span className="flex items-center gap-1 bg-gray-400/10 text-gray-600 dark:text-gray-300 rounded-lg px-2.5 py-1 text-xs font-medium">
+                🥈 {medals.silver}
+              </span>
+            )}
+            {medals.bronze > 0 && (
+              <span className="flex items-center gap-1 bg-orange-400/10 text-orange-600 dark:text-orange-400 rounded-lg px-2.5 py-1 text-xs font-medium">
+                🥉 {medals.bronze}
+              </span>
+            )}
+            {(records.world + records.continental + records.national) > 0 && (
+              <span className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/5 rounded-lg px-2.5 py-1 text-xs">
+                {records.world       > 0 && <RecBadge level="WR" />}
+                {records.continental > 0 && <RecBadge level="CR" />}
+                {records.national    > 0 && <RecBadge level="NR" />}
+              </span>
+            )}
+          </div>
+        </div>
+        <a href={`https://www.worldcubeassociation.org/persons/${effectiveWcaId}`}
+          target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors border border-gray-200 dark:border-border rounded-lg px-3 py-1.5 shrink-0">
+          <Icon name="external" size={13} />
+          WCA Profile
+        </a>
       </div>
 
       {/* Official / Unofficial toggle */}
@@ -613,7 +743,7 @@ export default function ResultsPage() {
           ) : (
             <div className="card p-4 flex items-center justify-between text-sm">
               <span className="text-muted">Full history available on the WCA website.</span>
-              <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
+              <a href={`https://www.worldcubeassociation.org/persons/${effectiveWcaId}`}
                 target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-accent hover:underline text-xs ml-4 shrink-0">
                 View on WCA <Icon name="external" size={12} />
