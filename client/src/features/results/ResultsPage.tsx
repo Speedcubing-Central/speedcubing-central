@@ -1,96 +1,98 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
+import '@cubing/icons';
 import { useAuth } from '../../store/auth';
 import { api } from '../../lib/api';
 import { Icon } from '../../components/Icon';
 
-// WCA standard event display order
 const EVENT_ORDER = [
-  '333', '222', '444', '555', '666', '777',
-  '333bf', '444bf', '555bf',
-  '333oh',
-  'clock', 'minx', 'pyram', 'skewb', 'sq1',
-  '333mbf', '333fm',
+  '333','222','444','555','666','777',
+  '333bf','444bf','555bf','333oh',
+  'clock','minx','pyram','skewb','sq1',
+  '333mbf','333fm',
 ];
 
 const EVENT_NAMES: Record<string, string> = {
-  '333': '3×3', '222': '2×2', '444': '4×4', '555': '5×5',
-  '666': '6×6', '777': '7×7', '333bf': '3×3 BLD', '444bf': '4×4 BLD',
-  '555bf': '5×5 BLD', '333oh': '3×3 OH', 'clock': 'Clock',
-  'minx': 'Megaminx', 'pyram': 'Pyraminx', 'skewb': 'Skewb',
-  'sq1': 'Square-1', '333mbf': 'Multi-BLD', '333fm': 'FMC',
+  '333':'3×3','222':'2×2','444':'4×4','555':'5×5',
+  '666':'6×6','777':'7×7','333bf':'3×3 Blind','444bf':'4×4 Blind',
+  '555bf':'5×5 Blind','333oh':'3×3 One-Handed','clock':'Clock',
+  'minx':'Megaminx','pyram':'Pyraminx','skewb':'Skewb',
+  'sq1':'Square-1','333mbf':'Multi-Blind','333fm':'Fewest Moves',
 };
 
-function formatWcaTime(centiseconds: number, eventId: string): string {
-  if (centiseconds <= 0) return 'DNF';
+// ── WCA time formatting ───────────────────────────────────────────────────────
 
-  if (eventId === '333fm') {
-    // FMC single: move count stored as-is
-    return String(centiseconds);
-  }
-
+function fmtCs(cs: number, eventId: string): string {
+  if (cs <= 0) return 'DNF';
+  if (eventId === '333fm') return String(cs);
   if (eventId === '333mbf') {
-    // Encoding: (99 - points) * 10000000 + seconds * 100 + missed
-    const missed = centiseconds % 100;
-    const seconds = Math.floor((centiseconds % 10000000) / 100);
-    const points = 99 - Math.floor(centiseconds / 10000000) - missed;
-    const solved = points + missed;
+    const missed   = cs % 100;
+    const seconds  = Math.floor((cs % 10_000_000) / 100);
+    const points   = 99 - Math.floor(cs / 10_000_000) - missed;
+    const solved   = points + missed;
     const attempted = solved + missed;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
-    return `${points}/${attempted} ${timeStr}`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${points}/${attempted} ${m}:${String(s).padStart(2, '0')}`;
   }
-
-  const totalSeconds = centiseconds / 100;
-  const minutes = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  if (minutes > 0) {
-    return `${minutes}:${secs.toFixed(2).padStart(5, '0')}`;
-  }
-  return secs.toFixed(2);
+  const total = cs / 100;
+  const mins  = Math.floor(total / 60);
+  const secs  = total % 60;
+  return mins > 0
+    ? `${mins}:${secs.toFixed(2).padStart(5, '0')}`
+    : secs.toFixed(2);
 }
 
-function formatFmcAverage(value: number): string {
-  // FMC average stored as centiseconds of the average (e.g. 2433 = 24.33 moves)
-  return (value / 100).toFixed(2);
+function fmtAvg(cs: number, eventId: string): string {
+  if (cs === -1) return 'DNF';
+  if (cs <= 0)  return '—';
+  if (eventId === '333fm') return (cs / 100).toFixed(2);
+  return fmtCs(cs, eventId);
 }
 
-function RankBadge({ rank, label }: { rank: number; label: string }) {
-  const colors: Record<string, string> = {
-    WR: 'bg-yellow-400/20 text-yellow-300 border border-yellow-400/40',
-    CR: 'bg-purple-400/20 text-purple-300 border border-purple-400/40',
-    NR: 'bg-red-400/20 text-red-300 border border-red-400/40',
-  };
-  const cls = colors[label];
-  if (!cls) return null;
+// ── Record badge ──────────────────────────────────────────────────────────────
+
+type RecordLevel = 'WR' | 'CR' | 'NR';
+
+function RecBadge({ level }: { level: RecordLevel }) {
   return (
-    <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide', cls)}>
-      {label}
+    <span className={clsx(
+      'inline-block text-[9px] font-black px-1 py-px rounded leading-tight tracking-wider',
+      level === 'WR' && 'bg-yellow-400/20 text-yellow-300',
+      level === 'CR' && 'bg-violet-400/20 text-violet-300',
+      level === 'NR' && 'bg-red-400/20 text-red-300',
+    )}>
+      {level}
     </span>
   );
 }
 
-function rankLabel(worldRank: number, continentRank: number, countryRank: number) {
-  if (worldRank === 1) return 'WR';
-  if (continentRank === 1) return 'CR';
-  if (countryRank === 1) return 'NR';
+function inferRecord(wr: number, cr: number, nr: number): RecordLevel | null {
+  if (wr === 1) return 'WR';
+  if (cr === 1) return 'CR';
+  if (nr === 1) return 'NR';
   return null;
 }
 
-interface PersonRecord {
-  best: number;
-  world_rank: number;
-  continent_rank: number;
-  country_rank: number;
+// ── Event icon (cubing.js) ─────────────────────────────────────────────────────
+
+function EventIcon({ eventId, size = 16 }: { eventId: string; size?: number }) {
+  return (
+    <span
+      className={`cubing-icon event-${eventId}`}
+      style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}
+    />
+  );
 }
+
+// ── WCA API shapes ────────────────────────────────────────────────────────────
+
+interface PersonRecord { best: number; world_rank: number; continent_rank: number; country_rank: number }
 
 interface PersonData {
   person: {
-    name: string;
-    wca_id: string;
-    country_iso2: string;
-    url: string;
+    name: string; wca_id: string; country_iso2: string; url: string;
     avatar?: { url: string; thumb_url: string };
   };
   competition_count: number;
@@ -100,88 +102,93 @@ interface PersonData {
 }
 
 interface CompResult {
-  competition_id: string;
-  competition_name: string;
-  event_id: string;
-  round_type_name: string;
   pos: number | null;
   best: number;
   average: number;
-  attempts: (number | null)[];
-  country_rank: number;
-  continent_rank: number;
-  world_rank: number;
+  regional_single_record?: string | null;
+  regional_average_record?: string | null;
+  // WCA API v0 nested format
+  competition?: { id: string; name: string; start_date?: string; end_date?: string; city_name?: string };
+  event?:       { id: string; name: string };
+  round_type?:  { id: string; name: string; rank?: number; final?: boolean };
+  // Flat format fallback
+  competition_id?: string;
+  competition_name?: string;
+  event_id?: string;
+  round_type_id?: string;
+  round_type_name?: string;
+  start_date?: string;
 }
+
+const getCompId   = (r: CompResult) => r.competition?.id   ?? r.competition_id   ?? '';
+const getCompName = (r: CompResult) => r.competition?.name ?? r.competition_name ?? r.competition_id ?? '—';
+const getEventId  = (r: CompResult) => r.event?.id         ?? r.event_id         ?? '';
+const getRound    = (r: CompResult) => r.round_type?.name  ?? r.round_type_name  ?? r.round_type_id  ?? '—';
+const getDate     = (r: CompResult) => r.competition?.start_date ?? r.start_date ?? '';
+
+function formatDate(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ── Personal Records table ─────────────────────────────────────────────────────
 
 function PRTable({ records }: { records: PersonData['personal_records'] }) {
   const events = EVENT_ORDER.filter((id) => records[id]);
-
-  if (events.length === 0) {
-    return <p className="text-muted text-sm">No official results yet.</p>;
-  }
+  if (events.length === 0) return <p className="text-muted text-sm">No official results yet.</p>;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="text-left border-b border-gray-200 dark:border-border">
-            <th className="pb-2 font-medium text-muted pr-4">Event</th>
-            <th className="pb-2 font-medium text-muted text-right pr-6">Single</th>
-            <th className="pb-2 font-medium text-muted text-right pr-2 text-xs">WR</th>
-            <th className="pb-2 font-medium text-muted text-right pr-2 text-xs">CR</th>
-            <th className="pb-2 font-medium text-muted text-right pr-6 text-xs">NR</th>
-            <th className="pb-2 font-medium text-muted text-right pr-6">Average</th>
-            <th className="pb-2 font-medium text-muted text-right pr-2 text-xs">WR</th>
-            <th className="pb-2 font-medium text-muted text-right pr-2 text-xs">CR</th>
-            <th className="pb-2 font-medium text-muted text-right text-xs">NR</th>
+          <tr className="text-muted border-b border-gray-200 dark:border-border">
+            <th className="pb-2 font-medium text-left pl-1 pr-3 w-32">Event</th>
+            <th className="pb-2 font-medium text-right pr-3">Single</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">WR</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">CR</th>
+            <th className="pb-2 font-medium text-right pr-5 opacity-60">NR</th>
+            <th className="pb-2 font-medium text-right pr-3">Average</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">WR</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">CR</th>
+            <th className="pb-2 font-medium text-right pr-1 opacity-60">NR</th>
           </tr>
         </thead>
         <tbody>
-          {events.map((eventId) => {
-            const rec = records[eventId];
-            const single = rec?.single;
-            const avg = rec?.average;
-            const singleLabel = single ? rankLabel(single.world_rank, single.continent_rank, single.country_rank) : null;
-            const avgLabel = avg ? rankLabel(avg.world_rank, avg.continent_rank, avg.country_rank) : null;
+          {events.map((id) => {
+            const rec = records[id];
+            const s   = rec?.single;
+            const a   = rec?.average;
+            const sl  = s ? inferRecord(s.world_rank, s.continent_rank, s.country_rank) : null;
+            const al  = a ? inferRecord(a.world_rank, a.continent_rank, a.country_rank) : null;
             return (
-              <tr key={eventId} className="border-b border-gray-100 dark:border-border/50 last:border-0">
-                <td className="py-2.5 pr-4 font-medium">{EVENT_NAMES[eventId] ?? eventId}</td>
-                {/* Single */}
-                <td className="py-2.5 pr-6 text-right font-mono font-semibold">
-                  <span className="flex items-center justify-end gap-2">
-                    {singleLabel && <RankBadge rank={single!.country_rank} label={singleLabel} />}
-                    {single ? formatWcaTime(single.best, eventId) : '—'}
+              <tr key={id} className="border-b border-gray-100 dark:border-border/40 last:border-0 hover:bg-gray-50 dark:hover:bg-card-hover/40 transition-colors">
+                <td className="py-1.5 pl-1 pr-3">
+                  <span className="flex items-center gap-2">
+                    <EventIcon eventId={id} size={14} />
+                    <span className="font-medium">{EVENT_NAMES[id] ?? id}</span>
                   </span>
                 </td>
-                <td className="py-2.5 pr-2 text-right text-muted text-xs font-mono">
-                  {single ? single.world_rank.toLocaleString() : '—'}
+                <td className="py-1.5 pr-3 text-right font-mono font-semibold">
+                  <span className="flex items-center justify-end gap-1.5">
+                    {sl && <RecBadge level={sl} />}
+                    {s ? fmtCs(s.best, id) : '—'}
+                  </span>
                 </td>
-                <td className="py-2.5 pr-2 text-right text-muted text-xs font-mono">
-                  {single ? single.continent_rank.toLocaleString() : '—'}
-                </td>
-                <td className="py-2.5 pr-6 text-right text-muted text-xs font-mono">
-                  {single ? single.country_rank.toLocaleString() : '—'}
-                </td>
-                {/* Average */}
-                <td className="py-2.5 pr-6 text-right font-mono font-semibold">
-                  {avg ? (
-                    <span className="flex items-center justify-end gap-2">
-                      {avgLabel && <RankBadge rank={avg.country_rank} label={avgLabel} />}
-                      {eventId === '333fm'
-                        ? formatFmcAverage(avg.best)
-                        : formatWcaTime(avg.best, eventId)}
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{s ? s.world_rank.toLocaleString() : '—'}</td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{s ? s.continent_rank.toLocaleString() : '—'}</td>
+                <td className="py-1.5 pr-5 text-right font-mono text-muted">{s ? s.country_rank.toLocaleString() : '—'}</td>
+                <td className="py-1.5 pr-3 text-right font-mono font-semibold">
+                  {a ? (
+                    <span className="flex items-center justify-end gap-1.5">
+                      {al && <RecBadge level={al} />}
+                      {fmtAvg(a.best, id)}
                     </span>
                   ) : '—'}
                 </td>
-                <td className="py-2.5 pr-2 text-right text-muted text-xs font-mono">
-                  {avg ? avg.world_rank.toLocaleString() : '—'}
-                </td>
-                <td className="py-2.5 pr-2 text-right text-muted text-xs font-mono">
-                  {avg ? avg.continent_rank.toLocaleString() : '—'}
-                </td>
-                <td className="py-2.5 text-right text-muted text-xs font-mono">
-                  {avg ? avg.country_rank.toLocaleString() : '—'}
-                </td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{a ? a.world_rank.toLocaleString() : '—'}</td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{a ? a.continent_rank.toLocaleString() : '—'}</td>
+                <td className="py-1.5 pr-1 text-right font-mono text-muted">{a ? a.country_rank.toLocaleString() : '—'}</td>
               </tr>
             );
           })}
@@ -191,78 +198,156 @@ function PRTable({ records }: { records: PersonData['personal_records'] }) {
   );
 }
 
-function CompHistory({ results }: { results: CompResult[] }) {
-  // Group by competition
-  const byComp = new Map<string, { name: string; results: CompResult[] }>();
+// ── Result row (shared) ───────────────────────────────────────────────────────
+
+function ResultRow({
+  label, sublabel, pos, best, avg, eventId,
+  singleRec, avgRec, showEvent,
+}: {
+  label: string; sublabel?: string;
+  pos: number | null; best: number; avg: number; eventId: string;
+  singleRec?: string | null; avgRec?: string | null;
+  showEvent?: boolean;
+}) {
+  const sr = (singleRec as RecordLevel) ?? null;
+  const ar = (avgRec as RecordLevel) ?? null;
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 gap-y-0 py-2 px-3 border-b border-gray-100 dark:border-border/40 last:border-0 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {showEvent && <EventIcon eventId={eventId} size={14} />}
+          <span className="font-medium text-sm truncate">{label}</span>
+        </div>
+        {sublabel && <div className="text-xs text-muted mt-0.5">{sublabel}</div>}
+      </div>
+      <div className="text-xs text-muted font-mono text-right hidden sm:block">
+        {pos != null ? `#${pos}` : '—'}
+      </div>
+      <div className="text-right">
+        <div className="flex items-center justify-end gap-1.5 font-mono text-sm font-semibold">
+          {sr && <RecBadge level={sr} />}
+          <span>{best > 0 ? fmtCs(best, eventId) : 'DNF'}</span>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="flex items-center justify-end gap-1.5 font-mono text-sm text-muted">
+          {ar && <RecBadge level={ar} />}
+          <span>{fmtAvg(avg, eventId)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Column headers for result sections ───────────────────────────────────────
+
+function ResultHeader({ showEvent }: { showEvent?: boolean }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 py-1.5 px-3 border-b border-gray-200 dark:border-border bg-gray-50/50 dark:bg-white/[0.02]">
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-wide">
+        {showEvent ? 'Event' : 'Round'}
+      </div>
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-wide text-right hidden sm:block">#</div>
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-wide text-right">Single</div>
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-wide text-right">Average</div>
+    </div>
+  );
+}
+
+// ── By Competition view ───────────────────────────────────────────────────────
+
+function ByCompetition({ results }: { results: CompResult[] }) {
+  const byComp = new Map<string, { name: string; date: string; rows: CompResult[] }>();
   for (const r of results) {
-    if (!byComp.has(r.competition_id)) {
-      byComp.set(r.competition_id, { name: r.competition_name, results: [] });
-    }
-    byComp.get(r.competition_id)!.results.push(r);
+    const id = getCompId(r);
+    if (!byComp.has(id)) byComp.set(id, { name: getCompName(r), date: getDate(r), rows: [] });
+    byComp.get(id)!.rows.push(r);
   }
-
-  const comps = Array.from(byComp.entries());
-
-  if (comps.length === 0) {
-    return <p className="text-muted text-sm">No competition results found.</p>;
-  }
+  const comps = Array.from(byComp.values()).sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div className="space-y-4">
-      {comps.map(([compId, { name, results: compResults }]) => (
-        <div key={compId} className="card p-4">
-          <div className="font-semibold mb-3 text-sm">{name}</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left border-b border-gray-200 dark:border-border">
-                  <th className="pb-1.5 font-medium text-muted pr-3">Event</th>
-                  <th className="pb-1.5 font-medium text-muted pr-3">Round</th>
-                  <th className="pb-1.5 font-medium text-muted pr-3 text-right">Place</th>
-                  <th className="pb-1.5 font-medium text-muted pr-3 text-right">Best</th>
-                  <th className="pb-1.5 font-medium text-muted text-right">Average</th>
-                </tr>
-              </thead>
-              <tbody>
-                {compResults
-                  .sort((a, b) => EVENT_ORDER.indexOf(a.event_id) - EVENT_ORDER.indexOf(b.event_id))
-                  .map((r, i) => {
-                    const label = rankLabel(r.world_rank, r.continent_rank, r.country_rank);
-                    return (
-                      <tr key={i} className="border-b border-gray-100 dark:border-border/50 last:border-0">
-                        <td className="py-1.5 pr-3 font-medium">{EVENT_NAMES[r.event_id] ?? r.event_id}</td>
-                        <td className="py-1.5 pr-3 text-muted">{r.round_type_name}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">
-                          {r.pos != null ? `#${r.pos}` : '—'}
-                        </td>
-                        <td className="py-1.5 pr-3 text-right font-mono font-semibold">
-                          <span className="flex items-center justify-end gap-1.5">
-                            {label && <RankBadge rank={r.country_rank} label={label} />}
-                            {r.best > 0 ? formatWcaTime(r.best, r.event_id) : 'DNF'}
-                          </span>
-                        </td>
-                        <td className="py-1.5 text-right font-mono">
-                          {r.average > 0
-                            ? r.event_id === '333fm'
-                              ? formatFmcAverage(r.average)
-                              : formatWcaTime(r.average, r.event_id)
-                            : r.average === -1 ? 'DNF' : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+    <div className="space-y-3">
+      {comps.map((comp) => (
+        <div key={comp.name} className="card overflow-hidden">
+          <div className="px-4 py-3 flex items-baseline justify-between gap-4 border-b border-gray-200 dark:border-border bg-gray-50/50 dark:bg-white/[0.03]">
+            <span className="font-semibold text-sm truncate">{comp.name}</span>
+            {comp.date && <span className="text-xs text-muted shrink-0">{formatDate(comp.date)}</span>}
           </div>
+          <ResultHeader showEvent />
+          {comp.rows
+            .sort((a, b) => EVENT_ORDER.indexOf(getEventId(a)) - EVENT_ORDER.indexOf(getEventId(b)))
+            .map((r, i) => (
+              <ResultRow
+                key={i}
+                label={EVENT_NAMES[getEventId(r)] ?? getEventId(r)}
+                sublabel={getRound(r)}
+                pos={r.pos}
+                best={r.best}
+                avg={r.average}
+                eventId={getEventId(r)}
+                singleRec={r.regional_single_record}
+                avgRec={r.regional_average_record}
+                showEvent
+              />
+            ))}
         </div>
       ))}
     </div>
   );
 }
 
+// ── By Event view ─────────────────────────────────────────────────────────────
+
+function ByEvent({ results }: { results: CompResult[] }) {
+  const byEvent = new Map<string, CompResult[]>();
+  for (const r of results) {
+    const id = getEventId(r);
+    if (!byEvent.has(id)) byEvent.set(id, []);
+    byEvent.get(id)!.push(r);
+  }
+  const events = EVENT_ORDER.filter((id) => byEvent.has(id));
+
+  return (
+    <div className="space-y-3">
+      {events.map((eventId) => {
+        const rows = byEvent.get(eventId)!.sort((a, b) => b.date.localeCompare(a.date));
+        return (
+          <div key={eventId} className="card overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2.5 border-b border-gray-200 dark:border-border bg-gray-50/50 dark:bg-white/[0.03]">
+              <EventIcon eventId={eventId} size={18} />
+              <span className="font-semibold text-sm">{EVENT_NAMES[eventId] ?? eventId}</span>
+              <span className="text-xs text-muted ml-auto">{rows.length} result{rows.length !== 1 ? 's' : ''}</span>
+            </div>
+            <ResultHeader />
+            {rows.map((r, i) => {
+              const date = getDate(r);
+              return (
+                <ResultRow
+                  key={i}
+                  label={getCompName(r)}
+                  sublabel={getRound(r) + (date ? ` · ${formatDate(date)}` : '')}
+                  pos={r.pos}
+                  best={r.best}
+                  avg={r.average}
+                  eventId={eventId}
+                  singleRec={r.regional_single_record}
+                  avgRec={r.regional_average_record}
+                />
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function ResultsPage() {
   const { user } = useAuth();
   const wcaId = user?.wcaId;
+  const [view, setView] = useState<'competition' | 'event'>('competition');
 
   const { data: personData, isLoading: personLoading, error: personError } = useQuery<PersonData>({
     queryKey: ['wca-person', wcaId],
@@ -280,128 +365,147 @@ export default function ResultsPage() {
 
   if (!user) {
     return (
-      <div className="max-w-xl mx-auto mt-16 text-center space-y-4">
-        <Icon name="trophy" size={40} className="mx-auto text-muted" />
+      <div className="max-w-md mx-auto mt-20 text-center space-y-3">
+        <Icon name="trophy" size={36} className="mx-auto text-muted" />
         <h2 className="text-xl font-bold">Competition Results</h2>
-        <p className="text-muted">Log in to view your official WCA results.</p>
+        <p className="text-muted text-sm">Log in to view your official WCA results.</p>
       </div>
     );
   }
 
   if (!wcaId) {
     return (
-      <div className="max-w-xl mx-auto mt-16 text-center space-y-4">
-        <Icon name="trophy" size={40} className="mx-auto text-muted" />
+      <div className="max-w-md mx-auto mt-20 text-center space-y-3">
+        <Icon name="trophy" size={36} className="mx-auto text-muted" />
         <h2 className="text-xl font-bold">No WCA ID linked</h2>
-        <p className="text-muted">
-          Your account doesn't have a WCA ID associated. Log in with WCA OAuth to link your
-          official results.
+        <p className="text-muted text-sm">
+          Log in with WCA OAuth to link your official results.
         </p>
       </div>
     );
   }
 
-  if (personLoading) {
-    return <div className="p-8 text-muted text-center">Loading results…</div>;
-  }
-
+  if (personLoading) return <div className="p-8 text-muted text-center text-sm">Loading results…</div>;
   if (personError || !personData) {
     return (
-      <div className="p-8 text-center space-y-2">
-        <p className="text-red-400 font-medium">Could not load WCA profile.</p>
-        <p className="text-muted text-sm">WCA ID: {wcaId}</p>
+      <div className="p-8 text-center space-y-1">
+        <p className="text-red-400 font-medium text-sm">Could not load WCA profile.</p>
+        <p className="text-muted text-xs">WCA ID: {wcaId}</p>
       </div>
     );
   }
 
   const { person, competition_count, personal_records, medals, records } = personData;
-  const totalRecords = records.national + records.continental + records.world;
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Profile header */}
-      <div className="card p-5 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-        {person.avatar?.thumb_url && (
-          <img
-            src={person.avatar.thumb_url}
-            alt={person.name}
-            className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-border shrink-0"
-          />
+    <div className="space-y-5 max-w-4xl">
+
+      {/* ── Profile header ── */}
+      <div className="card p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        {person.avatar?.thumb_url ? (
+          <img src={person.avatar.thumb_url} alt={person.name}
+            className="w-14 h-14 rounded-full object-cover ring-2 ring-border shrink-0" />
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-card-hover flex items-center justify-center shrink-0">
+            <Icon name="user" size={24} className="text-muted" />
+          </div>
         )}
+
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold truncate">{person.name}</h1>
-            <span className="font-mono text-accent font-semibold text-sm">{person.wca_id}</span>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h1 className="text-xl font-bold">{person.name}</h1>
+            <span className="font-mono text-accent text-sm font-semibold">{person.wca_id}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-muted">
-            <span className="flex items-center gap-1.5">
-              <Icon name="globe" size={14} />
-              {person.country_iso2}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Icon name="calendar" size={14} />
-              {competition_count} competition{competition_count !== 1 ? 's' : ''}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 mt-2">
-            {medals.gold > 0 && (
-              <span className="text-sm font-medium">🥇 {medals.gold}</span>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted mt-1">
+            <span>{person.country_iso2}</span>
+            <span className="text-border">·</span>
+            <span>{competition_count} competition{competition_count !== 1 ? 's' : ''}</span>
+            {(medals.gold + medals.silver + medals.bronze) > 0 && (
+              <>
+                <span className="text-border">·</span>
+                <span className="flex items-center gap-2">
+                  {medals.gold   > 0 && <span>🥇 {medals.gold}</span>}
+                  {medals.silver > 0 && <span>🥈 {medals.silver}</span>}
+                  {medals.bronze > 0 && <span>🥉 {medals.bronze}</span>}
+                </span>
+              </>
             )}
-            {medals.silver > 0 && (
-              <span className="text-sm font-medium">🥈 {medals.silver}</span>
-            )}
-            {medals.bronze > 0 && (
-              <span className="text-sm font-medium">🥉 {medals.bronze}</span>
-            )}
-            {records.world > 0 && (
-              <RankBadge rank={1} label="WR" />
-            )}
-            {records.continental > 0 && (
-              <RankBadge rank={1} label="CR" />
-            )}
-            {records.national > 0 && (
-              <RankBadge rank={1} label="NR" />
+            {(records.world + records.continental + records.national) > 0 && (
+              <>
+                <span className="text-border">·</span>
+                <span className="flex items-center gap-1.5">
+                  {records.world       > 0 && <RecBadge level="WR" />}
+                  {records.continental > 0 && <RecBadge level="CR" />}
+                  {records.national    > 0 && <RecBadge level="NR" />}
+                </span>
+              </>
             )}
           </div>
         </div>
-        <a
-          href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors shrink-0"
-        >
+
+        <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
+          target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors shrink-0">
           <Icon name="external" size={13} />
           WCA Profile
         </a>
       </div>
 
-      {/* Personal Records */}
-      <div className="card p-5">
-        <h2 className="text-base font-semibold mb-4">Personal Records</h2>
+      {/* ── Personal Records ── */}
+      <div className="card p-4">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Personal Records</h2>
         <PRTable records={personal_records} />
       </div>
 
-      {/* Competition History */}
+      {/* ── Competition Results ── */}
       <div>
-        <h2 className="text-base font-semibold mb-3">Competition History</h2>
-        {resultsLoading ? (
-          <div className="text-muted text-sm p-4">Loading competition history…</div>
-        ) : resultsData ? (
-          <CompHistory results={resultsData} />
-        ) : (
-          <div className="card p-4 text-sm text-muted flex items-center justify-between">
-            <span>Full competition history available on the WCA website.</span>
-            <a
-              href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-accent hover:underline text-xs"
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Competition Results</h2>
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium">
+            <button
+              onClick={() => setView('competition')}
+              className={clsx(
+                'px-3 py-1.5 transition-colors',
+                view === 'competition'
+                  ? 'bg-accent text-white'
+                  : 'text-muted hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-card-hover',
+              )}
             >
-              View on WCA <Icon name="external" size={13} />
+              By Competition
+            </button>
+            <button
+              onClick={() => setView('event')}
+              className={clsx(
+                'px-3 py-1.5 border-l border-gray-200 dark:border-border transition-colors',
+                view === 'event'
+                  ? 'bg-accent text-white'
+                  : 'text-muted hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-card-hover',
+              )}
+            >
+              By Event
+            </button>
+          </div>
+        </div>
+
+        {resultsLoading ? (
+          <div className="card p-6 text-center text-sm text-muted">Loading competition history…</div>
+        ) : resultsData && resultsData.length > 0 ? (
+          view === 'competition'
+            ? <ByCompetition results={resultsData} />
+            : <ByEvent results={resultsData} />
+        ) : (
+          <div className="card p-4 flex items-center justify-between text-sm">
+            <span className="text-muted">Full competition history available on the WCA website.</span>
+            <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-accent hover:underline text-xs ml-4 shrink-0">
+              View on WCA <Icon name="external" size={12} />
             </a>
           </div>
         )}
       </div>
+
     </div>
   );
 }
