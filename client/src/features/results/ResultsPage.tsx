@@ -550,8 +550,8 @@ export default function ResultsPage() {
     <div className="space-y-5 max-w-4xl">
 
       {/* Profile header */}
-      <div className="card overflow-hidden border-l-4 border-accent">
-        <div className="py-5 px-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="card overflow-hidden border-t-4 border-accent">
+        <div className="p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-3 mb-3">
               <h1 className="text-2xl font-bold leading-tight">{person.name}</h1>
