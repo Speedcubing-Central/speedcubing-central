@@ -13,6 +13,7 @@ import AlgTrainerPage from './features/alg-trainer/AlgTrainerPage';
 import BattleLobby from './features/battle/BattleLobby';
 import BattleRoom from './features/battle/BattleRoom';
 import ReconstructionPage from './features/reconstruction/ReconstructionPage';
+import ResultsPage from './features/results/ResultsPage';
 import LoginPage from './features/auth/LoginPage';
 import SettingsPage from './features/settings/SettingsPage';
 
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/battle/:code" element={<BattleRoom />} />
         <Route path="/reconstruction" element={<ReconstructionPage />} />
         <Route path="/reconstruction/:id" element={<ReconstructionPage />} />
+        <Route path="/results" element={<ResultsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

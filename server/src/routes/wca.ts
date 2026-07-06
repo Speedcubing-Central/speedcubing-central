@@ -92,6 +92,24 @@ router.get('/competitor/:wcaId', async (req, res, next) => {
   }
 });
 
+// GET /api/wca/competitor/:wcaId/results — all competition results for a person
+router.get('/competitor/:wcaId/results', async (req, res, next) => {
+  try {
+    const wcaId = req.params.wcaId.toUpperCase();
+    const key = `wca:competitor:${wcaId}:results`;
+    const data = await cached(key, ONE_HOUR, async () => {
+      return wcaGet(`/persons/${encodeURIComponent(wcaId)}/results`);
+    });
+    res.json(data);
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.status === 404) {
+      res.status(404).json({ error: 'Competitor not found' });
+      return;
+    }
+    next(e);
+  }
+});
+
 // GET /api/wca/search?q=... — search persons by name or id
 router.get('/search', async (req, res, next) => {
   try {
