@@ -32,11 +32,17 @@ const ROUND_NAMES: Record<string, string> = {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function countryFlag(iso2: string): string {
-  if (!iso2 || iso2.length !== 2) return '';
-  const base = 0x1F1E6;
-  return String.fromCodePoint(base + iso2.toUpperCase().charCodeAt(0) - 65) +
-         String.fromCodePoint(base + iso2.toUpperCase().charCodeAt(1) - 65);
+function CountryFlag({ iso2 }: { iso2: string }) {
+  if (!iso2) return null;
+  return (
+    <img
+      src={`https://flagcdn.com/20x15/${iso2.toLowerCase()}.png`}
+      alt={iso2}
+      width={20}
+      height={15}
+      className="inline-block rounded-[2px] shrink-0"
+    />
+  );
 }
 
 // Convert WCA competition ID to a readable name when the API returns the ID only.
@@ -430,8 +436,6 @@ export default function ResultsPage() {
   }
 
   const { person, competition_count, personal_records, medals, records } = personData;
-  const flag = countryFlag(person.country_iso2);
-
   return (
     <div className="space-y-5 max-w-4xl">
 
@@ -443,7 +447,7 @@ export default function ResultsPage() {
             <span className="font-mono text-accent text-sm font-semibold">{person.wca_id}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted mt-1.5">
-            {flag && <span>{flag} {person.country_iso2}</span>}
+            <span className="flex items-center gap-1.5"><CountryFlag iso2={person.country_iso2} />{person.country_iso2}</span>
             <span>·</span>
             <span>{competition_count} competition{competition_count !== 1 ? 's' : ''}</span>
             {(medals.gold + medals.silver + medals.bronze) > 0 && (
