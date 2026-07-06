@@ -301,7 +301,11 @@ export default function TimerPage() {
               or need to scroll internally. */}
           <div ref={scrambleCardRef} className="card p-4 shrink-0 flex flex-col items-center gap-2 md:max-h-[70%] md:overflow-hidden">
             <div ref={scrambleImgRef}>
-              <ScrambleImage eventId={event} scramble={scr.scramble} size={event === 'minx' ? 210 : undefined} />
+              <ScrambleImage
+                eventId={event}
+                scramble={scr.scramble}
+                size={event === 'minx' ? 230 : event === 'sq1' ? 240 : undefined}
+              />
             </div>
             <div
               ref={scrambleTextRef}
