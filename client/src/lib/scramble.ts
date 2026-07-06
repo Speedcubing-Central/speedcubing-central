@@ -31,6 +31,34 @@ export function generateScramble(eventId: string): string {
   }
 }
 
+// Formats a scramble for multi-line display.
+// sq1:  line break after each " /" separator so lines always start at a new "(a,b)" pair.
+// minx: line break after each U/U' move (one megaminx row per line).
+// All other events: returned unchanged.
+export function formatScramble(scramble: string, eventId: string): string {
+  if (!scramble) return scramble;
+
+  if (eventId === 'sq1') {
+    const pairs = scramble.split(' / ');
+    const LINE = 5;
+    const lines: string[] = [];
+    for (let i = 0; i < pairs.length; i += LINE) {
+      const chunk = pairs.slice(i, i + LINE);
+      const isLast = i + LINE >= pairs.length;
+      lines.push(chunk.join(' / ') + (isLast ? '' : ' /'));
+    }
+    return lines.join('\n');
+  }
+
+  if (eventId === 'minx') {
+    // Each row ends with U or U'; insert a newline after every such move
+    // that is followed by more moves.
+    return scramble.replace(/(U'?) (?=[RD])/g, '$1\n');
+  }
+
+  return scramble;
+}
+
 // Fetch a WCA-quality random-state scramble from the server (cubing.js runs
 // server-side via Node.js worker_threads, avoiding browser Web Worker issues).
 // If the server doesn't respond within 5 s, fall back to client-side scrambow.

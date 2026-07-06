@@ -10,6 +10,7 @@ import { ScrambleImage } from '../../components/ScrambleImage';
 import { useTimerEngine } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
+import { formatScramble } from '../../lib/scramble';
 import { singleStats, makeAverageView, type AvgSize, type SolveAverage } from './stats';
 import { StatsTable } from './StatsTable';
 import { PenaltyButtons } from './PenaltyButtons';
@@ -288,8 +289,8 @@ export default function TimerPage() {
           {/* Scramble card */}
           <div className="card p-5 shrink-0 flex flex-col items-center gap-3">
             <ScrambleImage eventId={event} scramble={scr.scramble} />
-            <div className={`${scrambleFontSize(scr.scramble)} font-mono tracking-wide break-words w-full text-center`}>
-              {scr.loading ? <span className="text-muted text-base">Scrambling…</span> : scr.scramble || '—'}
+            <div className={`${scrambleFontSize(scr.scramble)} font-mono tracking-wide whitespace-pre-wrap w-full text-center`}>
+              {scr.loading ? <span className="text-muted text-base">Scrambling…</span> : formatScramble(scr.scramble, event) || '—'}
             </div>
             <button className="text-xs text-accent inline-flex items-center gap-1" onClick={() => scr.refresh()}>
               <Icon name="refresh" size={13} /> new scramble
