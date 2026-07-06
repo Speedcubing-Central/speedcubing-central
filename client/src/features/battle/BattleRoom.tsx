@@ -438,7 +438,7 @@ export default function BattleRoom() {
         {/* Scramble */}
         {room.status === 'ACTIVE' && room.scramble && (
           <div className="card p-4 flex flex-col items-center gap-2 shrink-0">
-            <ScrambleImage eventId={event} scramble={room.scramble} size={event === 'minx' ? 190 : undefined} />
+            <ScrambleImage eventId={event} scramble={room.scramble} size={event === 'minx' ? 320 : event === 'sq1' ? 150 : undefined} />
             <ScrambleText
               scramble={room.scramble}
               eventId={event}

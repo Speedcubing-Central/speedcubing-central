@@ -304,7 +304,7 @@ export default function TimerPage() {
               <ScrambleImage
                 eventId={event}
                 scramble={scr.scramble}
-                size={event === 'minx' ? 230 : event === 'sq1' ? 240 : undefined}
+                size={event === 'minx' ? 320 : event === 'sq1' ? 150 : undefined}
               />
             </div>
             <div
