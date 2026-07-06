@@ -92,13 +92,42 @@ router.get('/competitor/:wcaId', async (req, res, next) => {
   }
 });
 
-// GET /api/wca/competitor/:wcaId/results — all competition results for a person
+// GET /api/wca/competitor/:wcaId/results — all competition results for a person,
+// enriched with proper competition names fetched from the WCA competitions endpoint.
 router.get('/competitor/:wcaId/results', async (req, res, next) => {
   try {
     const wcaId = req.params.wcaId.toUpperCase();
     const key = `wca:competitor:${wcaId}:results`;
     const data = await cached(key, ONE_HOUR, async () => {
-      return wcaGet(`/persons/${encodeURIComponent(wcaId)}/results`);
+      const results = await wcaGet<any[]>(`/persons/${encodeURIComponent(wcaId)}/results`);
+      if (!Array.isArray(results)) return results;
+
+      // Collect unique competition IDs that don't already have a proper name.
+      const ids = [...new Set(
+        results
+          .map((r: any) => r.competition_id ?? r.competition?.id)
+          .filter(Boolean) as string[],
+      )];
+
+      // Fetch each competition's proper name in parallel, caching each individually.
+      const nameMap = new Map<string, string>();
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const name = await cached(`wca:comp-name:${id}`, ONE_HOUR, async () => {
+            const comp = await wcaGet<any>(`/competitions/${encodeURIComponent(id)}`);
+            return (comp?.name ?? id) as string;
+          });
+          nameMap.set(id, name as string);
+        } catch {
+          nameMap.set(id, id);
+        }
+      }));
+
+      // Inject competition_name into every result row.
+      return results.map((r: any) => {
+        const id = r.competition_id ?? r.competition?.id ?? '';
+        return { ...r, competition_name: nameMap.get(id) ?? r.competition?.name ?? id };
+      });
     });
     res.json(data);
   } catch (e) {

@@ -32,16 +32,6 @@ const ROUND_NAMES: Record<string, string> = {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-
-// Convert WCA competition ID to a readable name when the API returns the ID only.
-function formatCompId(raw: string): string {
-  return raw
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
-    .replace(/([a-zA-Z])(\d)/g, '$1 $2')
-    .replace(/(\d)([A-Za-z])/g, '$1 $2');
-}
-
 function fmtCs(cs: number, eventId: string): string {
   if (cs <= 0) return 'DNF';
   if (eventId === '333fm') return String(cs);
@@ -140,10 +130,7 @@ interface CompResult {
 
 function getCompId  (r: CompResult) { return r.competition?.id   ?? r.competition_id   ?? ''; }
 function getCompName(r: CompResult) {
-  const name = r.competition?.name ?? r.competition_name ?? '';
-  const id   = getCompId(r);
-  // If name equals id or is blank, format the id into a readable name
-  return name && name !== id ? name : formatCompId(id);
+  return r.competition_name ?? r.competition?.name ?? getCompId(r);
 }
 function getEventId (r: CompResult) { return r.event?.id         ?? r.event_id         ?? ''; }
 function getDate    (r: CompResult) { return r.competition?.start_date ?? r.start_date ?? ''; }
