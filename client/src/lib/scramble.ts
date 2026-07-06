@@ -32,23 +32,13 @@ export function generateScramble(eventId: string): string {
 }
 
 // Formats a scramble for multi-line display.
-// sq1:  line break after each " /" separator so lines always start at a new "(a,b)" pair.
 // minx: line break after each U/U' move (one megaminx row per line).
 // All other events: returned unchanged.
+// (sq1 line-wrapping isn't done here — see sq1Pairs below — because how many
+// pairs fit per line depends on the rendered width, which a plain string
+// can't express.)
 export function formatScramble(scramble: string, eventId: string): string {
   if (!scramble) return scramble;
-
-  if (eventId === 'sq1') {
-    const pairs = scramble.split(' / ');
-    const LINE = 5;
-    const lines: string[] = [];
-    for (let i = 0; i < pairs.length; i += LINE) {
-      const chunk = pairs.slice(i, i + LINE);
-      const isLast = i + LINE >= pairs.length;
-      lines.push(chunk.join(' / ') + (isLast ? '' : ' /'));
-    }
-    return lines.join('\n');
-  }
 
   if (eventId === 'minx') {
     // Each row ends with U or U'; insert a newline after every such move
@@ -57,6 +47,17 @@ export function formatScramble(scramble: string, eventId: string): string {
   }
 
   return scramble;
+}
+
+// Splits a Square-1 scramble into its "(a,b)" pairs, appending a trailing
+// " /" to every pair except the last. Rendered as individually non-wrapping
+// items in a flex-wrap container (see <ScrambleText>), so the browser's own
+// layout decides how many pairs fit per line — every line still starts with
+// a pair and ends with a slash, at any screen size.
+export function sq1Pairs(scramble: string): string[] {
+  if (!scramble) return [];
+  const pairs = scramble.split(' / ');
+  return pairs.map((p, i) => (i < pairs.length - 1 ? `${p} /` : p));
 }
 
 // Fetch a WCA-quality random-state scramble from the server (cubing.js runs

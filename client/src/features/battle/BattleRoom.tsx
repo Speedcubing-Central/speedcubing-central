@@ -8,9 +8,9 @@ import { toast } from '../../store/toast';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { ScrambleImage } from '../../components/ScrambleImage';
+import { ScrambleText } from '../../components/ScrambleText';
 import { useTimerEngine } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
-import { formatScramble } from '../../lib/scramble';
 
 function parseTimeInput(raw: string): number | null {
   const s = raw.trim().replace(',', '.');
@@ -437,11 +437,13 @@ export default function BattleRoom() {
 
         {/* Scramble */}
         {room.status === 'ACTIVE' && room.scramble && (
-          <div className="card p-4 flex flex-col items-center gap-3 shrink-0">
-            <ScrambleImage eventId={event} scramble={room.scramble} />
-            <div className="font-mono text-sm tracking-wide text-center whitespace-pre-wrap w-full">
-              {formatScramble(room.scramble, event)}
-            </div>
+          <div className="card p-4 flex flex-col items-center gap-2 shrink-0">
+            <ScrambleImage eventId={event} scramble={room.scramble} size={event === 'minx' ? 190 : undefined} />
+            <ScrambleText
+              scramble={room.scramble}
+              eventId={event}
+              className="font-mono text-sm tracking-wide leading-snug text-center w-full"
+            />
           </div>
         )}
 

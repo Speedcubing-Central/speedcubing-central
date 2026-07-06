@@ -7,10 +7,11 @@ import { useUi } from '../../store/ui';
 import { EventSelector } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleImage } from '../../components/ScrambleImage';
+import { ScrambleText } from '../../components/ScrambleText';
+import { useFitScrambleFontSize } from '../../components/useFitScrambleFontSize';
 import { useTimerEngine } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
-import { formatScramble } from '../../lib/scramble';
 import { singleStats, makeAverageView, type AvgSize, type SolveAverage } from './stats';
 import { StatsTable } from './StatsTable';
 import { PenaltyButtons } from './PenaltyButtons';
@@ -45,14 +46,6 @@ function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reserv
   return size;
 }
 
-function scrambleFontSize(scramble: string): string {
-  const n = scramble.length;
-  if (n <= 30) return 'text-4xl';
-  if (n <= 50) return 'text-3xl';
-  if (n <= 80) return 'text-2xl';
-  if (n <= 140) return 'text-xl';
-  return 'text-lg';
-}
 
 // Parse a time string. For pure-digit inputs (no . or :), use precision to
 // interpret: the last `precision` digits are the fractional part.
@@ -113,6 +106,21 @@ export default function TimerPage() {
   // manual mode also needs the input + button row, so it gets less headroom.
   const timerCardRef = useRef<HTMLDivElement>(null);
   const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
+
+  // Shrinks the scramble text to whatever fits above/below it (the cube
+  // diagram and the refresh button), so the scramble card never needs to
+  // scroll internally regardless of scramble length or screen size.
+  const scrambleCardRef = useRef<HTMLDivElement>(null);
+  const scrambleImgRef = useRef<HTMLDivElement>(null);
+  const scrambleTextRef = useRef<HTMLDivElement>(null);
+  const scrambleBtnRef = useRef<HTMLButtonElement>(null);
+  const scrambleFontPx = useFitScrambleFontSize(
+    scrambleCardRef,
+    scrambleImgRef,
+    scrambleTextRef,
+    scrambleBtnRef,
+    [scr.scramble, event, scr.loading],
+  );
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -286,13 +294,23 @@ export default function TimerPage() {
         {/* LEFT column */}
         <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
 
-          {/* Scramble card */}
-          <div className="card p-5 shrink-0 flex flex-col items-center gap-3">
-            <ScrambleImage eventId={event} scramble={scr.scramble} />
-            <div className={`${scrambleFontSize(scr.scramble)} font-mono tracking-wide whitespace-pre-wrap w-full text-center`}>
-              {scr.loading ? <span className="text-muted text-base">Scrambling…</span> : formatScramble(scr.scramble, event) || '—'}
+          {/* Scramble card — capped to a share of the column height, and the
+              scramble text's font size is fitted (see useFitScrambleFontSize)
+              to whatever room is left after the diagram and button, so a long
+              scramble (e.g. megaminx) can never squeeze the timer out of view
+              or need to scroll internally. */}
+          <div ref={scrambleCardRef} className="card p-4 shrink-0 flex flex-col items-center gap-2 md:max-h-[70%] md:overflow-hidden">
+            <div ref={scrambleImgRef}>
+              <ScrambleImage eventId={event} scramble={scr.scramble} size={event === 'minx' ? 210 : undefined} />
             </div>
-            <button className="text-xs text-accent inline-flex items-center gap-1" onClick={() => scr.refresh()}>
+            <div
+              ref={scrambleTextRef}
+              className="font-mono tracking-wide leading-snug w-full text-center"
+              style={{ fontSize: scrambleFontPx }}
+            >
+              {scr.loading ? <span className="text-muted text-base">Scrambling…</span> : <ScrambleText scramble={scr.scramble} eventId={event} />}
+            </div>
+            <button ref={scrambleBtnRef} className="text-xs text-accent inline-flex items-center gap-1" onClick={() => scr.refresh()}>
               <Icon name="refresh" size={13} /> new scramble
             </button>
           </div>
