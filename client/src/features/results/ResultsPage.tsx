@@ -32,18 +32,6 @@ const ROUND_NAMES: Record<string, string> = {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function CountryFlag({ iso2 }: { iso2: string }) {
-  if (!iso2) return null;
-  return (
-    <img
-      src={`https://flagcdn.com/20x15/${iso2.toLowerCase()}.png`}
-      alt={iso2}
-      width={20}
-      height={15}
-      className="inline-block rounded-[2px] shrink-0"
-    />
-  );
-}
 
 // Convert WCA competition ID to a readable name when the API returns the ID only.
 function formatCompId(raw: string): string {
@@ -290,26 +278,38 @@ function ByCompetition({ results }: { results: CompResult[] }) {
             <span className="font-semibold truncate">{comp.name}</span>
             {comp.date && <span className="text-xs text-muted shrink-0">{fmtDate(comp.date)}</span>}
           </div>
-          <ResultsHeader />
-          {comp.rows
-            .sort((a, b) => EVENT_ORDER.indexOf(getEventId(a)) - EVENT_ORDER.indexOf(getEventId(b)))
-            .map((r, i) => {
-              const evId   = getEventId(r);
-              const evName = EVENT_NAMES[evId] ?? evId;
-              const round  = getRound(r);
-              return (
-                <ResultRow
-                  key={i}
-                  label={`${evName} ${round}`}
-                  rank={r.pos}
-                  best={r.best}
-                  avg={r.average}
-                  eventId={evId}
-                  singleRec={r.regional_single_record}
-                  avgRec={r.regional_average_record}
-                />
-              );
-            })}
+          {(() => {
+            // Group rows by event, preserving WCA order
+            const eventGroups = new Map<string, CompResult[]>();
+            for (const r of comp.rows) {
+              const evId = getEventId(r);
+              if (!eventGroups.has(evId)) eventGroups.set(evId, []);
+              eventGroups.get(evId)!.push(r);
+            }
+            const sortedEventIds = EVENT_ORDER.filter((id) => eventGroups.has(id));
+            return sortedEventIds.map((evId, gi) => (
+              <div key={evId} className={gi > 0 ? 'border-t border-gray-200 dark:border-border' : ''}>
+                {/* Event sub-header */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/60 dark:bg-white/[0.02]">
+                  <EventIcon eventId={evId} size={13} />
+                  <span className="text-xs font-semibold">{EVENT_NAMES[evId] ?? evId}</span>
+                </div>
+                <ResultsHeader />
+                {eventGroups.get(evId)!.map((r, i) => (
+                  <ResultRow
+                    key={i}
+                    label={getRound(r)}
+                    rank={r.pos}
+                    best={r.best}
+                    avg={r.average}
+                    eventId={evId}
+                    singleRec={r.regional_single_record}
+                    avgRec={r.regional_average_record}
+                  />
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       ))}
     </div>
@@ -447,7 +447,7 @@ export default function ResultsPage() {
             <span className="font-mono text-accent text-sm font-semibold">{person.wca_id}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted mt-1.5">
-            <span className="flex items-center gap-1.5"><CountryFlag iso2={person.country_iso2} />{person.country_iso2}</span>
+            <span>{person.country_iso2}</span>
             <span>·</span>
             <span>{competition_count} competition{competition_count !== 1 ? 's' : ''}</span>
             {(medals.gold + medals.silver + medals.bronze) > 0 && (
