@@ -22,6 +22,7 @@ import bldRouter from './routes/bld.js';
 import algRouter from './routes/alg.js';
 import scrambleRouter from './routes/scramble.js';
 import reconstructionsRouter from './routes/reconstructions.js';
+import ccRouter from './routes/cubingContests.js';
 
 export function createApp() {
   const app = express();
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/alg', algRouter);
   app.use('/api/scramble', scrambleRouter);
   app.use('/api/reconstructions', reconstructionsRouter);
+  app.use('/api/cc', ccRouter);
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => {
