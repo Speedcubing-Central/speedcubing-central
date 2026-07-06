@@ -8,6 +8,7 @@ const TILES: { to: string; icon: IconName; label: string; description: string }[
   { to: '/algorithms', icon: 'cube', label: 'Algorithms', description: 'Browse and drill algorithms for 3×3 and 2×2, with more puzzles and sets coming soon.' },
   { to: '/battle', icon: 'swords', label: 'Battle', description: 'Compete head-to-head in real-time with other solvers.' },
   { to: '/reconstruction', icon: 'film', label: 'Reconstruction', description: '3D playback of any scramble + solution, move by move.' },
+  { to: '/results', icon: 'trophy', label: 'Results', description: 'Browse official WCA results and unofficial event rankings for any competitor.' },
 ];
 
 export default function Dashboard() {
