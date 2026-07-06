@@ -264,49 +264,45 @@ function ResultRow({ label, rank, best, avg, eventId, singleRec, avgRec }: {
   );
 }
 
-function ResultsHeader() {
-  return (
-    <div className="flex items-center gap-4 py-1.5 px-4 border-b border-gray-200 dark:border-border text-[11px] font-semibold text-muted uppercase tracking-wide bg-gray-50/60 dark:bg-white/[0.02]">
-      <div className="flex-1">Round</div>
-      <div className="w-14 text-right shrink-0">Rank</div>
-      <div className="w-20 text-right shrink-0">Single</div>
-      <div className="w-20 text-right shrink-0">Average</div>
-    </div>
-  );
-}
-
 // ── By Competition ────────────────────────────────────────────────────────────
 
-function ByCompetition({ results }: { results: CompResult[] }) {
+function ByCompetition({ results, eventFilter }: { results: CompResult[]; eventFilter: string | null }) {
   const byComp = new Map<string, { name: string; date: string; rows: CompResult[] }>();
   for (const r of results) {
     const id = getCompId(r);
     if (!byComp.has(id)) byComp.set(id, { name: getCompName(r), date: getDate(r), rows: [] });
     byComp.get(id)!.rows.push(r);
   }
-  const comps = Array.from(byComp.values()).sort((a, b) => b.date.localeCompare(a.date));
+  const allComps = Array.from(byComp.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+  // When filtering, skip competitions that don't have the selected event at all
+  const comps = eventFilter
+    ? allComps.filter((c) => c.rows.some((r) => getEventId(r) === eventFilter))
+    : allComps;
 
   return (
     <div className="space-y-3">
-      {comps.map((comp) => (
-        <div key={comp.name} className="card overflow-hidden">
-          {/* Competition header */}
-          <div className="px-4 py-3 flex items-baseline justify-between gap-4 border-b border-gray-200 dark:border-border">
-            <span className="font-semibold truncate">{comp.name}</span>
-            {comp.date && <span className="text-xs text-muted shrink-0">{fmtDate(comp.date)}</span>}
-          </div>
-          {(() => {
-            // Group rows by event, preserving WCA order
-            const eventGroups = new Map<string, CompResult[]>();
-            for (const r of comp.rows) {
-              const evId = getEventId(r);
-              if (!eventGroups.has(evId)) eventGroups.set(evId, []);
-              eventGroups.get(evId)!.push(r);
-            }
-            const sortedEventIds = EVENT_ORDER.filter((id) => eventGroups.has(id));
-            return sortedEventIds.map((evId, gi) => (
+      {comps.map((comp) => {
+        const eventGroups = new Map<string, CompResult[]>();
+        for (const r of comp.rows) {
+          const evId = getEventId(r);
+          if (!eventGroups.has(evId)) eventGroups.set(evId, []);
+          eventGroups.get(evId)!.push(r);
+        }
+        // Preserve WCA order, applying the event filter if set
+        const visibleEventIds = EVENT_ORDER.filter(
+          (id) => eventGroups.has(id) && (eventFilter == null || id === eventFilter),
+        );
+
+        return (
+          <div key={comp.name} className="card overflow-hidden">
+            <div className="px-4 py-3 flex items-baseline justify-between gap-4 border-b border-gray-200 dark:border-border">
+              <span className="font-semibold truncate">{comp.name}</span>
+              {comp.date && <span className="text-xs text-muted shrink-0">{fmtDate(comp.date)}</span>}
+            </div>
+            {visibleEventIds.map((evId, gi) => (
               <div key={evId} className={gi > 0 ? 'border-t border-gray-200 dark:border-border' : ''}>
-                {/* Combined event name + column labels */}
+                {/* Event subheader: icon + name + column labels */}
                 <div className="flex items-center gap-4 px-4 py-2 bg-gray-50/60 dark:bg-white/[0.02] border-b border-gray-200 dark:border-border">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <EventIcon eventId={evId} size={13} />
@@ -329,78 +325,10 @@ function ByCompetition({ results }: { results: CompResult[] }) {
                   />
                 ))}
               </div>
-            ));
-          })()}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── By Event ──────────────────────────────────────────────────────────────────
-
-function ByEvent({ results }: { results: CompResult[] }) {
-  const eventIds = EVENT_ORDER.filter((id) => results.some((r) => getEventId(r) === id));
-  const [selected, setSelected] = useState(eventIds[0] ?? '');
-
-  const eventResults = results.filter((r) => getEventId(r) === selected);
-
-  // Group by competition, sorted most-recent-first
-  const byComp = new Map<string, { name: string; date: string; rows: CompResult[] }>();
-  for (const r of eventResults) {
-    const id = getCompId(r);
-    if (!byComp.has(id)) byComp.set(id, { name: getCompName(r), date: getDate(r), rows: [] });
-    byComp.get(id)!.rows.push(r);
-  }
-  const comps = Array.from(byComp.values()).sort((a, b) => b.date.localeCompare(a.date));
-
-  return (
-    <div className="space-y-3">
-      {/* Event selector */}
-      <div className="flex flex-wrap gap-2">
-        {eventIds.map((id) => (
-          <button
-            key={id}
-            onClick={() => setSelected(id)}
-            className={clsx(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap',
-              selected === id
-                ? 'bg-accent text-white border-accent'
-                : 'border-gray-200 dark:border-border text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
-            )}
-          >
-            <EventIcon eventId={id} size={13} />
-            {EVENT_NAMES[id] ?? id}
-          </button>
-        ))}
-      </div>
-
-      {/* Results for selected event */}
-      {comps.map((comp) => (
-        <div key={comp.name} className="card overflow-hidden">
-          <div className="px-4 py-3 flex items-baseline justify-between gap-4 border-b border-gray-200 dark:border-border">
-            <span className="font-semibold truncate">{comp.name}</span>
-            {comp.date && <span className="text-xs text-muted shrink-0">{fmtDate(comp.date)}</span>}
+            ))}
           </div>
-          <ResultsHeader />
-          {comp.rows.map((r, i) => {
-            const evName = EVENT_NAMES[selected] ?? selected;
-            const round  = getRound(r);
-            return (
-              <ResultRow
-                key={i}
-                label={`${evName} ${round}`}
-                rank={r.pos}
-                best={r.best}
-                avg={r.average}
-                eventId={selected}
-                singleRec={r.regional_single_record}
-                avgRec={r.regional_average_record}
-              />
-            );
-          })}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -499,7 +427,7 @@ export default function ResultsPage() {
   const { user } = useAuth();
   const wcaId = user?.wcaId;
   const [source, setSource] = useState<'official' | 'unofficial'>('official');
-  const [view, setView] = useState<'competition' | 'event'>('competition');
+  const [eventFilter, setEventFilter] = useState<string | null>(null);
 
   const { data: personData, isLoading: personLoading, error: personError } = useQuery<PersonData>({
     queryKey: ['wca-person', wcaId],
@@ -647,32 +575,42 @@ export default function ResultsPage() {
       {/* Competition Results — official only */}
       {source === 'official' && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold text-muted uppercase tracking-wide">Competition Results</h2>
-            <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium">
-              {(['competition', 'event'] as const).map((v, i) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={clsx(
-                    'px-3 py-1.5 transition-colors',
-                    i > 0 && 'border-l border-gray-200 dark:border-border',
-                    view === v
-                      ? 'bg-accent text-white'
-                      : 'text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
-                  )}
-                >
-                  {v === 'competition' ? 'By Competition' : 'By Event'}
-                </button>
-              ))}
-            </div>
-          </div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Competition Results</h2>
           {resultsLoading ? (
             <div className="card p-6 text-center text-sm text-muted">Loading competition history…</div>
           ) : resultsData && resultsData.length > 0 ? (
-            view === 'competition'
-              ? <ByCompetition results={resultsData} />
-              : <ByEvent results={resultsData} />
+            <>
+              {/* Event filter pills */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button
+                  onClick={() => setEventFilter(null)}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap',
+                    eventFilter == null
+                      ? 'bg-accent text-white border-accent'
+                      : 'border-gray-200 dark:border-border text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
+                  )}
+                >
+                  All
+                </button>
+                {EVENT_ORDER.filter((id) => resultsData.some((r) => getEventId(r) === id)).map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => setEventFilter(id)}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap',
+                      eventFilter === id
+                        ? 'bg-accent text-white border-accent'
+                        : 'border-gray-200 dark:border-border text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
+                    )}
+                  >
+                    <EventIcon eventId={id} size={13} />
+                    {EVENT_NAMES[id] ?? id}
+                  </button>
+                ))}
+              </div>
+              <ByCompetition results={resultsData} eventFilter={eventFilter} />
+            </>
           ) : (
             <div className="card p-4 flex items-center justify-between text-sm">
               <span className="text-muted">Full history available on the WCA website.</span>
