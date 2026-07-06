@@ -27,7 +27,7 @@ const EVENT_NAMES: Record<string, string> = {
 const ROUND_NAMES: Record<string, string> = {
   '1':'Round 1','2':'Round 2','3':'Round 3','4':'Round 4','5':'Round 5',
   'f':'Final','0':'Combined Final','h':'Combined Round',
-  'd':'Round 1 (B)','e':'Round 2 (B)','g':'Round 1 (C)','c':'Final (C)',
+  'd':'Round 1','e':'Round 2','g':'Round 1','c':'Final',
 };
 
 // ── Formatters ────────────────────────────────────────────────────────────────
