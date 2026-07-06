@@ -5,7 +5,7 @@ import { Icon, type IconName } from '../../components/Icon';
 const TILES: { to: string; icon: IconName; label: string; description: string }[] = [
   { to: '/timer', icon: 'timer', label: 'Timer', description: 'Time your solves with inspection, sessions, and live averages.' },
   { to: '/calculator', icon: 'calculator', label: 'Calculator', description: 'Calculate Ao5 and Mo3 averages and find your target time.' },
-  { to: '/alg-trainer', icon: 'cube', label: 'Algorithms', description: 'Browse and drill algorithms for 3×3 and 2×2, with more puzzles and sets coming soon.' },
+  { to: '/algorithms', icon: 'cube', label: 'Algorithms', description: 'Browse and drill algorithms for 3×3 and 2×2, with more puzzles and sets coming soon.' },
   { to: '/battle', icon: 'swords', label: 'Battle', description: 'Compete head-to-head in real-time with other solvers.' },
   { to: '/reconstruction', icon: 'film', label: 'Reconstruction', description: '3D playback of any scramble + solution, move by move.' },
 ];

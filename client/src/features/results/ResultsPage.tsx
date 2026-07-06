@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import '@cubing/icons';
@@ -426,13 +427,16 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
 export default function ResultsPage() {
   const { user } = useAuth();
   const wcaId = user?.wcaId ?? null;
+  const { wcaId: urlWcaId } = useParams<{ wcaId?: string }>();
 
   // Search
   const searchRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [viewingWcaId, setViewingWcaId] = useState<string | null>(null);
+  const [viewingWcaId, setViewingWcaId] = useState<string | null>(
+    urlWcaId ? urlWcaId.toUpperCase() : null,
+  );
 
   // Page state
   const [source, setSource] = useState<'official' | 'unofficial'>('official');

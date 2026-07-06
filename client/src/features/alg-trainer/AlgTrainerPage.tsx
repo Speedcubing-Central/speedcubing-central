@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
@@ -78,6 +79,16 @@ function rotatingStickering(kind: AlgSet['kind']): StickeringKind {
 }
 
 const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'eg1', 'eg2'].includes(kind);
+
+// URL slug ↔ internal set ID mappings
+const SET_TO_URL: Record<string, string> = {
+  OLL: 'oll', PLL: 'pll', F2L: 'f2l', COLL: 'coll',
+  EG1: 'eg-1', EG2: 'eg-2', CLL: 'cll',
+  OrtegaOLL: 'ortega-oll', OrtegaPBL: 'ortega-pbl',
+};
+const URL_TO_SET: Record<string, string> = Object.fromEntries(
+  Object.entries(SET_TO_URL).map(([k, v]) => [v, k]),
+);
 
 function CaseImage({ c, set, size = 80, pref }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref }) {
   const alg = effectiveAlg(c, pref);
@@ -848,18 +859,23 @@ function TrainingSession({
   );
 }
 
-// Trainer view state machine
-type TrainerView =
-  | { screen: 'puzzles' }
-  | { screen: 'sets'; puzzle: string }
-  | { screen: 'select'; puzzle: string; setId: string }
-  | { screen: 'session'; puzzle: string; setId: string; cases: AlgCase[] };
+// ---------------------------------------------------------------------------
+// Trainer tab — URL-driven
+// ---------------------------------------------------------------------------
 
-function TrainerTab({ isAuthed }: { isAuthed: boolean }) {
-  const [view, setView] = useState<TrainerView>({ screen: 'puzzles' });
+function TrainerTab({
+  puzzle, setId, isAuthed,
+}: {
+  puzzle: string | null;
+  setId: string | null;
+  isAuthed: boolean;
+}) {
+  const navigate = useNavigate();
+  const [sessionCases, setSessionCases] = useState<AlgCase[] | null>(null);
   const [prefs, setPrefs] = useState<PrefsMap>({});
 
-  const setId = 'setId' in view ? view.setId : null;
+  // Clear active session when the set changes
+  useEffect(() => { setSessionCases(null); }, [puzzle, setId]);
 
   useEffect(() => {
     if (!setId || !isAuthed) return;
@@ -872,90 +888,82 @@ function TrainerTab({ isAuthed }: { isAuthed: boolean }) {
       .catch(() => {});
   }, [setId, isAuthed]);
 
-  if (view.screen === 'puzzles') {
+  if (!puzzle) {
     return (
       <PuzzleLanding
         subtitle="Select a puzzle to start training."
-        onSelect={(puzzle) => setView({ screen: 'sets', puzzle })}
+        onSelect={(p) => navigate(`/algorithms/trainer/${p}`)}
       />
     );
   }
-
-  if (view.screen === 'sets') {
+  if (!setId) {
     return (
       <SetPicker
-        puzzle={view.puzzle}
-        onBack={() => setView({ screen: 'puzzles' })}
-        onSelect={(setId) => setView({ screen: 'select', puzzle: view.puzzle, setId })}
+        puzzle={puzzle}
+        onBack={() => navigate('/algorithms/trainer')}
+        onSelect={(sid) => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[sid] ?? sid.toLowerCase()}`)}
       />
     );
   }
-
-  if (view.screen === 'select') {
+  if (sessionCases) {
     return (
-      <CaseSelector
-        setId={view.setId}
+      <TrainingSession
+        cases={sessionCases}
+        setId={setId}
         prefs={prefs}
-        onBack={() => setView({ screen: 'sets', puzzle: view.puzzle })}
-        onStart={(cases) => setView({ screen: 'session', puzzle: view.puzzle, setId: view.setId, cases })}
+        onBack={() => setSessionCases(null)}
       />
     );
   }
-
-  // session
-  const sv = view as { screen: 'session'; puzzle: string; setId: string; cases: AlgCase[] };
   return (
-    <TrainingSession
-      cases={sv.cases}
-      setId={sv.setId}
+    <CaseSelector
+      setId={setId}
       prefs={prefs}
-      onBack={() => setView({ screen: 'select', puzzle: sv.puzzle, setId: sv.setId })}
+      onBack={() => navigate(`/algorithms/trainer/${puzzle}`)}
+      onStart={(cases) => setSessionCases(cases)}
     />
   );
 }
 
 // ---------------------------------------------------------------------------
-// Library view state machine
+// Library tab — URL-driven
 // ---------------------------------------------------------------------------
 
-type LibraryView =
-  | { screen: 'puzzles' }
-  | { screen: 'sets'; puzzle: string }
-  | { screen: 'cases'; puzzle: string; setId: string };
-
-function LibraryTab({ isAuthed }: { isAuthed: boolean }) {
-  const [view, setView] = useState<LibraryView>({ screen: 'puzzles' });
-  const setId = view.screen === 'cases' ? view.setId : null;
+function LibraryTab({
+  puzzle, setId, isAuthed,
+}: {
+  puzzle: string | null;
+  setId: string | null;
+  isAuthed: boolean;
+}) {
+  const navigate = useNavigate();
   const { prefs, upsert } = useAlgPrefs(setId, isAuthed);
 
   const handlePrefChange = (caseId: string, patch: Partial<Pick<AlgPref, 'status' | 'preferredAlg'>>) => {
     if (setId) upsert(setId, caseId, patch);
   };
 
-  if (view.screen === 'puzzles') {
+  if (!puzzle) {
     return (
       <PuzzleLanding
         subtitle="Select a puzzle to browse algorithms."
-        onSelect={(puzzle) => setView({ screen: 'sets', puzzle })}
+        onSelect={(p) => navigate(`/algorithms/library/${p}`)}
       />
     );
   }
-
-  if (view.screen === 'sets') {
+  if (!setId) {
     return (
       <SetPicker
-        puzzle={view.puzzle}
-        onBack={() => setView({ screen: 'puzzles' })}
-        onSelect={(sid) => setView({ screen: 'cases', puzzle: view.puzzle, setId: sid })}
+        puzzle={puzzle}
+        onBack={() => navigate('/algorithms/library')}
+        onSelect={(sid) => navigate(`/algorithms/library/${puzzle}/${SET_TO_URL[sid] ?? sid.toLowerCase()}`)}
       />
     );
   }
-
-  const cv = view as { screen: 'cases'; puzzle: string; setId: string };
   return (
     <CaseBrowser
-      setId={cv.setId}
-      onBack={() => setView({ screen: 'sets', puzzle: cv.puzzle })}
+      setId={setId}
+      onBack={() => navigate(`/algorithms/library/${puzzle}`)}
       prefs={prefs}
       onPrefChange={handlePrefChange}
       isAuthed={isAuthed}
@@ -964,13 +972,22 @@ function LibraryTab({ isAuthed }: { isAuthed: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Root page
+// Root page — URL is the source of truth for tab / puzzle / set
 // ---------------------------------------------------------------------------
 
 export default function AlgTrainerPage() {
   const { user } = useAuth();
   const isAuthed = !!user;
-  const [tab, setTab] = useState<'library' | 'trainer'>('library');
+  const {
+    tab: tabParam,
+    puzzle: puzzleParam,
+    setId: setSlug,
+  } = useParams<{ tab?: string; puzzle?: string; setId?: string }>();
+  const navigate = useNavigate();
+
+  const tab: 'library' | 'trainer' = tabParam === 'trainer' ? 'trainer' : 'library';
+  const puzzle = puzzleParam ?? null;
+  const setId = setSlug ? (URL_TO_SET[setSlug] ?? null) : null;
 
   return (
     <div>
@@ -978,7 +995,7 @@ export default function AlgTrainerPage() {
         {(['library', 'trainer'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => navigate(`/algorithms/${t}`)}
             className={clsx(
               'px-4 py-2.5 text-sm font-semibold capitalize transition-colors border-b-2 -mb-px',
               tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-primary',
@@ -988,7 +1005,10 @@ export default function AlgTrainerPage() {
           </button>
         ))}
       </div>
-      {tab === 'library' ? <LibraryTab isAuthed={isAuthed} /> : <TrainerTab isAuthed={isAuthed} />}
+      {tab === 'library'
+        ? <LibraryTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
+        : <TrainerTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
+      }
     </div>
   );
 }

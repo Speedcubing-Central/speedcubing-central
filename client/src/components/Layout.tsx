@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home' },
   { to: '/timer', label: 'Timer', icon: 'timer' },
   { to: '/calculator', label: 'Calculator', icon: 'calculator' },
-  { to: '/alg-trainer', label: 'Algorithms', icon: 'cube' },
+  { to: '/algorithms', label: 'Algorithms', icon: 'cube' },
   { to: '/battle', label: 'Battle', icon: 'swords' },
   { to: '/reconstruction', label: 'Reconstruction', icon: 'film' },
   { to: '/results', label: 'Results', icon: 'trophy' },
@@ -33,7 +33,7 @@ const NAV: NavItem[] = [
 ];
 
 // Items shown in the mobile bottom bar.
-const MOBILE_NAV = ['/', '/timer', '/battle', '/alg-trainer', '/settings'];
+const MOBILE_NAV = ['/', '/timer', '/battle', '/algorithms', '/settings'];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();

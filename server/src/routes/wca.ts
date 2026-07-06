@@ -129,7 +129,7 @@ router.get('/competitor/:wcaId/results', async (req, res, next) => {
         const info = compMap.get(id);
         return {
           ...r,
-          competition_name: info?.name ?? r.competition?.name ?? id,
+          competition_name: (info?.name && info.name !== id ? info.name : null) ?? r.competition?.name ?? id,
           start_date: info?.start_date ?? r.competition?.start_date ?? r.start_date ?? '',
         };
       });

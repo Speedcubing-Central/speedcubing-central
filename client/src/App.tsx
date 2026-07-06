@@ -54,12 +54,17 @@ export default function App() {
         <Route path="/" element={<HomeRoute />} />
         <Route path="/timer" element={<TimerPage />} />
         <Route path="/calculator" element={<CalculatorPage />} />
-        <Route path="/alg-trainer" element={<AlgTrainerPage />} />
+        <Route path="/alg-trainer" element={<Navigate to="/algorithms" replace />} />
+        <Route path="/algorithms" element={<AlgTrainerPage />} />
+        <Route path="/algorithms/:tab" element={<AlgTrainerPage />} />
+        <Route path="/algorithms/:tab/:puzzle" element={<AlgTrainerPage />} />
+        <Route path="/algorithms/:tab/:puzzle/:setId" element={<AlgTrainerPage />} />
         <Route path="/battle" element={<BattleLobby />} />
         <Route path="/battle/:code" element={<BattleRoom />} />
         <Route path="/reconstruction" element={<ReconstructionPage />} />
         <Route path="/reconstruction/:id" element={<ReconstructionPage />} />
         <Route path="/results" element={<ResultsPage />} />
+        <Route path="/results/:wcaId" element={<ResultsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
