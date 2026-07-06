@@ -56,7 +56,10 @@ router.get('/competitor/:wcaId/results', async (req, res, next) => {
                 ccGet<unknown>(`/default/results/rankings/${eventId}/${type}/all?topN=10000`),
               );
               for (const entry of extractEntries(response)) {
-                if (entry.wcaId?.toUpperCase() === wcaId) {
+                const match = entry.persons?.find(
+                  (p: any) => p.wcaId?.toUpperCase() === wcaId,
+                );
+                if (match) {
                   rows.push({ ...entry, eventId, resultType: type });
                 }
               }

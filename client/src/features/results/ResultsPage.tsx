@@ -409,7 +409,7 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
   const prMap = new Map<string, { single?: number; average?: number }>();
   for (const row of rows) {
     const pr = prMap.get(row.eventId) ?? {};
-    const cs = Math.round(row.result / 10);
+    const cs = row.result;
     if (row.resultType === 'single') {
       pr.single = pr.single != null ? Math.min(pr.single, cs) : cs;
     } else {
