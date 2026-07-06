@@ -136,6 +136,9 @@ interface CCRow {
   competitionId?: string;
   date?: string;
   regionCode?: string;
+  worldRank?: number | null;
+  continentRank?: number | null;
+  countryRank?: number | null;
 }
 
 interface CompResult {
@@ -404,17 +407,32 @@ function ByEvent({ results }: { results: CompResult[] }) {
 
 // ── Unofficial (Cubing Contests) PR table ─────────────────────────────────────
 
+interface CCPr {
+  single?: number; singleWR?: number | null; singleCR?: number | null; singleNR?: number | null;
+  average?: number; avgWR?: number | null; avgCR?: number | null; avgNR?: number | null;
+}
+
 function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean }) {
   if (loading) return <p className="text-sm text-muted py-1">Loading Cubing Contests results…</p>;
 
-  const prMap = new Map<string, { single?: number; average?: number }>();
+  const prMap = new Map<string, CCPr>();
   for (const row of rows) {
     const pr = prMap.get(row.eventId) ?? {};
     const cs = row.result;
     if (row.resultType === 'single') {
-      pr.single = pr.single != null ? Math.min(pr.single, cs) : cs;
+      if (pr.single == null || cs < pr.single) {
+        pr.single   = cs;
+        pr.singleWR = row.worldRank     ?? null;
+        pr.singleCR = row.continentRank ?? null;
+        pr.singleNR = row.countryRank   ?? null;
+      }
     } else {
-      pr.average = pr.average != null ? Math.min(pr.average, cs) : cs;
+      if (pr.average == null || cs < pr.average) {
+        pr.average = cs;
+        pr.avgWR   = row.worldRank     ?? null;
+        pr.avgCR   = row.continentRank ?? null;
+        pr.avgNR   = row.countryRank   ?? null;
+      }
     }
     prMap.set(row.eventId, pr);
   }
@@ -432,7 +450,13 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
           <tr className="text-muted border-b border-gray-200 dark:border-border">
             <th className="pb-2 font-medium text-left pr-4">Event</th>
             <th className="pb-2 font-medium text-right pr-3">Single</th>
-            <th className="pb-2 font-medium text-right">Average</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">WR</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">CR</th>
+            <th className="pb-2 font-medium text-right pr-5 opacity-60">NR</th>
+            <th className="pb-2 font-medium text-right pr-3">Average</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">WR</th>
+            <th className="pb-2 font-medium text-right pr-2 opacity-60">CR</th>
+            <th className="pb-2 font-medium text-right opacity-60">NR</th>
           </tr>
         </thead>
         <tbody>
@@ -451,9 +475,15 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
                 <td className="py-1.5 pr-3 text-right font-mono font-semibold">
                   {pr.single != null ? fmtCs(pr.single, id) : '—'}
                 </td>
-                <td className="py-1.5 text-right font-mono text-muted">
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{pr.singleWR?.toLocaleString() ?? '—'}</td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{pr.singleCR?.toLocaleString() ?? '—'}</td>
+                <td className="py-1.5 pr-5 text-right font-mono text-muted">{pr.singleNR?.toLocaleString() ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-right font-mono font-semibold">
                   {pr.average != null ? fmtAvg(pr.average, id) : '—'}
                 </td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{pr.avgWR?.toLocaleString() ?? '—'}</td>
+                <td className="py-1.5 pr-2 text-right font-mono text-muted">{pr.avgCR?.toLocaleString() ?? '—'}</td>
+                <td className="py-1.5     text-right font-mono text-muted">{pr.avgNR?.toLocaleString() ?? '—'}</td>
               </tr>
             );
           })}
