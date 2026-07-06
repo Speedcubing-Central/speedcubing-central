@@ -30,18 +30,19 @@ const ROUND_NAMES: Record<string, string> = {
   'd':'Round 1','e':'Round 2','g':'Round 1','c':'Final',
 };
 
-// Cubing Contests unofficial events
-const CC_EVENTS: Array<{ id: string; name: string }> = [
-  { id: 'fto',               name: 'FTO' },
-  { id: 'kilominx',          name: 'Kilominx' },
-  { id: 'redi',              name: 'Redi Cube' },
-  { id: 'mpyram',            name: 'Multi-Pyraminx' },
-  { id: '333_mirror_blocks', name: 'Mirror Blocks' },
-  { id: '333_team_bld',      name: 'Team BLD' },
-  { id: 'magic',             name: 'Magic' },
-  { id: 'mmagic',            name: 'Master Magic' },
-  { id: '333_linear_fm',     name: '3×3 Linear FMC' },
-  { id: 'minx_oh',           name: 'Megaminx OH' },
+// Cubing Contests unofficial events.
+// iconPrefix: 'unofficial' for @cubing/icons unofficial-* classes, 'event' for legacy WCA-era events.
+const CC_EVENTS: Array<{ id: string; name: string; iconPrefix: string }> = [
+  { id: 'fto',               name: 'FTO',             iconPrefix: 'unofficial' },
+  { id: 'kilominx',          name: 'Kilominx',        iconPrefix: 'unofficial' },
+  { id: 'redi',              name: 'Redi Cube',       iconPrefix: 'unofficial' },
+  { id: 'mpyram',            name: 'Multi-Pyraminx',  iconPrefix: 'unofficial' },
+  { id: '333_mirror_blocks', name: 'Mirror Blocks',   iconPrefix: 'unofficial' },
+  { id: '333_team_bld',      name: 'Team BLD',        iconPrefix: 'unofficial' },
+  { id: 'magic',             name: 'Magic',           iconPrefix: 'event'      },
+  { id: 'mmagic',            name: 'Master Magic',    iconPrefix: 'event'      },
+  { id: '333_linear_fm',     name: '3×3 Linear FMC', iconPrefix: 'unofficial' },
+  { id: 'minx_oh',           name: 'Megaminx OH',     iconPrefix: 'unofficial' },
 ];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -104,9 +105,9 @@ function inferRecord(wr: number, cr: number, nr: number): RecordLevel | null {
 
 // ── Event icon ────────────────────────────────────────────────────────────────
 
-function EventIcon({ eventId, size = 14 }: { eventId: string; size?: number }) {
+function EventIcon({ eventId, size = 14, prefix = 'event' }: { eventId: string; size?: number; prefix?: string }) {
   return (
-    <span className={`cubing-icon event-${eventId}`}
+    <span className={`cubing-icon ${prefix}-${eventId}`}
       style={{ fontSize: size, lineHeight: 1, display: 'inline-block', flexShrink: 0 }} />
   );
 }
@@ -437,12 +438,13 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
         <tbody>
           {eventIds.map((id) => {
             const pr = prMap.get(id)!;
-            const name = CC_EVENTS.find((e) => e.id === id)?.name ?? id;
+            const event = CC_EVENTS.find((e) => e.id === id);
+            const name = event?.name ?? id;
             return (
               <tr key={id} className="border-b border-gray-100 dark:border-border/40 last:border-0 hover:bg-gray-50 dark:hover:bg-card-hover/30 transition-colors">
                 <td className="py-1.5 pr-4 whitespace-nowrap">
                   <span className="flex items-center gap-2">
-                    <EventIcon eventId={id} size={13} />
+                    <EventIcon eventId={id} size={13} prefix={event?.iconPrefix} />
                     <span className="font-medium">{name}</span>
                   </span>
                 </td>
