@@ -404,12 +404,8 @@ function ByEvent({ results }: { results: CompResult[] }) {
 // ── Unofficial (Cubing Contests) PR table ─────────────────────────────────────
 
 function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean }) {
-  if (loading) {
-    return <div className="card p-6 text-center text-sm text-muted">Loading Cubing Contests results…</div>;
-  }
+  if (loading) return <p className="text-sm text-muted py-1">Loading Cubing Contests results…</p>;
 
-  // Group by eventId, keep best single and best average.
-  // CC times are in milliseconds; divide by 10 → centiseconds (same unit as WCA).
   const prMap = new Map<string, { single?: number; average?: number }>();
   for (const row of rows) {
     const pr = prMap.get(row.eventId) ?? {};
@@ -425,63 +421,42 @@ function UnofficialPRTable({ rows, loading }: { rows: CCRow[]; loading: boolean 
   const eventIds = CC_EVENTS.map((e) => e.id).filter((id) => prMap.has(id));
 
   if (!eventIds.length) {
-    return (
-      <div className="space-y-3">
-        <div className="card p-6 text-center text-sm text-muted">
-          No Cubing Contests results found for your WCA ID.
-        </div>
-        <p className="text-center text-xs text-muted">
-          Powered by{' '}
-          <a href="https://cubingcontests.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">
-            Cubing Contests
-          </a>
-        </p>
-      </div>
-    );
+    return <p className="text-sm text-muted">No Cubing Contests results found for your WCA ID.</p>;
   }
 
   return (
-    <div className="space-y-3">
-      <div className="card overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 dark:border-border bg-gray-50/60 dark:bg-white/[0.02] text-[11px] font-semibold text-muted uppercase tracking-wide">
-              <th className="px-4 py-2.5 text-left">Event</th>
-              <th className="px-4 py-2.5 text-right">Single</th>
-              <th className="px-4 py-2.5 text-right">Average</th>
-            </tr>
-          </thead>
-          <tbody>
-            {eventIds.map((id) => {
-              const pr = prMap.get(id)!;
-              const name = CC_EVENTS.find((e) => e.id === id)?.name ?? id;
-              return (
-                <tr key={id} className="border-b border-gray-100 dark:border-border/40 last:border-0 hover:bg-gray-50 dark:hover:bg-card-hover/30 transition-colors">
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2">
-                      <EventIcon eventId={id} size={13} />
-                      <span className="font-medium">{name}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono font-semibold">
-                    {pr.single != null ? fmtCs(pr.single, id) : '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-muted">
-                    {pr.average != null ? fmtAvg(pr.average, id) : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-center text-xs text-muted">
-        Powered by{' '}
-        <a href="https://cubingcontests.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">
-          Cubing Contests
-        </a>
-        {' '}· Personal bests only · {CC_EVENTS.length} unofficial events tracked
-      </p>
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-muted border-b border-gray-200 dark:border-border">
+            <th className="pb-2 font-medium text-left pr-4">Event</th>
+            <th className="pb-2 font-medium text-right pr-3">Single</th>
+            <th className="pb-2 font-medium text-right">Average</th>
+          </tr>
+        </thead>
+        <tbody>
+          {eventIds.map((id) => {
+            const pr = prMap.get(id)!;
+            const name = CC_EVENTS.find((e) => e.id === id)?.name ?? id;
+            return (
+              <tr key={id} className="border-b border-gray-100 dark:border-border/40 last:border-0 hover:bg-gray-50 dark:hover:bg-card-hover/30 transition-colors">
+                <td className="py-1.5 pr-4 whitespace-nowrap">
+                  <span className="flex items-center gap-2">
+                    <EventIcon eventId={id} size={13} />
+                    <span className="font-medium">{name}</span>
+                  </span>
+                </td>
+                <td className="py-1.5 pr-3 text-right font-mono font-semibold">
+                  {pr.single != null ? fmtCs(pr.single, id) : '—'}
+                </td>
+                <td className="py-1.5 text-right font-mono text-muted">
+                  {pr.average != null ? fmtAvg(pr.average, id) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -600,79 +575,84 @@ export default function ResultsPage() {
           </a>
       </div>
 
+      {/* Official / Unofficial toggle */}
+      <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium w-fit">
+        {(['official', 'unofficial'] as const).map((v, i) => (
+          <button
+            key={v}
+            onClick={() => setSource(v)}
+            className={clsx(
+              'px-4 py-2 transition-colors',
+              i > 0 && 'border-l border-gray-200 dark:border-border',
+              source === v
+                ? 'bg-accent text-white'
+                : 'text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
+            )}
+          >
+            {v === 'official' ? 'Official Events' : 'Unofficial Events'}
+          </button>
+        ))}
+      </div>
+
       {/* Personal Records */}
       <div className="card p-4">
         <h2 className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Personal Records</h2>
-        <PRTable records={personal_records} />
+        {source === 'official'
+          ? <PRTable records={personal_records} />
+          : <UnofficialPRTable rows={ccData ?? []} loading={ccLoading} />
+        }
       </div>
+      {source === 'unofficial' && (
+        <p className="text-center text-xs text-muted -mt-2">
+          Powered by{' '}
+          <a href="https://cubingcontests.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+            Cubing Contests
+          </a>
+          {' '}· Personal bests only · {CC_EVENTS.length} unofficial events tracked
+        </p>
+      )}
 
-      {/* Competition Results */}
-      <div>
-        {/* Top-level Official / Unofficial toggle */}
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wide">Competition Results</h2>
-          <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium">
-            {(['official', 'unofficial'] as const).map((v, i) => (
-              <button
-                key={v}
-                onClick={() => setSource(v)}
-                className={clsx(
-                  'px-3 py-1.5 transition-colors',
-                  i > 0 && 'border-l border-gray-200 dark:border-border',
-                  source === v
-                    ? 'bg-accent text-white'
-                    : 'text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
-                )}
-              >
-                {v === 'official' ? 'Official Events' : 'Unofficial Events'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {source === 'official' ? (
-          <>
-            {/* Sub-toggle: By Competition / By Event */}
-            <div className="flex justify-end mb-3">
-              <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium">
-                {(['competition', 'event'] as const).map((v, i) => (
-                  <button
-                    key={v}
-                    onClick={() => setView(v)}
-                    className={clsx(
-                      'px-3 py-1.5 transition-colors',
-                      i > 0 && 'border-l border-gray-200 dark:border-border',
-                      view === v
-                        ? 'bg-accent text-white'
-                        : 'text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
-                    )}
-                  >
-                    {v === 'competition' ? 'By Competition' : 'By Event'}
-                  </button>
-                ))}
-              </div>
+      {/* Competition Results — official only */}
+      {source === 'official' && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wide">Competition Results</h2>
+            <div className="flex rounded-lg border border-gray-200 dark:border-border overflow-hidden text-xs font-medium">
+              {(['competition', 'event'] as const).map((v, i) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={clsx(
+                    'px-3 py-1.5 transition-colors',
+                    i > 0 && 'border-l border-gray-200 dark:border-border',
+                    view === v
+                      ? 'bg-accent text-white'
+                      : 'text-muted hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-card-hover',
+                  )}
+                >
+                  {v === 'competition' ? 'By Competition' : 'By Event'}
+                </button>
+              ))}
             </div>
-            {resultsLoading ? (
-              <div className="card p-6 text-center text-sm text-muted">Loading competition history…</div>
-            ) : resultsData && resultsData.length > 0 ? (
-              view === 'competition'
-                ? <ByCompetition results={resultsData} />
-                : <ByEvent results={resultsData} />
-            ) : (
-              <div className="card p-4 flex items-center justify-between text-sm">
-                <span className="text-muted">Full history available on the WCA website.</span>
-                <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
-                  target="_blank" rel="noreferrer"
-                  className="flex items-center gap-1 text-accent hover:underline text-xs ml-4 shrink-0">
-                  View on WCA <Icon name="external" size={12} />
-                </a>
-              </div>
-            )}
-          </>
-        ) : (
-          <UnofficialPRTable rows={ccData ?? []} loading={ccLoading} />
-        )}
-      </div>
+          </div>
+          {resultsLoading ? (
+            <div className="card p-6 text-center text-sm text-muted">Loading competition history…</div>
+          ) : resultsData && resultsData.length > 0 ? (
+            view === 'competition'
+              ? <ByCompetition results={resultsData} />
+              : <ByEvent results={resultsData} />
+          ) : (
+            <div className="card p-4 flex items-center justify-between text-sm">
+              <span className="text-muted">Full history available on the WCA website.</span>
+              <a href={`https://www.worldcubeassociation.org/persons/${wcaId}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 text-accent hover:underline text-xs ml-4 shrink-0">
+                View on WCA <Icon name="external" size={12} />
+              </a>
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );
