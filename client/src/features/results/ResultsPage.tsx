@@ -276,12 +276,16 @@ function ByCompetition({ results }: { results: CompResult[] }) {
             const sortedEventIds = EVENT_ORDER.filter((id) => eventGroups.has(id));
             return sortedEventIds.map((evId, gi) => (
               <div key={evId} className={gi > 0 ? 'border-t border-gray-200 dark:border-border' : ''}>
-                {/* Event sub-header */}
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/60 dark:bg-white/[0.02]">
-                  <EventIcon eventId={evId} size={13} />
-                  <span className="text-xs font-semibold">{EVENT_NAMES[evId] ?? evId}</span>
+                {/* Combined event name + column labels */}
+                <div className="flex items-center gap-4 px-4 py-2 bg-gray-50/60 dark:bg-white/[0.02] border-b border-gray-200 dark:border-border">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <EventIcon eventId={evId} size={13} />
+                    <span className="text-xs font-semibold">{EVENT_NAMES[evId] ?? evId}</span>
+                  </div>
+                  <div className="w-14 text-right shrink-0 text-[11px] font-semibold text-muted uppercase tracking-wide">Rank</div>
+                  <div className="w-20 text-right shrink-0 text-[11px] font-semibold text-muted uppercase tracking-wide">Single</div>
+                  <div className="w-20 text-right shrink-0 text-[11px] font-semibold text-muted uppercase tracking-wide">Average</div>
                 </div>
-                <ResultsHeader />
                 {eventGroups.get(evId)!.map((r, i) => (
                   <ResultRow
                     key={i}
