@@ -109,24 +109,29 @@ router.get('/competitor/:wcaId/results', async (req, res, next) => {
           .filter(Boolean) as string[],
       )];
 
-      // Fetch each competition's proper name in parallel, caching each individually.
-      const nameMap = new Map<string, string>();
+      // Fetch each competition's name + start_date in parallel, caching each individually.
+      const compMap = new Map<string, { name: string; start_date: string }>();
       await Promise.all(ids.map(async (id) => {
         try {
-          const name = await cached(`wca:comp-name:${id}`, ONE_HOUR, async () => {
+          const info = await cached(`wca:comp-info:${id}`, ONE_HOUR, async () => {
             const comp = await wcaGet<any>(`/competitions/${encodeURIComponent(id)}`);
-            return (comp?.name ?? id) as string;
+            return { name: (comp?.name ?? id) as string, start_date: (comp?.start_date ?? '') as string };
           });
-          nameMap.set(id, name as string);
+          compMap.set(id, info as { name: string; start_date: string });
         } catch {
-          nameMap.set(id, id);
+          compMap.set(id, { name: id, start_date: '' });
         }
       }));
 
-      // Inject competition_name into every result row.
+      // Inject competition_name and start_date into every result row.
       return results.map((r: any) => {
         const id = r.competition_id ?? r.competition?.id ?? '';
-        return { ...r, competition_name: nameMap.get(id) ?? r.competition?.name ?? id };
+        const info = compMap.get(id);
+        return {
+          ...r,
+          competition_name: info?.name ?? r.competition?.name ?? id,
+          start_date: info?.start_date ?? r.competition?.start_date ?? r.start_date ?? '',
+        };
       });
     });
     res.json(data);
