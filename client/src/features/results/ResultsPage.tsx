@@ -310,7 +310,7 @@ function ByEvent({ results }: { results: CompResult[] }) {
   return (
     <div className="space-y-3">
       {events.map((eventId) => {
-        const rows = byEvent.get(eventId)!.sort((a, b) => b.date.localeCompare(a.date));
+        const rows = byEvent.get(eventId)!.sort((a, b) => getDate(b).localeCompare(getDate(a)));
         return (
           <div key={eventId} className="card overflow-hidden">
             <div className="px-4 py-3 flex items-center gap-2.5 border-b border-gray-200 dark:border-border bg-gray-50/50 dark:bg-white/[0.03]">
