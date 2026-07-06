@@ -568,7 +568,6 @@ export default function ResultsPage() {
           <a href="https://cubingcontests.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">
             Cubing Contests
           </a>
-          {' '}· Personal bests only · {CC_EVENTS.length} unofficial events tracked
         </p>
       )}
 
