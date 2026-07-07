@@ -1,7 +1,8 @@
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
-import { formatTime, normalizeScramble } from '@scc/shared';
+import { formatTime } from '@scc/shared';
 import { useSettings } from '../../store/settings';
+import { formatScrambleForCopy } from '../../lib/scramble';
 import { copyText, formatAverageCopy } from './copy';
 import type { SolveAverage } from './stats';
 
@@ -33,7 +34,7 @@ export function AverageDetail({ view, event, onClose }: { view: SolveAverage; ev
                 {formatTime(s.time, s.penalty, solvePrecision)}
                 {dropped ? ')' : ''}
               </span>
-              <span className="font-mono text-xs text-muted break-words">{normalizeScramble(s.scramble) || '—'}</span>
+              <span className="font-mono text-xs text-muted break-words">{formatScrambleForCopy(s.scramble, event) || '—'}</span>
             </div>
           );
         })}

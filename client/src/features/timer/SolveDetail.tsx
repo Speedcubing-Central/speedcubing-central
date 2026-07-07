@@ -3,7 +3,7 @@ import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
 import { ScrambleImage } from '../../components/ScrambleImage';
 import { PenaltyButtons } from './PenaltyButtons';
-import { formatTime, normalizeScramble, type Penalty, type SolveDTO } from '@scc/shared';
+import { formatTime, type Penalty, type SolveDTO } from '@scc/shared';
 import { useSettings } from '../../store/settings';
 import { formatScrambleForCopy } from '../../lib/scramble';
 import { copyText, formatSolveCopy } from './copy';
@@ -137,7 +137,7 @@ export function SolveDetail({
             </button>
           </div>
           <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words">
-            {normalizeScramble(solve.scramble) || '—'}
+            {formatScrambleForCopy(solve.scramble, event) || '—'}
           </div>
         </div>
         <div className="justify-self-center">
