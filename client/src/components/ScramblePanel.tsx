@@ -8,7 +8,7 @@ import { useDiagramFit } from './useDiagramFit';
 // Per-puzzle preferred diagram size, in px — the size used whenever there's
 // room for it. sq1's 3D render is legible small; megaminx's 2D net needs to
 // be bigger to read; everything else gets a generously-sized default.
-const DIAGRAM_SIZE: Record<string, number> = { sq1: 220, minx: 320 };
+const DIAGRAM_SIZE: Record<string, number> = { sq1: 200, minx: 320 };
 const DEFAULT_DIAGRAM_SIZE = 300;
 
 // Text size is a simple, static tier based on how much the scramble
@@ -56,7 +56,7 @@ export function ScramblePanel({
   const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font]);
 
   return (
-    <div className={clsx('card p-4 shrink-0 overflow-hidden flex flex-col items-center justify-end gap-4', className)}>
+    <div className={clsx('card p-6 shrink-0 overflow-hidden flex flex-col items-center justify-end gap-4', className)}>
       <ScrambleImage eventId={eventId} scramble={scramble} size={diagramSize} />
       <div ref={textRef} className="font-mono tracking-wide leading-snug w-full text-center" style={{ fontSize: font }}>
         {loading ? <span className="text-muted text-base">Scrambling…</span> : <ScrambleText scramble={scramble} eventId={eventId} />}

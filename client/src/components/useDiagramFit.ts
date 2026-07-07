@@ -1,10 +1,10 @@
 import { useLayoutEffect, useState, type RefObject } from 'react';
 
 const MIN_DIAGRAM = 90;
-// Fixed p-4 padding (32px) + two gap-4 gaps (32px) around the diagram/text/
+// Fixed p-6 padding (48px) + two gap-4 gaps (32px) around the diagram/text/
 // button stack — matches ScramblePanel's own className, so this must be
 // updated if that spacing ever changes.
-const FIXED_OVERHEAD = 64;
+const FIXED_OVERHEAD = 80;
 
 // Closed-form (not search) sizing of the scramble diagram to fit within an
 // externally-supplied height budget (`maxHeight`), capped at
