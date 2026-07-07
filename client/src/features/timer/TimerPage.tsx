@@ -24,7 +24,7 @@ const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-c
 // Keep in sync with the timer card's `md:min-h-[...]` class below — this is
 // the guaranteed minimum the scramble panel's budget calculation reserves
 // for it.
-const TIMER_MIN_HEIGHT = 200;
+const TIMER_MIN_HEIGHT = 160;
 const COLUMN_GAP = 12; // gap-3
 
 // Measures a ref'd element's own height, tracked via ResizeObserver. Used
@@ -373,7 +373,8 @@ export default function TimerPage() {
           {entryMode === 'keyboard' ? (
             <div
               ref={timerCardRef}
-              className="card flex-1 min-h-0 md:min-h-[200px] overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+              className="card flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+              style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
               onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen) engine.press(); }}
               onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen) engine.release(); }}
             >
@@ -386,7 +387,11 @@ export default function TimerPage() {
               <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
             </div>
           ) : (
-            <div ref={timerCardRef} className="card flex-1 min-h-0 md:min-h-[200px] overflow-y-auto flex flex-col items-center justify-center gap-6">
+            <div
+              ref={timerCardRef}
+              className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
+              style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
+            >
               <div
                 className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
                 style={{ fontSize: digitFontSize }}

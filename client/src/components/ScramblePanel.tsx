@@ -14,7 +14,7 @@ const DEFAULT_DIAGRAM_SIZE = 300;
 // Text size is a simple, static tier based on how much the scramble
 // actually has — not fit to any available space, just what reads well.
 function textSize(scramble: string, eventId: string): number {
-  if (eventId === 'minx') return 19;
+  if (eventId === 'minx') return 13;
   if (eventId === 'sq1') return 16;
   const n = scramble.length;
   if (n <= 30) return 36;
