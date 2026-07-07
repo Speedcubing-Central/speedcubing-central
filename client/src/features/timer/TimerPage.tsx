@@ -21,6 +21,48 @@ import { copyText, formatSolveCopy } from './copy';
 
 const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
 
+// Keep in sync with the timer card's `md:min-h-[...]` class below — this is
+// the guaranteed minimum the scramble panel's budget calculation reserves
+// for it.
+const TIMER_MIN_HEIGHT = 200;
+const COLUMN_GAP = 12; // gap-3
+
+// Measures a ref'd element's own height, tracked via ResizeObserver. Used
+// for the LEFT column (a stable, flex-stretched height, unaffected by the
+// scramble panel's own content) and the last-solve card (present only
+// sometimes, but its own height doesn't depend on the scramble panel
+// either) — both safe to measure directly, unlike the scramble panel's own
+// box.
+function useElementHeight(ref: React.RefObject<HTMLDivElement>): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const recompute = () => setHeight(el.clientHeight);
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return height;
+}
+
+// Tracks the md: breakpoint so the scramble panel's height budget only
+// applies on desktop, matching the fixed-height column layout there —
+// mobile has no fixed-height column (the whole page scrolls instead), so
+// there's no real budget to compute.
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = () => setIsDesktop(mq.matches);
+    handler();
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isDesktop;
+}
+
 // Sizes the timer digits to whatever room is actually left in the card,
 // instead of guessing at viewport-relative units. `reservedBelow` is the
 // pixel height of whatever else shares the card (hint text or the manual-
@@ -44,21 +86,6 @@ function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reserv
   return size;
 }
 
-// Tracks the md: breakpoint so the scramble panel's height cap only applies
-// on desktop, matching the `md:max-h-[...]` class applied alongside it —
-// mobile has no fixed-height column (the whole page scrolls instead), so
-// there's no real budget to fit the scramble text into there.
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const handler = () => setIsDesktop(mq.matches);
-    handler();
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return isDesktop;
-}
 
 // Parse a time string. For pure-digit inputs (no . or :), use precision to
 // interpret: the last `precision` digits are the fractional part.
@@ -119,7 +146,6 @@ export default function TimerPage() {
   // manual mode also needs the input + button row, so it gets less headroom.
   const timerCardRef = useRef<HTMLDivElement>(null);
   const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
-  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -153,6 +179,30 @@ export default function TimerPage() {
 
   const stats = useMemo(() => singleStats(data.solves), [data.solves]);
   const newest = data.solves[0];
+
+  // Height budget for the scramble panel's diagram (see useDiagramFit):
+  // column height minus the timer card's protected minimum, the last-solve
+  // card (when present), and the gaps between them — all measured
+  // independently of the scramble panel's own size, so this can never be
+  // circular. Debounced so a continuous window resize doesn't thrash the
+  // <twisty-player> widget on every intermediate frame; only applied at the
+  // md: breakpoint, matching the fixed-height column layout there.
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const lastSolveRef = useRef<HTMLDivElement>(null);
+  const colHeight = useElementHeight(leftColRef);
+  const isDesktop = useIsDesktop();
+  const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isDesktop || colHeight <= 0) {
+      setScrambleMaxHeight(undefined);
+      return;
+    }
+    const lastSolveH = newest ? lastSolveRef.current?.offsetHeight ?? 0 : 0;
+    const gaps = newest ? COLUMN_GAP * 2 : COLUMN_GAP;
+    const budget = colHeight - TIMER_MIN_HEIGHT - lastSolveH - gaps;
+    const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
+    return () => clearTimeout(timeout);
+  }, [isDesktop, colHeight, newest]);
 
   const runningStr = (ms: number) => {
     if (timerUpdate === 'hidden') return 'solving…';
@@ -291,36 +341,39 @@ export default function TimerPage() {
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
 
         {/* LEFT column */}
-        <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
+        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
 
-          {/* Scramble panel — a genuine flex-grow item at the md: breakpoint
-              (flex-basis 0, min-height 0), getting a fixed 2:1 share of the
-              column against the timer card below. That makes its rendered
-              height a function of CSS layout, not of its own content, which
-              is what lets ScramblePanel safely fit its text to that height
-              (see useScrambleTextFit) without the circular-measurement bugs
-              a content-sized card would produce. Below md:, the whole page
-              scrolls instead, so the card is left to size to its content. */}
+          {/* Scramble panel — sized to its own content per event (a short
+              3x3 scramble and a 7-line megaminx one legitimately need
+              different amounts of room). Its diagram shrinks (never crops —
+              see useDiagramFit) to fit scrambleMaxHeight, a budget computed
+              above from the column height minus the timer card's protected
+              minimum, so the panel can never squeeze the timer away. On
+              mobile scrambleMaxHeight is undefined (the whole page scrolls
+              instead), so the diagram just renders at its preferred size. */}
           <ScramblePanel
             eventId={event}
             scramble={scr.scramble}
             loading={scr.loading}
             onRefresh={() => scr.refresh()}
-            fitText={isDesktop}
-            className="md:flex-[2] md:min-h-0"
+            maxHeight={scrambleMaxHeight}
+            className="overflow-hidden"
           />
 
-          {/* Timer card — fills remaining vertical space. The digit display and
-              whatever sits below it (hint text, or the manual-entry input row)
-              are both shrink-0 so neither ever gets visually compressed to make
-              room for the other; digitFontSize is measured against the card's
-              actual rendered height (see useFittedFontSize) rather than guessed
-              viewport-relative units, so it can't overflow regardless of screen
-              size. overflow-y-auto stays as a last-resort fallback. */}
+          {/* Timer card — has a protected minimum height (md:min-h-[...])
+              so the scramble panel above can never squeeze it away; beyond
+              that minimum it grows to fill whatever's left (flex-1). The
+              digit display and whatever sits below it (hint text, or the
+              manual-entry input row) are both shrink-0 so neither ever gets
+              visually compressed to make room for the other; digitFontSize
+              is measured against the card's actual rendered height (see
+              useFittedFontSize) rather than guessed viewport-relative
+              units, so it can't overflow regardless of screen size.
+              overflow-y-auto stays as a last-resort fallback. */}
           {entryMode === 'keyboard' ? (
             <div
               ref={timerCardRef}
-              className="card flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+              className="card flex-1 min-h-0 md:min-h-[200px] overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
               onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen) engine.press(); }}
               onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen) engine.release(); }}
             >
@@ -333,7 +386,7 @@ export default function TimerPage() {
               <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
             </div>
           ) : (
-            <div ref={timerCardRef} className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6">
+            <div ref={timerCardRef} className="card flex-1 min-h-0 md:min-h-[200px] overflow-y-auto flex flex-col items-center justify-center gap-6">
               <div
                 className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
                 style={{ fontSize: digitFontSize }}
@@ -356,7 +409,7 @@ export default function TimerPage() {
 
           {/* Last solve + penalty */}
           {newest && (
-            <div className="card p-4 shrink-0 flex items-center justify-between gap-3 flex-wrap">
+            <div ref={lastSolveRef} className="card p-4 shrink-0 flex items-center justify-between gap-3 flex-wrap">
               <span className="text-sm text-muted">
                 Last solve: <span className="font-mono text-gray-900 dark:text-gray-100">{formatTime(newest.time, newest.penalty, solvePrecision)}</span>
               </span>
