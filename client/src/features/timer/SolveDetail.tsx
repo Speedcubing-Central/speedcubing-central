@@ -5,6 +5,7 @@ import { ScrambleImage } from '../../components/ScrambleImage';
 import { PenaltyButtons } from './PenaltyButtons';
 import { formatTime, normalizeScramble, type Penalty, type SolveDTO } from '@scc/shared';
 import { useSettings } from '../../store/settings';
+import { formatScrambleForCopy } from '../../lib/scramble';
 import { copyText, formatSolveCopy } from './copy';
 import { averagesForSolve, type SolveAverage } from './stats';
 
@@ -130,7 +131,7 @@ export function SolveDetail({
             Scramble
             <button
               className="text-accent hover:underline inline-flex items-center gap-1"
-              onClick={() => copyText(normalizeScramble(solve.scramble), 'Scramble copied')}
+              onClick={() => copyText(formatScrambleForCopy(solve.scramble, event), 'Scramble copied')}
             >
               <Icon name="copy" size={12} /> copy
             </button>
@@ -165,7 +166,7 @@ export function SolveDetail({
       )}
 
       <div className="flex items-center justify-between border-t border-gray-200 dark:border-border pt-3">
-        <button className="btn-ghost" onClick={() => copyText(formatSolveCopy(solve, solvePrecision), 'Solve copied')}>
+        <button className="btn-ghost" onClick={() => copyText(formatSolveCopy(solve, event, solvePrecision), 'Solve copied')}>
           <Icon name="copy" size={15} /> Copy solve
         </button>
         <button className="btn-ghost text-red-400 hover:text-red-300" onClick={del}>

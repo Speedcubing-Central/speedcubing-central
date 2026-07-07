@@ -11,6 +11,14 @@ import { useDiagramFit } from './useDiagramFit';
 const DIAGRAM_SIZE: Record<string, number> = { sq1: 200, minx: 320 };
 const DEFAULT_DIAGRAM_SIZE = 300;
 
+// Extra space (px) inserted between the diagram and the text below it, on
+// top of the standard gap-4. sq1's 3D render doesn't sit centered in its
+// box the way the 2D top-down views do — the visible cube extends close to
+// the bottom of its bounding square — so the standard gap alone reads as
+// almost no space at all between the cube and the scramble text, even
+// though the box itself is unchanged.
+const EXTRA_GAP: Record<string, number> = { sq1: 24 };
+
 // Text size is a simple, static tier based on how much the scramble
 // actually has — not fit to any available space, just what reads well.
 function textSize(scramble: string, eventId: string): number {
@@ -52,13 +60,18 @@ export function ScramblePanel({
   const btnRef = useRef<HTMLButtonElement>(null);
   const preferredDiagram = DIAGRAM_SIZE[eventId] ?? DEFAULT_DIAGRAM_SIZE;
   const font = textSize(scramble, eventId);
+  const extraGap = EXTRA_GAP[eventId] ?? 0;
 
-  const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font]);
+  const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font], extraGap);
 
   return (
     <div className={clsx('card p-6 shrink-0 overflow-hidden flex flex-col items-center justify-end gap-4', className)}>
       <ScrambleImage eventId={eventId} scramble={scramble} size={diagramSize} />
-      <div ref={textRef} className="font-mono tracking-wide leading-snug w-full text-center" style={{ fontSize: font }}>
+      <div
+        ref={textRef}
+        className="font-mono tracking-wide leading-snug w-full text-center"
+        style={{ fontSize: font, marginTop: extraGap }}
+      >
         {loading ? <span className="text-muted text-base">Scrambling…</span> : <ScrambleText scramble={scramble} eventId={eventId} />}
       </div>
       {onRefresh && (

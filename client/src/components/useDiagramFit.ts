@@ -26,6 +26,7 @@ export function useDiagramFit(
   maxHeight: number | undefined,
   preferredDiagram: number,
   deps: readonly unknown[],
+  extraOverhead = 0,
 ): number {
   const [diagramSize, setDiagramSize] = useState(preferredDiagram);
 
@@ -38,10 +39,10 @@ export function useDiagramFit(
     if (!text) return;
     const textHeight = text.scrollHeight;
     const btnHeight = btnRef.current?.offsetHeight ?? 0;
-    const available = maxHeight - FIXED_OVERHEAD - textHeight - btnHeight;
+    const available = maxHeight - FIXED_OVERHEAD - extraOverhead - textHeight - btnHeight;
     setDiagramSize(Math.max(MIN_DIAGRAM, Math.min(preferredDiagram, available)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxHeight, preferredDiagram, ...deps]);
+  }, [maxHeight, preferredDiagram, extraOverhead, ...deps]);
 
   return diagramSize;
 }

@@ -1,11 +1,13 @@
-import { formatTime, normalizeScramble, getEvent, type SolveDTO } from '@scc/shared';
+import { formatTime, getEvent, type SolveDTO } from '@scc/shared';
+import { formatScrambleForCopy } from '../../lib/scramble';
 import type { SolveAverage } from './stats';
 
 export { copyText } from '../../lib/clipboard';
 
-// Single solve: "12.34   R U R' U' ..." (scramble spacing normalized).
-export function formatSolveCopy(solve: SolveDTO, precision: number): string {
-  return `${formatTime(solve.time, solve.penalty, precision)}   ${normalizeScramble(solve.scramble)}`;
+// Single solve: "12.34   R U R' U' ..." (scramble spacing normalized; comma-
+// separated per row for megaminx — see formatScrambleForCopy).
+export function formatSolveCopy(solve: SolveDTO, eventId: string, precision: number): string {
+  return `${formatTime(solve.time, solve.penalty, precision)}   ${formatScrambleForCopy(solve.scramble, eventId)}`;
 }
 
 // Average block with a numbered, scramble-aligned time list. Dropped solves
@@ -18,7 +20,7 @@ export function formatAverageCopy(view: SolveAverage, eventId: string, precision
     const dropped = view.droppedIndices.includes(i);
     const t = formatTime(s.time, s.penalty, precision);
     const shown = dropped ? `(${t})` : t;
-    lines.push(`${i + 1}. ${shown}\t${normalizeScramble(s.scramble)}`);
+    lines.push(`${i + 1}. ${shown}\t${formatScrambleForCopy(s.scramble, eventId)}`);
   });
   return lines.join('\n');
 }

@@ -458,6 +458,7 @@ export default function TimerPage() {
                       index={i}
                       solve={s}
                       solves={data.solves}
+                      event={event}
                       precision={solvePrecision}
                       onOpenSolve={() => setDetailIndex(i)}
                       onOpenAverage={openAverage}
@@ -494,6 +495,7 @@ function SolveRow({
   index,
   solve,
   solves,
+  event,
   precision,
   onOpenSolve,
   onOpenAverage,
@@ -501,6 +503,7 @@ function SolveRow({
   index: number;
   solve: SolveDTO;
   solves: SolveDTO[];
+  event: string;
   precision: number;
   onOpenSolve: () => void;
   onOpenAverage: (size: AvgSize, startIndex: number) => void;
@@ -535,7 +538,7 @@ function SolveRow({
         {ao12 ? fmtAvg(ao12.value) : '·'}
       </button>
       <button
-        onClick={() => copyText(formatSolveCopy(solve, precision), 'Solve copied')}
+        onClick={() => copyText(formatSolveCopy(solve, event, precision), 'Solve copied')}
         title="Copy solve"
         className="text-muted hover:text-accent justify-self-end"
       >
