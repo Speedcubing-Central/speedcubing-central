@@ -7,8 +7,7 @@ import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
-import { ScrambleImage } from '../../components/ScrambleImage';
-import { ScrambleText } from '../../components/ScrambleText';
+import { ScramblePanel } from '../../components/ScramblePanel';
 import { useTimerEngine } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
 
@@ -436,16 +435,7 @@ export default function BattleRoom() {
         </div>
 
         {/* Scramble */}
-        {room.status === 'ACTIVE' && room.scramble && (
-          <div className="card p-4 flex flex-col items-center gap-2 shrink-0">
-            <ScrambleImage eventId={event} scramble={room.scramble} size={event === 'minx' ? 320 : event === 'sq1' ? 150 : undefined} />
-            <ScrambleText
-              scramble={room.scramble}
-              eventId={event}
-              className="font-mono text-sm tracking-wide leading-snug text-center w-full"
-            />
-          </div>
-        )}
+        {room.status === 'ACTIVE' && room.scramble && <ScramblePanel eventId={event} scramble={room.scramble} />}
 
         {/* Timer */}
         <div

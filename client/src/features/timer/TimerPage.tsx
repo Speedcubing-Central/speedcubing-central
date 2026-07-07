@@ -6,9 +6,7 @@ import { useAuth } from '../../store/auth';
 import { useUi } from '../../store/ui';
 import { EventSelector } from '../../components/ui';
 import { Icon } from '../../components/Icon';
-import { ScrambleImage } from '../../components/ScrambleImage';
-import { ScrambleText } from '../../components/ScrambleText';
-import { useFitScrambleFontSize } from '../../components/useFitScrambleFontSize';
+import { ScramblePanel } from '../../components/ScramblePanel';
 import { useTimerEngine } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
@@ -46,6 +44,21 @@ function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reserv
   return size;
 }
 
+// Tracks the md: breakpoint so the scramble panel's height cap only applies
+// on desktop, matching the `md:max-h-[...]` class applied alongside it —
+// mobile has no fixed-height column (the whole page scrolls instead), so
+// there's no real budget to fit the scramble text into there.
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = () => setIsDesktop(mq.matches);
+    handler();
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isDesktop;
+}
 
 // Parse a time string. For pure-digit inputs (no . or :), use precision to
 // interpret: the last `precision` digits are the fractional part.
@@ -106,21 +119,7 @@ export default function TimerPage() {
   // manual mode also needs the input + button row, so it gets less headroom.
   const timerCardRef = useRef<HTMLDivElement>(null);
   const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
-
-  // Shrinks the scramble text to whatever fits above/below it (the cube
-  // diagram and the refresh button), so the scramble card never needs to
-  // scroll internally regardless of scramble length or screen size.
-  const scrambleCardRef = useRef<HTMLDivElement>(null);
-  const scrambleImgRef = useRef<HTMLDivElement>(null);
-  const scrambleTextRef = useRef<HTMLDivElement>(null);
-  const scrambleBtnRef = useRef<HTMLButtonElement>(null);
-  const scrambleFontPx = useFitScrambleFontSize(
-    scrambleCardRef,
-    scrambleImgRef,
-    scrambleTextRef,
-    scrambleBtnRef,
-    [scr.scramble, event, scr.loading],
-  );
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -294,30 +293,22 @@ export default function TimerPage() {
         {/* LEFT column */}
         <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
 
-          {/* Scramble card — capped to a share of the column height, and the
-              scramble text's font size is fitted (see useFitScrambleFontSize)
-              to whatever room is left after the diagram and button, so a long
-              scramble (e.g. megaminx) can never squeeze the timer out of view
-              or need to scroll internally. */}
-          <div ref={scrambleCardRef} className="card p-4 shrink-0 flex flex-col items-center gap-2 md:max-h-[70%] md:overflow-hidden">
-            <div ref={scrambleImgRef}>
-              <ScrambleImage
-                eventId={event}
-                scramble={scr.scramble}
-                size={event === 'minx' ? 320 : event === 'sq1' ? 150 : undefined}
-              />
-            </div>
-            <div
-              ref={scrambleTextRef}
-              className="font-mono tracking-wide leading-snug w-full text-center"
-              style={{ fontSize: scrambleFontPx }}
-            >
-              {scr.loading ? <span className="text-muted text-base">Scrambling…</span> : <ScrambleText scramble={scr.scramble} eventId={event} />}
-            </div>
-            <button ref={scrambleBtnRef} className="text-xs text-accent inline-flex items-center gap-1" onClick={() => scr.refresh()}>
-              <Icon name="refresh" size={13} /> new scramble
-            </button>
-          </div>
+          {/* Scramble panel — a genuine flex-grow item at the md: breakpoint
+              (flex-basis 0, min-height 0), getting a fixed 2:1 share of the
+              column against the timer card below. That makes its rendered
+              height a function of CSS layout, not of its own content, which
+              is what lets ScramblePanel safely fit its text to that height
+              (see useScrambleTextFit) without the circular-measurement bugs
+              a content-sized card would produce. Below md:, the whole page
+              scrolls instead, so the card is left to size to its content. */}
+          <ScramblePanel
+            eventId={event}
+            scramble={scr.scramble}
+            loading={scr.loading}
+            onRefresh={() => scr.refresh()}
+            fitText={isDesktop}
+            className="md:flex-[2] md:min-h-0"
+          />
 
           {/* Timer card — fills remaining vertical space. The digit display and
               whatever sits below it (hint text, or the manual-entry input row)

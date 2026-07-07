@@ -54,9 +54,16 @@ export function formatScramble(scramble: string, eventId: string): string {
 // items in a flex-wrap container (see <ScrambleText>), so the browser's own
 // layout decides how many pairs fit per line — every line still starts with
 // a pair and ends with a slash, at any screen size.
+//
+// Defensively strips a stray trailing slash first: some upstream sources
+// (cubing.js's random-state sq1 output, in particular) occasionally end the
+// raw string with "... / " rather than a bare final pair — without this, the
+// last split segment keeps that slash attached (since "... / " ends the
+// string mid-delimiter, not with a full " / " to split on), so the very
+// last pair would wrongly render with a trailing slash too.
 export function sq1Pairs(scramble: string): string[] {
   if (!scramble) return [];
-  const pairs = scramble.split(' / ');
+  const pairs = scramble.trim().replace(/\/\s*$/, '').trim().split(' / ');
   return pairs.map((p, i) => (i < pairs.length - 1 ? `${p} /` : p));
 }
 
