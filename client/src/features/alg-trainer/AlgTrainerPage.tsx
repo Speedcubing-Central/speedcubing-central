@@ -22,7 +22,7 @@ import { TrainerSettings } from './TrainerSettings';
 import { AlgSolveDetail } from './AlgSolveDetail';
 import { SET_TO_URL, URL_TO_SET } from './algUrls';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
-import { useFittedFontSize } from '../../components/useFittedFontSize';
+import { useFillViewportHeight } from '../../components/useFillViewportHeight';
 
 const COLUMN_GAP = 12; // gap-3
 const TIMER_MIN_HEIGHT = 160;
@@ -630,6 +630,31 @@ function TrainingSession({
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const anyModalOpen = showSettings || detailIndex !== null;
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => undefined);
+  }
+
+  const outerRef = useRef<HTMLDivElement>(null);
+  const fillHeight = useFillViewportHeight(outerRef);
+  const headerRef = useRef<HTMLDivElement>(null);
+  // Safe to measure directly (unlike the row's own height): the header's
+  // size is driven purely by its own text/buttons, never by anything sized
+  // from `fillHeight` downstream — so there's no settling cascade for a
+  // ResizeObserver to miss here, the way there was when the row height used
+  // to be re-derived a layer further down (see TrainingLeftColumn).
+  const headerHeight = useElementHeight(headerRef);
+  const isDesktop = useIsDesktop();
+  const rowHeight = isDesktop && fillHeight !== undefined && headerHeight > 0
+    ? fillHeight - headerHeight - COLUMN_GAP
+    : undefined;
+
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
@@ -736,9 +761,9 @@ function TrainingSession({
   };
 
   return (
-    <div className="flex flex-col md:h-[calc(100dvh-2rem)]">
+    <div ref={outerRef} className="flex flex-col" style={{ height: fillHeight }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 shrink-0">
+      <div ref={headerRef} className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={onBack} className="btn-ghost flex items-center gap-1">
             <Icon name="arrowLeft" size={14} /> Cases
@@ -759,6 +784,10 @@ function TrainingSession({
           >
             <Icon name="gear" size={15} /> Settings
           </button>
+          <button onClick={toggleFullscreen} className="btn-ghost flex items-center gap-1.5 text-sm" title="Fullscreen">
+            <Icon name={isFullscreen ? 'x' : 'plus'} size={15} />
+            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          </button>
         </div>
       </div>
 
@@ -773,6 +802,7 @@ function TrainingSession({
           revealed={revealed}
           timerState={timerState}
           showCaseName={s.trainerShowCaseName}
+          availableHeight={rowHeight}
         />
 
         {/* Right: timer tile (grows to fill) + solves tile (fills remaining space, scrolls internally) */}
@@ -790,6 +820,7 @@ function TrainingSession({
           nextCase={nextCase}
           solves={data.solves}
           onOpenSolve={(i) => setDetailIndex(i)}
+          availableHeight={rowHeight}
         />
       </div>
 
@@ -812,10 +843,16 @@ function TrainingSession({
 
 // Left column: fills the available column height, diagram GROWING to use
 // whatever's left (see CaseDiagramPanel) after the move-reveal card and
-// case-name reveal below it — the "below" block is measured directly since
-// its own height doesn't depend on the diagram's size.
+// case-name reveal below it. `availableHeight` is the row's total height,
+// derived directly from the outer container's fillHeight (see
+// TrainingSession) — not re-measured here via a second ResizeObserver hop,
+// since that indirection was observed to go stale after the outer's height
+// settles asynchronously (the column's own clientHeight update never
+// re-fired the observer reliably). The "below" block is still measured
+// directly, since its own height genuinely doesn't depend on anything sized
+// from `availableHeight` — no settling cascade there.
 function TrainingLeftColumn({
-  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName,
+  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName, availableHeight,
 }: {
   set: AlgSet;
   currentCase: AlgCase;
@@ -825,28 +862,26 @@ function TrainingLeftColumn({
   revealed: number;
   timerState: 'idle' | 'running' | 'stopped';
   showCaseName: boolean;
+  availableHeight: number | undefined;
 }) {
-  const leftColRef = useRef<HTMLDivElement>(null);
   const belowRef = useRef<HTMLDivElement>(null);
-  const colHeight = useElementHeight(leftColRef);
-  const isDesktop = useIsDesktop();
+  const belowHeight = useElementHeight(belowRef);
   const [diagramMaxHeight, setDiagramMaxHeight] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!isDesktop || colHeight <= 0) {
+    if (availableHeight === undefined || belowHeight <= 0) {
       setDiagramMaxHeight(undefined);
       return;
     }
-    const belowH = belowRef.current?.offsetHeight ?? 0;
-    const budget = colHeight - belowH - COLUMN_GAP;
+    const budget = availableHeight - belowHeight - COLUMN_GAP;
     const timeout = setTimeout(() => setDiagramMaxHeight(budget), 150);
     return () => clearTimeout(timeout);
-  }, [isDesktop, colHeight, revealed, moves.length, timerState]);
+  }, [availableHeight, belowHeight]);
 
   const revealShown = timerState === 'stopped' && showCaseName;
 
   return (
-    <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
+    <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
       <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} />
 
       <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
@@ -889,14 +924,19 @@ function TrainingLeftColumn({
 
 const TRAINER_SOLVE_GRID = 'grid grid-cols-[1.8rem_1fr_4.5rem_1.25rem] gap-2 items-center';
 
-// Right column: a timer tile (protected minimum height, grows to fill via
-// flex-1, digit size dynamically fitted like Timer's own timer card — see
-// useFittedFontSize) stacked above a Solves tile (fills whatever's left,
-// scrolls internally) — the same two-tile composition Timer uses for its
-// own right column.
+// Right column: a timer tile stacked above a Solves tile (fills whatever's
+// left, scrolls internally) — the same two-tile composition Timer uses for
+// its own right column. `availableHeight` is the row's total height (see
+// TrainingSession); the timer card's own height is derived directly from it
+// (both tiles are equal flex-1, so it's just half the remaining space,
+// protected by TIMER_MIN_HEIGHT) rather than re-measured via the timer
+// card's own ResizeObserver — see the note on TrainingLeftColumn for why
+// that indirection goes stale here. The digit's font size is fit against
+// this same explicit height, only using a live ResizeObserver for width
+// (which doesn't have that staleness problem).
 function TrainingRightColumn({
   set, timerState, elapsed, penalty, entryMode, timerUpdate, solvePrecision,
-  manualInput, setManualInput, submitManual, nextCase, solves, onOpenSolve,
+  manualInput, setManualInput, submitManual, nextCase, solves, onOpenSolve, availableHeight,
 }: {
   set: AlgSet;
   timerState: 'idle' | 'running' | 'stopped';
@@ -911,10 +951,29 @@ function TrainingRightColumn({
   nextCase: () => void;
   solves: AlgSolveDTO[];
   onOpenSolve: (index: number) => void;
+  availableHeight: number | undefined;
 }) {
   const isDesktop = useIsDesktop();
   const timerCardRef = useRef<HTMLDivElement>(null);
-  const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
+  const timerCardHeight = availableHeight !== undefined
+    ? Math.max(TIMER_MIN_HEIGHT, (availableHeight - COLUMN_GAP) / 2)
+    : undefined;
+
+  const [digitFontSize, setDigitFontSize] = useState(144);
+  useEffect(() => {
+    const el = timerCardRef.current;
+    if (!el) return;
+    const reservedBelow = entryMode === 'keyboard' ? 68 : 96;
+    const recompute = () => {
+      const widthCap = el.clientWidth * 0.34;
+      const heightCap = (timerCardHeight ?? el.clientHeight) - reservedBelow;
+      setDigitFontSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [timerCardHeight, entryMode]);
 
   const display = timerState === 'running'
     ? runningDisplay(elapsed, timerUpdate)
@@ -925,8 +984,8 @@ function TrainingRightColumn({
     <div className="flex flex-col gap-3 md:flex-[2] min-h-0">
       <div
         ref={timerCardRef}
-        className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
-        style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
+        className="card overflow-y-auto flex flex-col items-center justify-center gap-6"
+        style={{ height: timerCardHeight, minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
       >
         <div
           className={clsx('font-mono font-bold tracking-tight transition-colors tabular-nums leading-none text-center px-4 shrink-0', colorClass)}
