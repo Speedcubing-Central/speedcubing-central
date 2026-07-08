@@ -81,6 +81,20 @@ export interface SessionDTO {
   solveCount?: number;
 }
 
+// A timed attempt at one algorithm-library case (Trainer tab), scoped to
+// (user, set, case) — unlike SolveDTO's session scoping, this has full
+// history per case so PBs/stats are meaningful.
+export interface AlgSolveDTO {
+  id: string;
+  userId: string;
+  setId: string;
+  caseId: string;
+  time: number; // milliseconds
+  penalty: Penalty;
+  scramble: string;
+  createdAt: string;
+}
+
 export interface GoalDTO {
   eventId: string;
   targetTime: number;

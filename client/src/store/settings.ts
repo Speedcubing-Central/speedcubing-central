@@ -31,6 +31,10 @@ interface SettingsState {
   showWPA: boolean;
   showTarget: boolean;
 
+  // Algorithm Trainer settings
+  trainerShowCaseName: boolean; // reveal the case name/group after stopping
+  trainerRandomAUF: boolean; // random U/U'/U2/none before inverting the scramble
+
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
   setDefaultEvent: (e: string) => void;
@@ -61,6 +65,9 @@ export const useSettings = create<SettingsState>()(
       showBPA: true,
       showWPA: true,
       showTarget: true,
+
+      trainerShowCaseName: true,
+      trainerRandomAUF: true,
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),

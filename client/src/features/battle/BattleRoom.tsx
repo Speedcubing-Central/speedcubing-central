@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatTime, getEvent, type Penalty } from '@scc/shared';
+import { parseTimeInput } from '../../lib/timeInput';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
@@ -10,31 +11,6 @@ import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
 import { useTimerEngine } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
-
-function parseTimeInput(raw: string): number | null {
-  const s = raw.trim().replace(',', '.');
-  const colonMatch = s.match(/^(\d+):(\d{1,2})(?:\.(\d{1,3}))?$/);
-  if (colonMatch) {
-    const mins = parseInt(colonMatch[1], 10);
-    const secs = parseInt(colonMatch[2], 10);
-    const dec = colonMatch[3] ? parseInt(colonMatch[3].padEnd(3, '0'), 10) : 0;
-    return mins * 60000 + secs * 1000 + dec;
-  }
-  const dotMatch = s.match(/^(\d+)\.(\d{1,3})$/);
-  if (dotMatch) {
-    const secs = parseInt(dotMatch[1], 10);
-    const dec = parseInt(dotMatch[2].padEnd(3, '0'), 10);
-    return secs * 1000 + dec;
-  }
-  const digitsMatch = s.match(/^\d{1,8}$/);
-  if (digitsMatch) {
-    const n = parseInt(s, 10);
-    const cs = n % 100;
-    const totalSecs = Math.floor(n / 100);
-    return totalSecs * 1000 + cs * 10;
-  }
-  return null;
-}
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -233,10 +209,10 @@ export default function BattleRoom() {
   }
 
   function handleTypingSubmit() {
-    const parsed = parseTimeInput(typingInput);
+    const parsed = parseTimeInput(typingInput, settings.solvePrecision);
     if (!parsed) { toast.error('Invalid time format'); return; }
-    setPendingTime(parsed);
-    setPendingPenalty('NONE');
+    setPendingTime(parsed.time);
+    setPendingPenalty(parsed.penalty);
     setAwaitingSubmit(true);
     setTypingInput('');
   }

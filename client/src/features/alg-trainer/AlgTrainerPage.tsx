@@ -5,12 +5,23 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, invertAlg, type StickeringKind,
+  RotatingCaseDiagram, invertAlg,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { useAuth } from '../../store/auth';
+import { useSettings } from '../../store/settings';
+import { formatTime as fmtTime, type Penalty } from '@scc/shared';
+import { parseTimeInput } from '../../lib/timeInput';
+import { IS_2x2, rotatingStickering, twoByTwoStickering } from './algDiagram';
+import { CaseDiagramPanel } from './CaseDiagramPanel';
+import { useAlgTrainerData } from './useAlgTrainerData';
+import { TrainerSettings } from './TrainerSettings';
+import { AlgStatsModal } from './AlgStatsModal';
+import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
+
+const COLUMN_GAP = 12; // gap-3
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,21 +75,6 @@ function useAlgPrefs(setId: string | null, isAuthed: boolean) {
 function CubingIcon({ event, className }: { event: string; className?: string }) {
   return <span className={clsx('cubing-icon', `event-${event}`, className)} />;
 }
-
-function twoByTwoStickering(kind: AlgSet['kind']): StickeringKind {
-  return kind === '2x2-oll' ? '2x2-oll' : 'full';
-}
-
-function rotatingStickering(kind: AlgSet['kind']): StickeringKind {
-  if (kind === 'oll') return 'oll';
-  if (kind === 'pll') return 'pll';
-  if (kind === 'coll') return 'coll';
-  if (kind === 'f2l') return 'f2l';
-  if (kind === '2x2-oll') return '2x2-oll';
-  return 'full';
-}
-
-const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'eg1', 'eg2'].includes(kind);
 
 // URL slug ↔ internal set ID mappings
 const SET_TO_URL: Record<string, string> = {
@@ -412,6 +408,7 @@ function CaseBrowser({
   isAuthed: boolean;
 }) {
   const set = getSet(setId)!;
+  const hasGroups = useMemo(() => set.cases.some((c) => c.group), [set]);
   const groups = useMemo(() => ['All', ...Array.from(new Set(set.cases.map((c) => c.group)))], [set]);
   const [group, setGroup] = useState('All');
   const [statusFilter, setStatusFilter] = useState<AlgStatus | 'All'>('All');
@@ -436,15 +433,17 @@ function CaseBrowser({
       </div>
       <PageHeader title={set.name} subtitle={set.description} />
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {groups.length > 2 && groups.map((g) => (
-          <button key={g} onClick={() => setGroup(g)}
-            className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
-              group === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
-            {g}
-          </button>
-        ))}
-      </div>
+      {hasGroups && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {groups.map((g) => (
+            <button key={g} onClick={() => setGroup(g)}
+              className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
+                group === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
+              {g}
+            </button>
+          ))}
+        </div>
+      )}
 
       {isAuthed && (
         <div className="flex flex-wrap gap-2 mb-5">
@@ -494,6 +493,7 @@ function CaseSelector({
   onBack: () => void;
 }) {
   const set = getSet(setId)!;
+  const hasGroups = useMemo(() => set.cases.some((c) => c.group), [set]);
   const groups = useMemo(() => Array.from(new Set(set.cases.map((c) => c.group))), [set]);
   const [statusFilter, setStatusFilter] = useState<AlgStatus | 'All'>('All');
   const [groupFilter, setGroupFilter] = useState('All');
@@ -536,15 +536,17 @@ function CaseSelector({
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <div className="flex flex-wrap gap-2">
-          {['All', ...groups].map((g) => (
-            <button key={g} onClick={() => setGroupFilter(g)}
-              className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
-                groupFilter === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
-              {g}
-            </button>
-          ))}
-        </div>
+        {hasGroups && (
+          <div className="flex flex-wrap gap-2">
+            {['All', ...groups].map((g) => (
+              <button key={g} onClick={() => setGroupFilter(g)}
+                className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
+                  groupFilter === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {(['All', 'NEW', 'LEARNING', 'LEARNED'] as const).map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
@@ -605,14 +607,15 @@ function parseMoves(alg: string): string[] {
   return alg.trim().split(/\s+/).filter(Boolean);
 }
 
-function formatTime(ms: number): string {
-  const s = ms / 1000;
-  return s < 60 ? s.toFixed(2) : `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`;
-}
+const AUF_MOVES = ['', 'U', "U'", 'U2'];
 
-interface TrainerSettings {
-  inputMethod: 'keyboard' | 'manual';
-  showCaseName: boolean;
+// Live display while the timer is running, precision gated by the
+// `timerUpdate` setting — mirrors TimerPage's runningStr.
+function runningDisplay(ms: number, timerUpdate: string): string {
+  if (timerUpdate === 'hidden') return 'solving…';
+  if (timerUpdate === 'seconds') return fmtTime(Math.floor(ms / 1000) * 1000, 'NONE', 0);
+  if (timerUpdate === 'deciseconds') return fmtTime(Math.floor(ms / 100) * 100, 'NONE', 1);
+  return fmtTime(Math.floor(ms / 10) * 10, 'NONE', 2);
 }
 
 function TrainingSession({
@@ -624,27 +627,39 @@ function TrainingSession({
   onBack: () => void;
 }) {
   const set = getSet(setId)!;
+  const s = useSettings();
+  const data = useAlgTrainerData(setId);
 
-  const [settings, setSettings] = useState<TrainerSettings>({ inputMethod: 'keyboard', showCaseName: true });
   const [showSettings, setShowSettings] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const anyModalOpen = showSettings || showStats;
 
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
 
-  // Use an alternate as the scramble so it's never the preferred alg.
-  const randomAlg = useMemo(() => {
+  // Pick an alternate (never the preferred alg, so it's not given away) plus
+  // a random AUF, so the same case doesn't always render as one of a small
+  // fixed set of scrambles — see the plan's scramble-generation note. The
+  // AUF is prepended to whichever algorithm is used (both here and for the
+  // revealed solution below) so the two stay consistent with each other.
+  const { randomAlg, auf } = useMemo(() => {
     const alts = currentCase.alts ?? [];
     const pool = alts.length > 0 ? alts : [currentCase.moves];
-    return pool[Math.floor(Math.random() * pool.length)];
-  }, [currentCase]);
+    const alg = pool[Math.floor(Math.random() * pool.length)];
+    const a = s.trainerRandomAUF ? AUF_MOVES[Math.floor(Math.random() * AUF_MOVES.length)] : '';
+    return { randomAlg: alg, auf: a };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCase, s.trainerRandomAUF]);
 
-  const scramble = useMemo(() => invertAlg(randomAlg), [randomAlg]);
-  const moves = useMemo(() => parseMoves(preferredAlg), [preferredAlg]);
+  const solvingAlg = auf ? `${auf} ${randomAlg}` : randomAlg;
+  const scramble = useMemo(() => invertAlg(solvingAlg), [solvingAlg]);
+  const moves = useMemo(() => parseMoves(auf ? `${auf} ${preferredAlg}` : preferredAlg), [preferredAlg, auf]);
 
   const [revealed, setRevealed] = useState(0);
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'stopped'>('idle');
   const [elapsed, setElapsed] = useState(0);
+  const [penalty, setPenalty] = useState<Penalty>('NONE');
   const [manualInput, setManualInput] = useState('');
   const startTime = useRef<number>(0);
   const rafId = useRef<number | null>(null);
@@ -654,6 +669,7 @@ function TrainingSession({
     setRevealed(0);
     setTimerState('idle');
     setElapsed(0);
+    setPenalty('NONE');
     setManualInput('');
   }, [cases]);
 
@@ -669,49 +685,64 @@ function TrainingSession({
     }
   }, [timerState]);
 
-  // Keyboard handler
+  // Keyboard handler: Left/Right arrows step the move reveal; Space or
+  // Enter start/stop the timer (keyboard entry mode) or advance to the next
+  // case once stopped (either mode — in manual mode the typed-time input
+  // has its own Enter-to-submit handler and is excluded here).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.code === 'ArrowRight') {
+      const isTextTarget = e.target instanceof HTMLInputElement;
+      if (anyModalOpen) return;
+      if (!isTextTarget && e.code === 'ArrowRight') {
         e.preventDefault();
         setRevealed((r) => Math.min(r + 1, moves.length));
         return;
       }
-      if (settings.inputMethod !== 'keyboard') return;
-      if (e.code === 'Space') {
+      if (!isTextTarget && e.code === 'ArrowLeft') {
         e.preventDefault();
-        if (timerState === 'idle') {
-          startTime.current = Date.now();
-          setTimerState('running');
-        } else if (timerState === 'running') {
-          setElapsed(Date.now() - startTime.current);
-          setTimerState('stopped');
-        } else {
+        setRevealed((r) => Math.max(r - 1, 0));
+        return;
+      }
+      if (isTextTarget || (e.code !== 'Space' && e.key !== 'Enter')) return;
+
+      if (s.entryMode !== 'keyboard') {
+        if (timerState === 'stopped') {
+          e.preventDefault();
           nextCase();
         }
+        return;
+      }
+      e.preventDefault();
+      if (timerState === 'idle') {
+        startTime.current = Date.now();
+        setTimerState('running');
+      } else if (timerState === 'running') {
+        const finalMs = Math.round(Date.now() - startTime.current);
+        setElapsed(finalMs);
+        setTimerState('stopped');
+        data.addSolve(currentCase.id, finalMs, 'NONE', scramble);
+      } else {
+        nextCase();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timerState, nextCase, moves.length, settings.inputMethod]);
+  }, [timerState, nextCase, moves.length, s.entryMode, anyModalOpen, currentCase, scramble, data]);
 
   const submitManual = () => {
-    const val = parseFloat(manualInput.replace(',', '.'));
-    if (!isNaN(val) && val > 0) {
-      setElapsed(Math.round(val * 1000));
-      setTimerState('stopped');
-      setManualInput('');
-    }
+    const parsed = parseTimeInput(manualInput, s.solvePrecision);
+    if (!parsed) return;
+    setElapsed(parsed.time);
+    setPenalty(parsed.penalty);
+    setTimerState('stopped');
+    setManualInput('');
+    data.addSolve(currentCase.id, parsed.time, parsed.penalty, scramble);
   };
 
-  const setSetting = <K extends keyof TrainerSettings>(key: K, val: TrainerSettings[K]) =>
-    setSettings((s) => ({ ...s, [key]: val }));
-
   return (
-    <div>
+    <div className="flex flex-col md:h-[calc(100dvh-2rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={onBack} className="btn-ghost flex items-center gap-1">
             <Icon name="arrowLeft" size={14} /> Cases
@@ -719,111 +750,51 @@ function TrainingSession({
           <span className="text-muted">/</span>
           <span className="font-semibold">{set.name} Trainer</span>
         </div>
-        <button
-          onClick={() => setShowSettings((v) => !v)}
-          className={clsx('btn-ghost flex items-center gap-1.5 text-sm', showSettings && 'text-accent')}
-        >
-          <Icon name="gear" size={15} /> Settings
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowStats(true)}
+            className="btn-ghost flex items-center gap-1.5 text-sm"
+          >
+            <Icon name="target" size={15} /> Stats
+          </button>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="btn-ghost flex items-center gap-1.5 text-sm"
+          >
+            <Icon name="gear" size={15} /> Settings
+          </button>
+        </div>
       </div>
 
-      {/* Settings panel */}
-      {showSettings && (
-        <div className="card p-5 mb-6 flex flex-col gap-5">
-          <div>
-            <div className="label mb-2">Input Method</div>
-            <div className="flex gap-2">
-              {(['keyboard', 'manual'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setSetting('inputMethod', m)}
-                  className={clsx('px-3 py-1.5 rounded text-sm font-semibold capitalize transition-colors',
-                    settings.inputMethod === m ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}
-                >
-                  {m === 'keyboard' ? 'Keyboard (spacebar)' : 'Manual input'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="label mb-2">After Stopping</div>
-            <div className="flex gap-2">
-              {([true, false] as const).map((v) => (
-                <button
-                  key={String(v)}
-                  onClick={() => setSetting('showCaseName', v)}
-                  className={clsx('px-3 py-1.5 rounded text-sm font-semibold transition-colors',
-                    settings.showCaseName === v ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}
-                >
-                  {v ? 'Show case name' : 'Hide case name'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left: diagram + scramble + move reveal */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="card p-5 flex flex-col items-center gap-3 w-full">
-            <RotatingCaseDiagram
-              alg={randomAlg}
-              size={280}
-              defaultLat={30}
-              puzzle={IS_2x2(set.kind) ? '2x2x2' : '3x3x3'}
-              diagramPrefix={currentCase.diagramPrefix}
-              stickering={rotatingStickering(set.kind)}
-            />
-            <div className="font-mono text-base font-semibold text-primary text-center leading-relaxed break-all">
-              {scramble}
-            </div>
-          </div>
-
-          {/* Move reveal */}
-          <div className="card p-4 w-full">
-            <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 flex items-center justify-between">
-              <span>Solution — <kbd className="kbd">→</kbd> to reveal</span>
-              <span className="text-accent">{revealed}/{moves.length}</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {moves.map((m, i) => (
-                <span
-                  key={i}
-                  className={clsx(
-                    'font-mono text-sm font-semibold px-1.5 py-0.5 rounded transition-colors',
-                    i < revealed ? 'text-primary bg-accent/10' : 'text-muted/40',
-                  )}
-                >
-                  {i < revealed ? m : '—'}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {timerState === 'stopped' && settings.showCaseName && (
-            <div className="card p-3 w-full text-center text-sm text-muted">
-              <span className="font-bold text-primary">{currentCase.name}</span>
-              <span className="mx-2">·</span>
-              {currentCase.group}
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
+        {/* Left: diagram + scramble + move reveal + case-name reveal */}
+        <TrainingLeftColumn
+          set={set}
+          currentCase={currentCase}
+          solvingAlg={solvingAlg}
+          scramble={scramble}
+          moves={moves}
+          revealed={revealed}
+          timerState={timerState}
+          showCaseName={s.trainerShowCaseName}
+        />
 
         {/* Right: timer */}
-        <div className="flex flex-col items-center justify-center gap-6">
+        <div className="flex flex-col items-center justify-center gap-6 md:flex-[2] min-h-0">
           <div className={clsx(
             'text-8xl font-mono font-bold tracking-tight transition-colors tabular-nums',
             timerState === 'running' ? 'text-accent' : 'text-primary',
           )}>
-            {formatTime(elapsed)}
+            {timerState === 'running'
+              ? runningDisplay(elapsed, s.timerUpdate)
+              : fmtTime(elapsed, penalty, s.solvePrecision)}
           </div>
 
-          {settings.inputMethod === 'keyboard' ? (
+          {s.entryMode === 'keyboard' ? (
             <div className="flex flex-col items-center gap-2 text-sm text-muted">
               {timerState === 'idle' && <span>Press <kbd className="kbd">Space</kbd> to start</span>}
               {timerState === 'running' && <span>Press <kbd className="kbd">Space</kbd> to stop</span>}
-              {timerState === 'stopped' && <span>Press <kbd className="kbd">Space</kbd> for next case</span>}
+              {timerState === 'stopped' && <span>Press <kbd className="kbd">Space</kbd> or <kbd className="kbd">Enter</kbd> for next case</span>}
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
@@ -832,11 +803,11 @@ function TrainingSession({
                   <input
                     autoFocus={timerState === 'idle'}
                     type="text"
-                    placeholder="e.g. 12.34"
+                    placeholder="e.g. 1234 or 12.34"
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && submitManual()}
-                    className="input w-36 text-center font-mono text-lg"
+                    className="input w-40 text-center font-mono text-lg"
                   />
                   <button onClick={submitManual} className="btn-primary px-4 py-2">Set</button>
                 </div>
@@ -848,10 +819,99 @@ function TrainingSession({
             </div>
           )}
 
-          {settings.inputMethod === 'keyboard' && timerState === 'stopped' && (
+          {s.entryMode === 'keyboard' && timerState === 'stopped' && (
             <button onClick={nextCase} className="btn-primary px-6 py-2.5">
               Next case
             </button>
+          )}
+        </div>
+      </div>
+
+      <TrainerSettings open={showSettings} onClose={() => setShowSettings(false)} />
+      <AlgStatsModal
+        open={showStats}
+        onClose={() => setShowStats(false)}
+        setId={setId}
+        solves={data.solves}
+        onUpdatePenalty={data.updatePenalty}
+        onUpdateTime={data.updateTime}
+        onDelete={data.deleteSolve}
+      />
+    </div>
+  );
+}
+
+// Left column: fills the available column height, diagram shrinking (never
+// cropping) to leave room for the move-reveal card and case-name reveal
+// below it — same budget pattern as Timer's scramble panel (see
+// useDiagramFit), just with the "below" block measured directly since its
+// height doesn't depend on the diagram's own size.
+function TrainingLeftColumn({
+  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName,
+}: {
+  set: AlgSet;
+  currentCase: AlgCase;
+  solvingAlg: string;
+  scramble: string;
+  moves: string[];
+  revealed: number;
+  timerState: 'idle' | 'running' | 'stopped';
+  showCaseName: boolean;
+}) {
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const belowRef = useRef<HTMLDivElement>(null);
+  const colHeight = useElementHeight(leftColRef);
+  const isDesktop = useIsDesktop();
+  const [diagramMaxHeight, setDiagramMaxHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isDesktop || colHeight <= 0) {
+      setDiagramMaxHeight(undefined);
+      return;
+    }
+    const belowH = belowRef.current?.offsetHeight ?? 0;
+    const budget = colHeight - belowH - COLUMN_GAP;
+    const timeout = setTimeout(() => setDiagramMaxHeight(budget), 150);
+    return () => clearTimeout(timeout);
+  }, [isDesktop, colHeight, revealed, moves.length, timerState]);
+
+  const revealShown = timerState === 'stopped' && showCaseName;
+
+  return (
+    <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
+      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} />
+
+      <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
+        {/* Move reveal */}
+        <div className="card p-4 w-full shrink-0">
+          <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 flex items-center justify-between">
+            <span>Solution — <kbd className="kbd">←</kbd><kbd className="kbd">→</kbd> to reveal</span>
+            <span className="text-accent">{revealed}/{moves.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {moves.map((m, i) => (
+              <span
+                key={i}
+                className={clsx(
+                  'font-mono text-sm font-semibold px-1.5 py-0.5 rounded transition-colors',
+                  i < revealed ? 'text-primary bg-accent/10' : 'text-muted/40',
+                )}
+              >
+                {i < revealed ? m : '—'}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Case-name reveal — an inline, animated line rather than a
+            separate bordered tile, so it reads as part of the flow instead
+            of popping in as its own disconnected block. */}
+        <div className="h-5 shrink-0 flex items-center justify-center">
+          {revealShown && (
+            <div className="case-reveal-enter flex items-center gap-2 text-sm">
+              <span className="font-bold text-accent">{currentCase.name}</span>
+              {currentCase.group && <span className="text-muted">{currentCase.group}</span>}
+            </div>
           )}
         </div>
       </div>

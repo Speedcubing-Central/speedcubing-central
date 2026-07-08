@@ -20,6 +20,7 @@ import profileRouter from './routes/profile.js';
 import battleRouter from './routes/battle.js';
 import bldRouter from './routes/bld.js';
 import algRouter from './routes/alg.js';
+import algSolvesRouter from './routes/algSolves.js';
 import scrambleRouter from './routes/scramble.js';
 import reconstructionsRouter from './routes/reconstructions.js';
 import ccRouter from './routes/cubingContests.js';
@@ -74,6 +75,7 @@ export function createApp() {
   app.use('/api/battle', battleRouter);
   app.use('/api/bld', bldRouter);
   app.use('/api/alg', algRouter);
+  app.use('/api/alg-solves', algSolvesRouter);
   app.use('/api/scramble', scrambleRouter);
   app.use('/api/reconstructions', reconstructionsRouter);
   app.use('/api/cc', ccRouter);

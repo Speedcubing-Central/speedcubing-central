@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { formatTime, getEvent, type Penalty, type SolveDTO } from '@scc/shared';
+import { parseTimeInput } from '../../lib/timeInput';
 import { useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { useUi } from '../../store/ui';
 import { EventSelector } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScramblePanel } from '../../components/ScramblePanel';
+import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useTimerEngine } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
@@ -26,42 +28,6 @@ const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-c
 // for it.
 const TIMER_MIN_HEIGHT = 160;
 const COLUMN_GAP = 12; // gap-3
-
-// Measures a ref'd element's own height, tracked via ResizeObserver. Used
-// for the LEFT column (a stable, flex-stretched height, unaffected by the
-// scramble panel's own content) and the last-solve card (present only
-// sometimes, but its own height doesn't depend on the scramble panel
-// either) — both safe to measure directly, unlike the scramble panel's own
-// box.
-function useElementHeight(ref: React.RefObject<HTMLDivElement>): number {
-  const [height, setHeight] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const recompute = () => setHeight(el.clientHeight);
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return height;
-}
-
-// Tracks the md: breakpoint so the scramble panel's height budget only
-// applies on desktop, matching the fixed-height column layout there —
-// mobile has no fixed-height column (the whole page scrolls instead), so
-// there's no real budget to compute.
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768);
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const handler = () => setIsDesktop(mq.matches);
-    handler();
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return isDesktop;
-}
 
 // Sizes the timer digits to whatever room is actually left in the card,
 // instead of guessing at viewport-relative units. `reservedBelow` is the
@@ -86,43 +52,6 @@ function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reserv
   return size;
 }
 
-
-// Parse a time string. For pure-digit inputs (no . or :), use precision to
-// interpret: the last `precision` digits are the fractional part.
-// e.g. precision=2, "1258" → 12.58s; "12684" → 1:26.84
-function parseTimeInput(raw: string, precision: number): { time: number; penalty: Penalty } | null {
-  const t = raw.trim();
-  if (!t) return null;
-  if (/^dnf$/i.test(t)) return { time: 0, penalty: 'DNF' };
-
-  let penalty: Penalty = 'NONE';
-  let s = t;
-  if (s.endsWith('+')) {
-    penalty = 'PLUS2';
-    s = s.slice(0, -1);
-  }
-
-  let ms: number;
-
-  if (/^\d+$/.test(s) && precision > 0) {
-    const frac = parseInt(s.slice(-precision).padStart(precision, '0'), 10);
-    const intStr = s.slice(0, -precision) || '0';
-    const intSec = parseInt(intStr, 10);
-    const minutes = Math.floor(intSec / 100);
-    const seconds = intSec % 100;
-    ms = (minutes * 60 + seconds) * 1000 + frac * Math.pow(10, 3 - precision);
-  } else if (/^\d+$/.test(s) && precision === 0) {
-    ms = parseInt(s, 10) * 1000;
-  } else if (s.includes(':')) {
-    const [m, sec] = s.split(':');
-    ms = (parseInt(m, 10) * 60 + parseFloat(sec)) * 1000;
-  } else {
-    ms = parseFloat(s) * 1000;
-  }
-
-  if (isNaN(ms) || ms < 0) return null;
-  return { time: Math.round(ms), penalty };
-}
 
 export default function TimerPage() {
   const settings = useSettings();

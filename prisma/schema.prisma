@@ -44,6 +44,7 @@ model User {
   letterPairs   LetterPair[]
   algProgress   AlgProgress[]
   algPrefs      UserAlgPref[]
+  algSolves     AlgSolve[]
   reconstructions Reconstruction[]
 
   @@index([wcaId])
@@ -75,6 +76,24 @@ model Solve {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+// A single timed attempt at one algorithm-library case (Trainer tab), scoped
+// to (user, set, case) rather than a session — PBs/stats need the full
+// history per case, not just one practice session's worth.
+model AlgSolve {
+  id        String   @id @default(cuid())
+  userId    String
+  setId     String
+  caseId    String
+  time      Int // milliseconds
+  penalty   Penalty  @default(NONE)
+  scramble  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, setId])
 }
 
 model DailyScramble {

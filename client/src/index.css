@@ -93,3 +93,18 @@ html:not(.dark) body {
 .toast-enter {
   animation: toast-in 0.2s ease-out;
 }
+
+/* Alg Trainer: case-name reveal after stopping */
+@keyframes case-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.case-reveal-enter {
+  animation: case-reveal-in 0.25s ease-out;
+}
