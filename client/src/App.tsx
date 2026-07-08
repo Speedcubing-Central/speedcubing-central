@@ -10,6 +10,7 @@ import Dashboard from './features/landing/Dashboard';
 import TimerPage from './features/timer/TimerPage';
 import CalculatorPage from './features/calculator/CalculatorPage';
 import AlgTrainerPage from './features/alg-trainer/AlgTrainerPage';
+import AlgStatsPage from './features/alg-trainer/AlgStatsPage';
 import BattleLobby from './features/battle/BattleLobby';
 import BattleRoom from './features/battle/BattleRoom';
 import ReconstructionPage from './features/reconstruction/ReconstructionPage';
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/algorithms/:tab" element={<AlgTrainerPage />} />
         <Route path="/algorithms/:tab/:puzzle" element={<AlgTrainerPage />} />
         <Route path="/algorithms/:tab/:puzzle/:setId" element={<AlgTrainerPage />} />
+        <Route path="/algorithms/trainer/:puzzle/:setId/stats" element={<AlgStatsPage />} />
         <Route path="/battle" element={<BattleLobby />} />
         <Route path="/battle/:code" element={<BattleRoom />} />
         <Route path="/reconstruction" element={<ReconstructionPage />} />

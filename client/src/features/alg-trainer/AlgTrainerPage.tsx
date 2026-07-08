@@ -12,16 +12,20 @@ import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
-import { formatTime as fmtTime, type Penalty } from '@scc/shared';
+import { formatTime as fmtTime, type Penalty, type AlgSolveDTO } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
+import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering, twoByTwoStickering } from './algDiagram';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { TrainerSettings } from './TrainerSettings';
-import { AlgStatsModal } from './AlgStatsModal';
+import { AlgSolveDetail } from './AlgSolveDetail';
+import { SET_TO_URL, URL_TO_SET } from './algUrls';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
+import { useFittedFontSize } from '../../components/useFittedFontSize';
 
 const COLUMN_GAP = 12; // gap-3
+const TIMER_MIN_HEIGHT = 160;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,16 +79,6 @@ function useAlgPrefs(setId: string | null, isAuthed: boolean) {
 function CubingIcon({ event, className }: { event: string; className?: string }) {
   return <span className={clsx('cubing-icon', `event-${event}`, className)} />;
 }
-
-// URL slug ↔ internal set ID mappings
-const SET_TO_URL: Record<string, string> = {
-  OLL: 'oll', PLL: 'pll', F2L: 'f2l', COLL: 'coll',
-  EG1: 'eg-1', EG2: 'eg-2', CLL: 'cll',
-  OrtegaOLL: 'ortega-oll', OrtegaPBL: 'ortega-pbl',
-};
-const URL_TO_SET: Record<string, string> = Object.fromEntries(
-  Object.entries(SET_TO_URL).map(([k, v]) => [v, k]),
-);
 
 function CaseImage({ c, set, size = 80, pref }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref }) {
   const alg = effectiveAlg(c, pref);
@@ -619,20 +613,22 @@ function runningDisplay(ms: number, timerUpdate: string): string {
 }
 
 function TrainingSession({
-  cases, setId, prefs, onBack,
+  cases, setId, puzzle, prefs, onBack,
 }: {
   cases: AlgCase[];
   setId: string;
+  puzzle: string;
   prefs: PrefsMap;
   onBack: () => void;
 }) {
   const set = getSet(setId)!;
   const s = useSettings();
   const data = useAlgTrainerData(setId);
+  const navigate = useNavigate();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const anyModalOpen = showSettings || showStats;
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const anyModalOpen = showSettings || detailIndex !== null;
 
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
@@ -752,7 +748,7 @@ function TrainingSession({
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setShowStats(true)}
+            onClick={() => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[setId] ?? setId.toLowerCase()}/stats`)}
             className="btn-ghost flex items-center gap-1.5 text-sm"
           >
             <Icon name="target" size={15} /> Stats
@@ -779,73 +775,45 @@ function TrainingSession({
           showCaseName={s.trainerShowCaseName}
         />
 
-        {/* Right: timer */}
-        <div className="flex flex-col items-center justify-center gap-6 md:flex-[2] min-h-0">
-          <div className={clsx(
-            'text-8xl font-mono font-bold tracking-tight transition-colors tabular-nums',
-            timerState === 'running' ? 'text-accent' : 'text-primary',
-          )}>
-            {timerState === 'running'
-              ? runningDisplay(elapsed, s.timerUpdate)
-              : fmtTime(elapsed, penalty, s.solvePrecision)}
-          </div>
-
-          {s.entryMode === 'keyboard' ? (
-            <div className="flex flex-col items-center gap-2 text-sm text-muted">
-              {timerState === 'idle' && <span>Press <kbd className="kbd">Space</kbd> to start</span>}
-              {timerState === 'running' && <span>Press <kbd className="kbd">Space</kbd> to stop</span>}
-              {timerState === 'stopped' && <span>Press <kbd className="kbd">Space</kbd> or <kbd className="kbd">Enter</kbd> for next case</span>}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              {timerState !== 'stopped' ? (
-                <div className="flex gap-2">
-                  <input
-                    autoFocus={timerState === 'idle'}
-                    type="text"
-                    placeholder="e.g. 1234 or 12.34"
-                    value={manualInput}
-                    onChange={(e) => setManualInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && submitManual()}
-                    className="input w-40 text-center font-mono text-lg"
-                  />
-                  <button onClick={submitManual} className="btn-primary px-4 py-2">Set</button>
-                </div>
-              ) : (
-                <button onClick={nextCase} className="btn-primary px-6 py-2.5">
-                  Next case
-                </button>
-              )}
-            </div>
-          )}
-
-          {s.entryMode === 'keyboard' && timerState === 'stopped' && (
-            <button onClick={nextCase} className="btn-primary px-6 py-2.5">
-              Next case
-            </button>
-          )}
-        </div>
+        {/* Right: timer tile (grows to fill) + solves tile (fills remaining space, scrolls internally) */}
+        <TrainingRightColumn
+          set={set}
+          timerState={timerState}
+          elapsed={elapsed}
+          penalty={penalty}
+          entryMode={s.entryMode}
+          timerUpdate={s.timerUpdate}
+          solvePrecision={s.solvePrecision}
+          manualInput={manualInput}
+          setManualInput={setManualInput}
+          submitManual={submitManual}
+          nextCase={nextCase}
+          solves={data.solves}
+          onOpenSolve={(i) => setDetailIndex(i)}
+        />
       </div>
 
       <TrainerSettings open={showSettings} onClose={() => setShowSettings(false)} />
-      <AlgStatsModal
-        open={showStats}
-        onClose={() => setShowStats(false)}
-        setId={setId}
-        solves={data.solves}
-        onUpdatePenalty={data.updatePenalty}
-        onUpdateTime={data.updateTime}
-        onDelete={data.deleteSolve}
-      />
+      {detailIndex !== null && (
+        <AlgSolveDetail
+          open
+          onClose={() => setDetailIndex(null)}
+          solves={data.solves}
+          index={detailIndex}
+          setId={setId}
+          onUpdatePenalty={data.updatePenalty}
+          onUpdateTime={data.updateTime}
+          onDelete={data.deleteSolve}
+        />
+      )}
     </div>
   );
 }
 
-// Left column: fills the available column height, diagram shrinking (never
-// cropping) to leave room for the move-reveal card and case-name reveal
-// below it — same budget pattern as Timer's scramble panel (see
-// useDiagramFit), just with the "below" block measured directly since its
-// height doesn't depend on the diagram's own size.
+// Left column: fills the available column height, diagram GROWING to use
+// whatever's left (see CaseDiagramPanel) after the move-reveal card and
+// case-name reveal below it — the "below" block is measured directly since
+// its own height doesn't depend on the diagram's size.
 function TrainingLeftColumn({
   set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName,
 }: {
@@ -919,6 +887,158 @@ function TrainingLeftColumn({
   );
 }
 
+const TRAINER_SOLVE_GRID = 'grid grid-cols-[1.8rem_1fr_4.5rem_1.25rem] gap-2 items-center';
+
+// Right column: a timer tile (protected minimum height, grows to fill via
+// flex-1, digit size dynamically fitted like Timer's own timer card — see
+// useFittedFontSize) stacked above a Solves tile (fills whatever's left,
+// scrolls internally) — the same two-tile composition Timer uses for its
+// own right column.
+function TrainingRightColumn({
+  set, timerState, elapsed, penalty, entryMode, timerUpdate, solvePrecision,
+  manualInput, setManualInput, submitManual, nextCase, solves, onOpenSolve,
+}: {
+  set: AlgSet;
+  timerState: 'idle' | 'running' | 'stopped';
+  elapsed: number;
+  penalty: Penalty;
+  entryMode: 'keyboard' | 'typing';
+  timerUpdate: string;
+  solvePrecision: 2 | 3;
+  manualInput: string;
+  setManualInput: (v: string) => void;
+  submitManual: () => void;
+  nextCase: () => void;
+  solves: AlgSolveDTO[];
+  onOpenSolve: (index: number) => void;
+}) {
+  const isDesktop = useIsDesktop();
+  const timerCardRef = useRef<HTMLDivElement>(null);
+  const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
+
+  const display = timerState === 'running'
+    ? runningDisplay(elapsed, timerUpdate)
+    : fmtTime(elapsed, penalty, solvePrecision);
+  const colorClass = timerState === 'running' ? 'text-accent' : 'text-primary';
+
+  return (
+    <div className="flex flex-col gap-3 md:flex-[2] min-h-0">
+      <div
+        ref={timerCardRef}
+        className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
+        style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
+      >
+        <div
+          className={clsx('font-mono font-bold tracking-tight transition-colors tabular-nums leading-none text-center px-4 shrink-0', colorClass)}
+          style={{ fontSize: digitFontSize }}
+        >
+          {display}
+        </div>
+
+        {entryMode === 'keyboard' ? (
+          <div className="flex flex-col items-center gap-2 text-sm text-muted shrink-0">
+            {timerState === 'idle' && <span>Press <kbd className="kbd">Space</kbd> to start</span>}
+            {timerState === 'running' && <span>Press <kbd className="kbd">Space</kbd> to stop</span>}
+            {timerState === 'stopped' && <span>Press <kbd className="kbd">Space</kbd> or <kbd className="kbd">Enter</kbd> for next case</span>}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 shrink-0">
+            {timerState !== 'stopped' ? (
+              <div className="flex gap-2">
+                <input
+                  autoFocus={timerState === 'idle'}
+                  type="text"
+                  placeholder="e.g. 1234 or 12.34"
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submitManual()}
+                  className="input w-40 text-center font-mono text-lg"
+                />
+                <button onClick={submitManual} className="btn-primary px-4 py-2">Set</button>
+              </div>
+            ) : (
+              <button onClick={nextCase} className="btn-primary px-6 py-2.5">
+                Next case
+              </button>
+            )}
+          </div>
+        )}
+
+        {entryMode === 'keyboard' && timerState === 'stopped' && (
+          <button onClick={nextCase} className="btn-primary px-6 py-2.5 shrink-0">
+            Next case
+          </button>
+        )}
+      </div>
+
+      {/* Solves — fills remaining vertical space, scrolls internally, same
+          pattern as Timer's own Solves card. */}
+      <div className="card p-5 flex flex-col flex-1 min-h-0">
+        <h3 className="font-bold text-lg mb-3 shrink-0">Solves ({solves.length})</h3>
+        {solves.length === 0 ? (
+          <p className="text-muted text-sm">No solves yet. Start the timer.</p>
+        ) : (
+          <>
+            <div className={`${TRAINER_SOLVE_GRID} text-xs font-semibold text-muted px-1 pb-1.5 border-b border-border shrink-0`}>
+              <span className="text-right">#</span>
+              <span>case</span>
+              <span className="text-right">time</span>
+              <span />
+            </div>
+            <div className="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
+              {solves.map((sv, i) => (
+                <TrainerSolveRow
+                  key={sv.id}
+                  index={i}
+                  solve={sv}
+                  total={solves.length}
+                  set={set}
+                  precision={solvePrecision}
+                  onOpen={() => onOpenSolve(i)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrainerSolveRow({
+  index, solve, total, set, precision, onOpen,
+}: {
+  index: number;
+  solve: AlgSolveDTO;
+  total: number;
+  set: AlgSet;
+  precision: number;
+  onOpen: () => void;
+}) {
+  const c = set.cases.find((cc) => cc.id === solve.caseId);
+  return (
+    <div className={`${TRAINER_SOLVE_GRID} px-1 py-2 text-sm`}>
+      <span className="text-muted text-xs text-right">{total - index}.</span>
+      <button onClick={onOpen} className="text-left font-medium truncate hover:text-accent">
+        {c?.name ?? solve.caseId}
+      </button>
+      <button
+        onClick={onOpen}
+        className={clsx('font-mono text-sm font-semibold hover:text-accent text-right', solve.penalty === 'DNF' && 'text-red-400')}
+      >
+        {fmtTime(solve.time, solve.penalty, precision)}
+      </button>
+      <button
+        onClick={() => copyText(fmtTime(solve.time, solve.penalty, precision), 'Time copied')}
+        title="Copy time"
+        className="text-muted hover:text-accent justify-self-end"
+      >
+        <Icon name="copy" size={14} />
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Trainer tab — URL-driven
 // ---------------------------------------------------------------------------
@@ -970,6 +1090,7 @@ function TrainerTab({
       <TrainingSession
         cases={sessionCases}
         setId={setId}
+        puzzle={puzzle}
         prefs={prefs}
         onBack={() => setSessionCases(null)}
       />

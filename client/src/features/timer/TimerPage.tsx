@@ -9,6 +9,7 @@ import { EventSelector } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
+import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
@@ -28,30 +29,6 @@ const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-c
 // for it.
 const TIMER_MIN_HEIGHT = 160;
 const COLUMN_GAP = 12; // gap-3
-
-// Sizes the timer digits to whatever room is actually left in the card,
-// instead of guessing at viewport-relative units. `reservedBelow` is the
-// pixel height of whatever else shares the card (hint text or the manual-
-// entry input row) — measuring the real container avoids ever having to
-// re-guess a vh percentage against a screen we can't see.
-function useFittedFontSize(containerRef: React.RefObject<HTMLDivElement>, reservedBelow: number): number {
-  const [size, setSize] = useState(144); // 9rem, matches the old max
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const recompute = () => {
-      const heightCap = el.clientHeight - reservedBelow;
-      const widthCap = el.clientWidth * 0.34;
-      setSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
-    };
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [containerRef, reservedBelow]);
-  return size;
-}
-
 
 export default function TimerPage() {
   const settings = useSettings();
