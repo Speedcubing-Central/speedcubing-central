@@ -2,9 +2,9 @@ import type { AlgSet } from './algTypes';
 
 export const EG1_SET: AlgSet = {
   id: 'EG1',
-  name: 'EG1',
+  name: 'EG-1',
   kind: 'eg1',
-  description: 'EG-1: Bottom layer has one solved corner (2×2)',
+  description: 'Erik-Gunnar 1',
   cases: [
     // Anti-Sune
     { id: 'EG1-AS-1', name: 'EG1 AS 1', group: 'Anti-Sune', moves: "y U2 B U' R2 F2 U' F", diagramPrefix: 'x2', alts: ["y R' F R2 U R' F' U' R U' R'", "y U' L' U' L U' F' L' U L2 F L'", "y L' U L2 F L' F' U' L F' L'"] },

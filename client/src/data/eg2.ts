@@ -2,9 +2,9 @@ import type { AlgSet } from './algTypes';
 
 export const EG2_SET: AlgSet = {
   id: 'EG2',
-  name: 'EG2',
+  name: 'EG-2',
   kind: 'eg2',
-  description: 'EG-2: Bottom layer has two solved corners (2×2)',
+  description: 'Erik-Gunnar 2',
   cases: [
     // Anti-Sune
     { id: 'EG2-AS-1', name: 'EG2 AS 1', group: 'Anti-Sune', moves: "F R2 U R' U2 R U R2 U F'", alts: ["U2 R' U2 R2 U' R' U R' F R F R2", "x U' R2 F R2 F' U R' U2 R' U x'", "R U2 R' F R' F' R U' R U' R F2 R2", "R U2 R' F R' F' R U' R U' R B2 R2", "y2 R' U R U' R2 F R F' R U R' U' R' F2 R2", "U2 F R2 U2 R' U R' U2 R U' F'"] },

@@ -173,9 +173,9 @@ const SET_CARDS_2x2 = [
     preview: <TwoByTwoDiagram alg="y R U R' F' R U R' U' R' F R2 U' R'" size={80} /> },
   { id: 'CLL',       label: 'CLL', description: 'Corners of the Last Layer', count: 42,
     preview: <TwoByTwoDiagram alg="y R U2 R' U' R U' R'" size={80} /> },
-  { id: 'EG1',       label: 'EG-1', description: 'EG-1', count: 42,
+  { id: 'EG1',       label: 'EG-1', description: 'Erik-Gunnar 1', count: 42,
     preview: <TwoByTwoDiagram alg="U R U' R' F' U' F2 R U' R'" size={80} /> },
-  { id: 'EG2',       label: 'EG-2', description: 'EG-2', count: 42,
+  { id: 'EG2',       label: 'EG-2', description: 'Erik-Gunnar 2', count: 42,
     preview: <TwoByTwoDiagram alg="F R2 U R' U2 R U R2 U F'" size={80} /> },
 ];
 
