@@ -707,24 +707,37 @@ function TrainingSession({
   }, [timerState]);
 
   // Keyboard handler: Left/Right arrows step the move reveal; Space or
-  // Enter start/stop the timer (keyboard entry mode) or advance to the next
-  // case once stopped (either mode — in manual mode the typed-time input
-  // has its own Enter-to-submit handler and is excluded here).
+  // Enter start the timer (keyboard entry mode) or advance to the next case
+  // once stopped (either mode — in manual mode the typed-time input has its
+  // own Enter-to-submit handler and is excluded here). Once the timer is
+  // running, any key stops it (arrows included — by then hands are on the
+  // cube, not reveal duty), matching Timer/Battle's own engine.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isTextTarget = e.target instanceof HTMLInputElement;
-      if (anyModalOpen) return;
-      if (!isTextTarget && e.code === 'ArrowRight') {
+      if (anyModalOpen || isTextTarget) return;
+
+      if (s.entryMode === 'keyboard' && timerState === 'running') {
+        if (e.repeat) return;
+        e.preventDefault();
+        const finalMs = Math.round(Date.now() - startTime.current);
+        setElapsed(finalMs);
+        setTimerState('stopped');
+        data.addSolve(currentCase.id, finalMs, 'NONE', scramble);
+        return;
+      }
+
+      if (e.code === 'ArrowRight') {
         e.preventDefault();
         setRevealed((r) => Math.min(r + 1, moves.length));
         return;
       }
-      if (!isTextTarget && e.code === 'ArrowLeft') {
+      if (e.code === 'ArrowLeft') {
         e.preventDefault();
         setRevealed((r) => Math.max(r - 1, 0));
         return;
       }
-      if (isTextTarget || (e.code !== 'Space' && e.key !== 'Enter')) return;
+      if (e.repeat || (e.code !== 'Space' && e.key !== 'Enter')) return;
 
       if (s.entryMode !== 'keyboard') {
         if (timerState === 'stopped') {
@@ -737,11 +750,6 @@ function TrainingSession({
       if (timerState === 'idle') {
         startTime.current = Date.now();
         setTimerState('running');
-      } else if (timerState === 'running') {
-        const finalMs = Math.round(Date.now() - startTime.current);
-        setElapsed(finalMs);
-        setTimerState('stopped');
-        data.addSolve(currentCase.id, finalMs, 'NONE', scramble);
       } else {
         nextCase();
       }

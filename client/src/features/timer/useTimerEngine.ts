@@ -191,7 +191,11 @@ export function useTimerEngine(opts: Options) {
     setPhase('idle');
   }, []);
 
-  // Keyboard (spacebar + escape)
+  // Keyboard (spacebar to start + escape). Starting (and the hold-to-arm
+  // sequence leading up to it) is Space-specific, but once the timer is
+  // actually running, any key stops it — matching the moment your hands
+  // leave the keyboard for the cube, where a stray keypress means you're
+  // done, not that you specifically hit Space again.
   useEffect(() => {
     if (!enabled) return;
     const isTextTarget = (t: EventTarget | null) => {
@@ -206,7 +210,13 @@ export function useTimerEngine(opts: Options) {
         }
         return;
       }
-      if (e.code !== 'Space' || e.repeat || isTextTarget(e.target)) return;
+      if (e.repeat || isTextTarget(e.target)) return;
+      if (phaseRef.current === 'running') {
+        e.preventDefault();
+        press();
+        return;
+      }
+      if (e.code !== 'Space') return;
       e.preventDefault();
       press();
     };
