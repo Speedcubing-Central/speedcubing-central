@@ -18,6 +18,7 @@ import { StatsTable } from './StatsTable';
 import { PenaltyButtons } from './PenaltyButtons';
 import { TimerSettings } from './TimerSettings';
 import { SessionManager } from './SessionManager';
+import { ImportCstimerModal } from './ImportCstimerModal';
 import { SolveDetail } from './SolveDetail';
 import { AverageDetail } from './AverageDetail';
 import { copyText, formatSolveCopy } from './copy';
@@ -42,11 +43,12 @@ export default function TimerPage() {
   const [typed, setTyped] = useState('');
   const [showSessions, setShowSessions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [avgView, setAvgView] = useState<SolveAverage | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const anyModalOpen = showSessions || showSettings || detailIndex !== null || avgView !== null;
+  const anyModalOpen = showSessions || showSettings || showImport || detailIndex !== null || avgView !== null;
 
   // Keyboard mode only reserves room for the hint line below the digits;
   // manual mode also needs the input + button row, so it gets less headroom.
@@ -228,6 +230,9 @@ export default function TimerPage() {
         <button className={tool} onClick={() => setShowSessions(true)}>
           <Icon name="book" size={16} /> Sessions
         </button>
+        <button className={clsx(tool, 'px-2.5')} onClick={() => setShowImport(true)} title="Import from CSTimer">
+          <Icon name="upload" size={16} />
+        </button>
         <button className={clsx(tool, 'px-2.5')} onClick={() => setShowSettings(true)} title="Timer Settings">
           <Icon name="gear" size={16} />
         </button>
@@ -378,6 +383,7 @@ export default function TimerPage() {
       </div>
 
       <SessionManager open={showSessions} onClose={() => setShowSessions(false)} data={data} event={event} />
+      <ImportCstimerModal open={showImport} onClose={() => setShowImport(false)} data={data} event={event} />
       <TimerSettings open={showSettings} onClose={() => setShowSettings(false)} />
       {detailIndex !== null && (
         <SolveDetail

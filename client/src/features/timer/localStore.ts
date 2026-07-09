@@ -89,6 +89,33 @@ export const guestStore = {
     if (solve) solve.time = time;
     write(data);
   },
+  // Bulk insert (e.g. an import) — unlike addSolve, entries may predate or
+  // postdate existing solves, so the merged list is re-sorted by actual
+  // timestamp rather than assumed to already be newest-first.
+  addSolvesBulk(
+    sessionId: string,
+    entries: { time: number; penalty: Penalty; scramble: string; createdAt: string }[],
+  ): SolveDTO[] {
+    const data = read();
+    const newSolves: SolveDTO[] = entries.map((e) => ({
+      id: uid(),
+      sessionId,
+      userId: 'guest',
+      time: e.time,
+      penalty: e.penalty,
+      scramble: e.scramble,
+      createdAt: e.createdAt,
+    }));
+    const existing = data.solves[sessionId] ?? [];
+    const merged = [...existing, ...newSolves].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    data.solves[sessionId] = merged;
+    const s = data.sessions.find((x) => x.id === sessionId);
+    if (s) s.solveCount = merged.length;
+    write(data);
+    return newSolves;
+  },
   deleteSolve(sessionId: string, solveId: string) {
     const data = read();
     if (data.solves[sessionId]) {

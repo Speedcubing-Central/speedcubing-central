@@ -21,6 +21,13 @@ const solveSchema = z.object({
   scramble: z.string().default(''),
 });
 
+// Bulk import (e.g. from an external timer export) — allows a custom
+// createdAt per solve so historical dates survive the import, capped well
+// above the client's own chunk size (1000) as a defensive limit.
+const bulkImportSchema = z.object({
+  solves: z.array(solveSchema.extend({ createdAt: z.string().datetime().optional() })).min(1).max(2000),
+});
+
 // GET /api/sessions — list user's sessions
 router.get('/', async (req, res, next) => {
   try {
@@ -116,6 +123,31 @@ router.post('/:id/solves', async (req, res, next) => {
       },
     });
     res.status(201).json(toSolveDTO(solve));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/sessions/:id/solves/bulk — bulk import solves (e.g. from cstimer)
+router.post('/:id/solves/bulk', async (req, res, next) => {
+  try {
+    const session = await prisma.session.findUnique({ where: { id: req.params.id } });
+    if (!session || session.userId !== req.user!.sub) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+    const { solves } = bulkImportSchema.parse(req.body);
+    const result = await prisma.solve.createMany({
+      data: solves.map((s) => ({
+        sessionId: session.id,
+        userId: req.user!.sub,
+        time: s.time,
+        penalty: s.penalty,
+        scramble: s.scramble,
+        ...(s.createdAt ? { createdAt: new Date(s.createdAt) } : {}),
+      })),
+    });
+    res.status(201).json({ count: result.count });
   } catch (e) {
     next(e);
   }

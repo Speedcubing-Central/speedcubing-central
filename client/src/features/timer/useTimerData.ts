@@ -152,6 +152,42 @@ export function useTimerData(eventId: string) {
     [currentId, isGuest],
   );
 
+  // Bulk import (e.g. from a cstimer export). Chunked for authed users since
+  // the API caps request bodies at 1mb; the guest store just writes once
+  // locally. Switches the view to the destination session once done and
+  // refreshes its solves directly — setCurrentId alone isn't enough when
+  // importing into a session we *just* created (createSession already set
+  // currentId to it, so setting the same id again is a no-op and the
+  // solves-loading effect above never re-fires to pick up what we just
+  // wrote).
+  const IMPORT_CHUNK_SIZE = 1000;
+  const importSolves = useCallback(
+    async (
+      sessionId: string,
+      entries: { time: number; penalty: Penalty; scramble: string; createdAt: string }[],
+      onProgress?: (done: number, total: number) => void,
+    ) => {
+      if (isGuest) {
+        guestStore.addSolvesBulk(sessionId, entries);
+      } else {
+        for (let i = 0; i < entries.length; i += IMPORT_CHUNK_SIZE) {
+          const chunk = entries.slice(i, i + IMPORT_CHUNK_SIZE);
+          await api.post(`/sessions/${sessionId}/solves/bulk`, { solves: chunk });
+          onProgress?.(Math.min(i + IMPORT_CHUNK_SIZE, entries.length), entries.length);
+        }
+      }
+      await loadSessions();
+      setCurrentId(sessionId);
+      if (isGuest) {
+        setSolves(guestStore.listSolves(sessionId));
+      } else {
+        const { data } = await api.get<SolveDTO[]>(`/sessions/${sessionId}/solves`);
+        setSolves(data);
+      }
+    },
+    [isGuest, loadSessions],
+  );
+
   return {
     isGuest,
     loading,
@@ -167,5 +203,6 @@ export function useTimerData(eventId: string) {
     updatePenalty,
     updateTime,
     deleteSolve,
+    importSolves,
   };
 }

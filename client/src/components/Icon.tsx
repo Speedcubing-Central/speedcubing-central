@@ -40,7 +40,8 @@ export type IconName =
   | 'circle'
   | 'panel'
   | 'copy'
-  | 'pencil';
+  | 'pencil'
+  | 'upload';
 
 const PATHS: Record<IconName, JSX.Element> = {
   home: (
@@ -219,6 +220,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   pencil: <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />,
+  upload: (
+    <>
+      <path d="M12 15.5V4M8 8l4-4 4 4" />
+      <path d="M4.5 15v3A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" />
+    </>
+  ),
 };
 
 export function Icon({
