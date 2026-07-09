@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { formatTime, getEvent, type Penalty, type SolveDTO } from '@scc/shared';
+import { formatTime, getEvent, type Penalty } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
@@ -22,10 +22,7 @@ import { SessionManager } from './SessionManager';
 import { ImportCstimerModal } from './ImportCstimerModal';
 import { SolveDetail } from './SolveDetail';
 import { AverageDetail } from './AverageDetail';
-import { copyText, formatSolveCopy } from './copy';
-
-const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
-const SOLVE_GRID_SELECT = 'grid grid-cols-[1.2rem_1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
+import { SolvesList } from './SolvesList';
 
 // Keep in sync with the timer card's `md:min-h-[...]` class below — this is
 // the guaranteed minimum the scramble panel's budget calculation reserves
@@ -416,33 +413,16 @@ export default function TimerPage() {
             {data.solves.length === 0 ? (
               <p className="text-muted text-sm">No solves yet. Start the timer.</p>
             ) : (
-              <>
-                <div className={`${selectMode ? SOLVE_GRID_SELECT : SOLVE_GRID} text-xs font-semibold text-muted px-1 pb-1.5 border-b border-border shrink-0`}>
-                  {selectMode && <span />}
-                  <span className="text-right">#</span>
-                  <span>single</span>
-                  <span className="text-right">ao5</span>
-                  <span className="text-right">ao12</span>
-                  <span />
-                </div>
-                <div className="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
-                  {data.solves.map((s, i) => (
-                    <SolveRow
-                      key={s.id}
-                      index={i}
-                      solve={s}
-                      solves={data.solves}
-                      event={event}
-                      precision={solvePrecision}
-                      onOpenSolve={() => setDetailIndex(i)}
-                      onOpenAverage={openAverage}
-                      selectMode={selectMode}
-                      selected={selectedIds.has(s.id)}
-                      onToggleSelect={() => toggleSelectOne(s.id)}
-                    />
-                  ))}
-                </div>
-              </>
+              <SolvesList
+                solves={data.solves}
+                event={event}
+                precision={solvePrecision}
+                onOpenSolve={(i) => setDetailIndex(i)}
+                onOpenAverage={openAverage}
+                selectMode={selectMode}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelectOne}
+              />
             )}
           </div>
         </div>
@@ -465,87 +445,6 @@ export default function TimerPage() {
         />
       )}
       {avgView && <AverageDetail view={avgView} event={event} onClose={() => setAvgView(null)} />}
-    </div>
-  );
-}
-
-function SolveRow({
-  index,
-  solve,
-  solves,
-  event,
-  precision,
-  onOpenSolve,
-  onOpenAverage,
-  selectMode,
-  selected,
-  onToggleSelect,
-}: {
-  index: number;
-  solve: SolveDTO;
-  solves: SolveDTO[];
-  event: string;
-  precision: number;
-  onOpenSolve: () => void;
-  onOpenAverage: (size: AvgSize, startIndex: number) => void;
-  selectMode: boolean;
-  selected: boolean;
-  onToggleSelect: () => void;
-}) {
-  const fmtAvg = (v: number | null) => (v === null ? '—' : !isFinite(v) ? 'DNF' : formatTime(Math.round(v), 'NONE', precision));
-  const ao5 = makeAverageView(solves, index, 5);
-  const ao12 = makeAverageView(solves, index, 12);
-
-  if (selectMode) {
-    return (
-      <div
-        onClick={onToggleSelect}
-        className={clsx(`${SOLVE_GRID_SELECT} px-1 py-2 text-sm rounded-lg cursor-pointer`, selected && 'bg-accent/10')}
-      >
-        <input type="checkbox" className="accent-accent" checked={selected} onChange={onToggleSelect} onClick={(e) => e.stopPropagation()} />
-        <span className="text-muted text-xs text-right">{solves.length - index}.</span>
-        <span className={clsx('font-mono font-semibold', solve.penalty === 'DNF' && 'text-red-400')}>
-          {formatTime(solve.time, solve.penalty, precision)}
-        </span>
-        <span className="font-mono text-xs text-muted text-right">{ao5 ? fmtAvg(ao5.value) : '·'}</span>
-        <span className="font-mono text-xs text-muted text-right">{ao12 ? fmtAvg(ao12.value) : '·'}</span>
-        <span />
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${SOLVE_GRID} px-1 py-2 text-sm`}>
-      <span className="text-muted text-xs text-right">{solves.length - index}.</span>
-      <button
-        onClick={onOpenSolve}
-        className={clsx('text-left font-mono font-semibold hover:text-accent', solve.penalty === 'DNF' && 'text-red-400')}
-      >
-        {formatTime(solve.time, solve.penalty, precision)}
-      </button>
-      <button
-        onClick={() => ao5 && onOpenAverage(5, index)}
-        disabled={!ao5}
-        className="font-mono text-xs text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted text-right"
-        title="ao5"
-      >
-        {ao5 ? fmtAvg(ao5.value) : '·'}
-      </button>
-      <button
-        onClick={() => ao12 && onOpenAverage(12, index)}
-        disabled={!ao12}
-        className="font-mono text-xs text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-muted text-right"
-        title="ao12"
-      >
-        {ao12 ? fmtAvg(ao12.value) : '·'}
-      </button>
-      <button
-        onClick={() => copyText(formatSolveCopy(solve, event, precision), 'Solve copied')}
-        title="Copy solve"
-        className="text-muted hover:text-accent justify-self-end"
-      >
-        <Icon name="copy" size={14} />
-      </button>
     </div>
   );
 }

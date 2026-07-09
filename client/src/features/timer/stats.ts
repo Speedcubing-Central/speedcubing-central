@@ -40,18 +40,11 @@ export function currentAverage(solves: SolveDTO[], size: number): number | null 
   return r.value;
 }
 
-// Best average of `size` across the whole session.
-export function bestAverage(solves: SolveDTO[], size: number): number | null {
-  let best: number | null = null;
-  for (let i = 0; i + size <= solves.length; i++) {
-    const r = computeAvg(solves.slice(i, i + size).map(toTimed), size);
-    if (r.value !== null && (best === null || r.value < best)) best = r.value;
-  }
-  return best;
-}
-
-// Start index (in the newest-first list) of the best average of `size`.
-export function bestAverageIndex(solves: SolveDTO[], size: number): number | null {
+// Best average of `size` across the whole session, plus the index (in the
+// newest-first list) it starts at — combined into one O(n·size) pass since
+// computing them separately (and a third time inside targetForBest) was the
+// single biggest cost in StatsTable for sessions with thousands of solves.
+export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value: number | null; index: number | null } {
   let best: number | null = null;
   let idx: number | null = null;
   for (let i = 0; i + size <= solves.length; i++) {
@@ -61,7 +54,17 @@ export function bestAverageIndex(solves: SolveDTO[], size: number): number | nul
       idx = i;
     }
   }
-  return idx;
+  return { value: best, index: idx };
+}
+
+// Best average of `size` across the whole session.
+export function bestAverage(solves: SolveDTO[], size: number): number | null {
+  return bestAverageWithIndex(solves, size).value;
+}
+
+// Start index (in the newest-first list) of the best average of `size`.
+export function bestAverageIndex(solves: SolveDTO[], size: number): number | null {
+  return bestAverageWithIndex(solves, size).index;
 }
 
 // Index of the best (fastest, non-DNF) single.
@@ -99,8 +102,10 @@ export function wpa(solves: SolveDTO[], size: number): number | null {
 
 // Largest single (ms) on the next solve that would still beat the session best.
 // Returns null if no best yet or beating it is impossible even with a perfect solve.
-export function targetForBest(solves: SolveDTO[], size: number): number | null {
-  const best = bestAverage(solves, size);
+// `precomputedBest` lets buildStatsTable pass in a value it already computed
+// instead of this doing its own extra O(n·size) pass to find it again.
+export function targetForBest(solves: SolveDTO[], size: number, precomputedBest?: number | null): number | null {
+  const best = precomputedBest !== undefined ? precomputedBest : bestAverage(solves, size);
   if (best === null || solves.length < size - 1) return null;
   const win = solves.slice(0, size - 1).map(toTimed);
   const avgAt = (x: number) => {
@@ -123,20 +128,25 @@ export interface AvgRow {
   size: AvgSize;
   current: number | null;
   best: number | null;
+  bestIndex: number | null;
   bpa: number | null;
   wpa: number | null;
   target: number | null;
 }
 
 export function buildStatsTable(solves: SolveDTO[]): AvgRow[] {
-  return AVERAGE_SIZES.map((size) => ({
-    size,
-    current: currentAverage(solves, size),
-    best: bestAverage(solves, size),
-    bpa: bpa(solves, size),
-    wpa: wpa(solves, size),
-    target: targetForBest(solves, size),
-  }));
+  return AVERAGE_SIZES.map((size) => {
+    const { value: best, index: bestIndex } = bestAverageWithIndex(solves, size);
+    return {
+      size,
+      current: currentAverage(solves, size),
+      best,
+      bestIndex,
+      bpa: bpa(solves, size),
+      wpa: wpa(solves, size),
+      target: targetForBest(solves, size, best),
+    };
+  });
 }
 
 // The `size` solves whose rolling average "belongs" to the solve at `index`

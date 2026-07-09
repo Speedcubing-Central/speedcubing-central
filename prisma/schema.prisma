@@ -75,7 +75,10 @@ model Solve {
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId])
+  // Covers both "solves for this session" and the createdAt-desc ordering
+  // that listing always applies, so large sessions (thousands of solves,
+  // e.g. after a bulk import) don't need a separate sort step.
+  @@index([sessionId, createdAt])
 }
 
 // A single timed attempt at one algorithm-library case (Trainer tab), scoped

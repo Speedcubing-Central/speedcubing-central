@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { ZodError } from 'zod';
@@ -52,6 +53,10 @@ export function createApp() {
       credentials: true,
     }),
   );
+  // Large solve-history responses (thousands of rows) compress down to a
+  // fraction of their size — this is the biggest single win for "loading
+  // all my times" on big sessions, cheaper than any client-side change.
+  app.use(compression());
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
