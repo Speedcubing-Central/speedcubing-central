@@ -125,4 +125,16 @@ export const guestStore = {
     if (s && s.solveCount) s.solveCount -= 1;
     write(data);
   },
+  deleteSolvesBulk(sessionId: string, solveIds: string[]) {
+    const data = read();
+    if (data.solves[sessionId]) {
+      const idSet = new Set(solveIds);
+      const before = data.solves[sessionId].length;
+      data.solves[sessionId] = data.solves[sessionId].filter((x) => !idSet.has(x.id));
+      const removed = before - data.solves[sessionId].length;
+      const s = data.sessions.find((x) => x.id === sessionId);
+      if (s && s.solveCount) s.solveCount = Math.max(0, s.solveCount - removed);
+    }
+    write(data);
+  },
 };

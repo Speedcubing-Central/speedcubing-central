@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { formatTime, getEvent, type Penalty, type SolveDTO } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { useSettings } from '../../store/settings';
+import { toast } from '../../store/toast';
 import { useAuth } from '../../store/auth';
 import { useUi } from '../../store/ui';
 import { EventSelector } from '../../components/ui';
@@ -24,6 +25,7 @@ import { AverageDetail } from './AverageDetail';
 import { copyText, formatSolveCopy } from './copy';
 
 const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
+const SOLVE_GRID_SELECT = 'grid grid-cols-[1.2rem_1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
 
 // Keep in sync with the timer card's `md:min-h-[...]` class below — this is
 // the guaranteed minimum the scramble panel's budget calculation reserves
@@ -47,6 +49,37 @@ export default function TimerPage() {
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [avgView, setAvgView] = useState<SolveAverage | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Leaving the select set stale across a session switch would let you
+  // "delete" solves that are no longer even visible.
+  useEffect(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, [data.currentId]);
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === data.solves.length ? new Set() : new Set(data.solves.map((s) => s.id))));
+  }
+
+  async function confirmBulkDelete() {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (!confirm(`Delete ${count} solve${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    await data.deleteSolves(Array.from(selectedIds));
+    toast.success(`Deleted ${count} solve${count !== 1 ? 's' : ''}`);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+  }
 
   const anyModalOpen = showSessions || showSettings || showImport || detailIndex !== null || avgView !== null;
 
@@ -350,12 +383,42 @@ export default function TimerPage() {
 
           {/* Solves list — fills remaining vertical space, scrolls internally */}
           <div className="card p-5 flex flex-col flex-1 min-h-0">
-            <h3 className="font-bold text-lg mb-3 shrink-0">Solves ({data.solves.length})</h3>
+            <div className="flex items-center justify-between mb-3 shrink-0 gap-2 flex-wrap">
+              <h3 className="font-bold text-lg">Solves ({data.solves.length})</h3>
+              {data.solves.length > 0 && (
+                selectMode ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted text-xs">{selectedIds.size} selected</span>
+                    <button className="btn-ghost text-xs px-2 py-1" onClick={toggleSelectAll}>
+                      {selectedIds.size === data.solves.length ? 'Deselect all' : 'Select all'}
+                    </button>
+                    <button
+                      className="btn-ghost text-xs px-2 py-1 text-red-400 hover:text-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                      onClick={confirmBulkDelete}
+                      disabled={selectedIds.size === 0}
+                    >
+                      <Icon name="trash" size={13} /> Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                    </button>
+                    <button
+                      className="btn-ghost text-xs px-2 py-1"
+                      onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button className="btn-ghost text-xs px-2 py-1" onClick={() => setSelectMode(true)}>
+                    Select
+                  </button>
+                )
+              )}
+            </div>
             {data.solves.length === 0 ? (
               <p className="text-muted text-sm">No solves yet. Start the timer.</p>
             ) : (
               <>
-                <div className={`${SOLVE_GRID} text-xs font-semibold text-muted px-1 pb-1.5 border-b border-border shrink-0`}>
+                <div className={`${selectMode ? SOLVE_GRID_SELECT : SOLVE_GRID} text-xs font-semibold text-muted px-1 pb-1.5 border-b border-border shrink-0`}>
+                  {selectMode && <span />}
                   <span className="text-right">#</span>
                   <span>single</span>
                   <span className="text-right">ao5</span>
@@ -373,6 +436,9 @@ export default function TimerPage() {
                       precision={solvePrecision}
                       onOpenSolve={() => setDetailIndex(i)}
                       onOpenAverage={openAverage}
+                      selectMode={selectMode}
+                      selected={selectedIds.has(s.id)}
+                      onToggleSelect={() => toggleSelectOne(s.id)}
                     />
                   ))}
                 </div>
@@ -411,6 +477,9 @@ function SolveRow({
   precision,
   onOpenSolve,
   onOpenAverage,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   index: number;
   solve: SolveDTO;
@@ -419,10 +488,31 @@ function SolveRow({
   precision: number;
   onOpenSolve: () => void;
   onOpenAverage: (size: AvgSize, startIndex: number) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const fmtAvg = (v: number | null) => (v === null ? '—' : !isFinite(v) ? 'DNF' : formatTime(Math.round(v), 'NONE', precision));
   const ao5 = makeAverageView(solves, index, 5);
   const ao12 = makeAverageView(solves, index, 12);
+
+  if (selectMode) {
+    return (
+      <div
+        onClick={onToggleSelect}
+        className={clsx(`${SOLVE_GRID_SELECT} px-1 py-2 text-sm rounded-lg cursor-pointer`, selected && 'bg-accent/10')}
+      >
+        <input type="checkbox" className="accent-accent" checked={selected} onChange={onToggleSelect} onClick={(e) => e.stopPropagation()} />
+        <span className="text-muted text-xs text-right">{solves.length - index}.</span>
+        <span className={clsx('font-mono font-semibold', solve.penalty === 'DNF' && 'text-red-400')}>
+          {formatTime(solve.time, solve.penalty, precision)}
+        </span>
+        <span className="font-mono text-xs text-muted text-right">{ao5 ? fmtAvg(ao5.value) : '·'}</span>
+        <span className="font-mono text-xs text-muted text-right">{ao12 ? fmtAvg(ao12.value) : '·'}</span>
+        <span />
+      </div>
+    );
+  }
 
   return (
     <div className={`${SOLVE_GRID} px-1 py-2 text-sm`}>

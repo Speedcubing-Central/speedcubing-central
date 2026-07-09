@@ -152,6 +152,23 @@ export function useTimerData(eventId: string) {
     [currentId, isGuest],
   );
 
+  const deleteSolves = useCallback(
+    async (solveIds: string[]) => {
+      if (!currentId || solveIds.length === 0) return;
+      if (isGuest) {
+        guestStore.deleteSolvesBulk(currentId, solveIds);
+      } else {
+        await api.post('/solves/bulk-delete', { ids: solveIds });
+      }
+      const idSet = new Set(solveIds);
+      setSolves((prev) => prev.filter((s) => !idSet.has(s.id)));
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentId ? { ...s, solveCount: Math.max(0, (s.solveCount ?? 0) - solveIds.length) } : s)),
+      );
+    },
+    [currentId, isGuest],
+  );
+
   // Bulk import (e.g. from a cstimer export). Chunked for authed users since
   // the API caps request bodies at 1mb; the guest store just writes once
   // locally. Switches the view to the destination session once done and
@@ -203,6 +220,7 @@ export function useTimerData(eventId: string) {
     updatePenalty,
     updateTime,
     deleteSolve,
+    deleteSolves,
     importSolves,
   };
 }
