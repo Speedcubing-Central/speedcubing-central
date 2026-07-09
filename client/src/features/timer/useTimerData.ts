@@ -14,6 +14,7 @@ export function useTimerData(eventId: string) {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [solves, setSolves] = useState<SolveDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [solvesLoading, setSolvesLoading] = useState(true);
 
   const eventSessions = sessions.filter((s) => s.eventId === eventId);
 
@@ -44,12 +45,18 @@ export function useTimerData(eventId: string) {
     }
   }, [sessions, eventId, currentId]);
 
-  // Load solves whenever the current session changes.
+  // Load solves whenever the current session changes. Tracked separately
+  // from `loading` (which only covers the session list) so the timer can
+  // hold off starting a solve until the previous session's history has
+  // actually finished loading — otherwise a fast typist could start
+  // scrambling against stale/empty stats for a moment on a slow connection.
   useEffect(() => {
     if (!currentId) {
       setSolves([]);
+      setSolvesLoading(false);
       return;
     }
+    setSolvesLoading(true);
     (async () => {
       if (isGuest) {
         setSolves(guestStore.listSolves(currentId));
@@ -57,6 +64,7 @@ export function useTimerData(eventId: string) {
         const { data } = await api.get<SolveDTO[]>(`/sessions/${currentId}/solves`);
         setSolves(data);
       }
+      setSolvesLoading(false);
     })();
   }, [currentId, isGuest]);
 
@@ -208,6 +216,7 @@ export function useTimerData(eventId: string) {
   return {
     isGuest,
     loading,
+    solvesLoading,
     sessions: eventSessions,
     currentId,
     setCurrentId,

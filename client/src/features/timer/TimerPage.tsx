@@ -111,7 +111,7 @@ export default function TimerPage() {
     holdToStart,
     holdDuration,
     startSound,
-    enabled: entryMode === 'keyboard' && !anyModalOpen,
+    enabled: entryMode === 'keyboard' && !anyModalOpen && !data.solvesLoading,
     onComplete,
   });
 
@@ -314,10 +314,10 @@ export default function TimerPage() {
           {entryMode === 'keyboard' ? (
             <div
               ref={timerCardRef}
-              className="card flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+              className="card relative flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
               style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
-              onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen) engine.press(); }}
-              onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen) engine.release(); }}
+              onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen && !data.solvesLoading) engine.press(); }}
+              onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen && !data.solvesLoading) engine.release(); }}
             >
               <div
                 className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
@@ -326,11 +326,12 @@ export default function TimerPage() {
                 {display}
               </div>
               <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
+              {data.solvesLoading && <TimerLoadingOverlay />}
             </div>
           ) : (
             <div
               ref={timerCardRef}
-              className="card flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
+              className="card relative flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
               style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
             >
               <div
@@ -346,10 +347,12 @@ export default function TimerPage() {
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addTyped()}
+                  disabled={data.solvesLoading}
                   autoFocus
                 />
-                <button className="btn-primary" onClick={addTyped}>Add solve</button>
+                <button className="btn-primary" onClick={addTyped} disabled={data.solvesLoading}>Add solve</button>
               </div>
+              {data.solvesLoading && <TimerLoadingOverlay />}
             </div>
           )}
 
@@ -445,6 +448,18 @@ export default function TimerPage() {
         />
       )}
       {avgView && <AverageDetail view={avgView} event={event} onClose={() => setAvgView(null)} />}
+    </div>
+  );
+}
+
+// Blocks the timer card while the current session's solve history is still
+// loading, so a fast typist can't start a solve before stats/averages catch
+// up (see the comment on `solvesLoading` in useTimerData.ts).
+function TimerLoadingOverlay() {
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-card/80 backdrop-blur-sm">
+      <Icon name="refresh" size={28} className="animate-spin text-accent" />
+      <p className="text-muted text-sm">Loading solves…</p>
     </div>
   );
 }
