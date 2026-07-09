@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import clsx from 'clsx';
 import { PageHeader } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { useAuth } from '../../store/auth';
-import { useSettings, DEFAULT_ACCENT } from '../../store/settings';
+import { useSettings, DEFAULT_ACCENT, THEME_PRESETS } from '../../store/settings';
 import { api } from '../../lib/api';
 import { toast } from '../../store/toast';
 
@@ -28,7 +29,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 export default function SettingsPage() {
   const { user, setUser, logout } = useAuth();
-  const { theme, setTheme, accentColor, set } = useSettings();
+  const { theme, setTheme, accentColor, themeId, setThemeId, set } = useSettings();
   const navigate = useNavigate();
 
   // Display name
@@ -114,6 +115,28 @@ export default function SettingsPage() {
               >
                 <Icon name={t === 'dark' ? 'moon' : 'sun'} size={16} />
                 {t === 'dark' ? 'Dark' : 'Light'}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Color theme" hint="A full palette, not just the accent — only visible in dark mode.">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {THEME_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setThemeId(p.id)}
+                title={p.name}
+                className={clsx(
+                  'rounded-lg border-2 p-1.5 flex flex-col items-center gap-1.5 transition-colors',
+                  themeId === p.id ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-border',
+                )}
+              >
+                <div className="w-full h-8 rounded-md overflow-hidden flex" style={{ background: p.bg }}>
+                  <div className="flex-1" style={{ background: p.card }} />
+                  <div className="w-2.5 shrink-0" style={{ background: p.accent }} />
+                </div>
+                <span className="text-xs font-medium">{p.name}</span>
               </button>
             ))}
           </div>

@@ -8,9 +8,33 @@ export type InspectionDirection = 'down' | 'up';
 export type EntryMode = 'keyboard' | 'typing';
 export type TimerUpdate = 'centiseconds' | 'deciseconds' | 'seconds' | 'hidden';
 
+// Preset dark-mode color palettes ("themes"). Light mode has its own
+// hardcoded look (scattered `dark:` overrides throughout the app) and isn't
+// affected by these — they only reskin the default dark palette via the
+// same CSS custom properties `applyAccentColor` already used for accent.
+export interface ThemePreset {
+  id: string;
+  name: string;
+  accent: string;
+  bg: string;
+  card: string;
+  cardHover: string;
+  border: string;
+}
+
+export const THEME_PRESETS: ThemePreset[] = [
+  { id: 'default', name: 'Default', accent: '#2b72ff', bg: '#0f1117', card: '#1e2130', cardHover: '#272b3d', border: '#2c3142' },
+  { id: 'violet',  name: 'Violet',  accent: '#8b5cf6', bg: '#120f1a', card: '#201b30', cardHover: '#2a2340', border: '#332b4d' },
+  { id: 'forest',  name: 'Forest',  accent: '#22c55e', bg: '#0d1410', card: '#16211a', cardHover: '#1e2c22', border: '#263a2c' },
+  { id: 'crimson', name: 'Crimson', accent: '#ef4444', bg: '#150f11', card: '#241a1d', cardHover: '#2f2226', border: '#3a2a2f' },
+  { id: 'amber',   name: 'Amber',   accent: '#f59e0b', bg: '#14100a', card: '#241d12', cardHover: '#2f2617', border: '#3a2f1d' },
+  { id: 'slate',   name: 'Slate',   accent: '#6b7280', bg: '#101113', card: '#1c1e22', cardHover: '#24272c', border: '#2c2f36' },
+];
+
 interface SettingsState {
   theme: Theme;
   accentColor: string;
+  themeId: string;
   defaultEvent: string;
   currentEvent: string;
   letteringScheme: 'speffz' | 'custom';
@@ -37,6 +61,7 @@ interface SettingsState {
 
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
+  setThemeId: (id: string) => void;
   setDefaultEvent: (e: string) => void;
   setCurrentEvent: (e: string) => void;
   setLetteringScheme: (s: 'speffz' | 'custom') => void;
@@ -48,6 +73,7 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       theme: 'dark',
       accentColor: DEFAULT_ACCENT,
+      themeId: 'default',
       defaultEvent: '333',
       currentEvent: '333',
       letteringScheme: 'speffz',
@@ -71,6 +97,10 @@ export const useSettings = create<SettingsState>()(
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      setThemeId: (themeId) => {
+        const preset = THEME_PRESETS.find((p) => p.id === themeId) ?? THEME_PRESETS[0];
+        set({ themeId, accentColor: preset.accent });
+      },
       setDefaultEvent: (defaultEvent) => set({ defaultEvent }),
       setCurrentEvent: (currentEvent) => set({ currentEvent }),
       setLetteringScheme: (letteringScheme) => set({ letteringScheme }),
@@ -106,4 +136,15 @@ export function applyAccentColor(hex: string) {
   const root = document.documentElement;
   root.style.setProperty('--color-accent', toChannels(hex));
   root.style.setProperty('--color-accent-hover', toChannels(darkenHex(hex)));
+}
+
+// Applies a theme preset's background/card/border palette (everything but
+// accent, which is tracked separately so it stays customizable on its own).
+export function applyThemePalette(themeId: string) {
+  const preset = THEME_PRESETS.find((p) => p.id === themeId) ?? THEME_PRESETS[0];
+  const root = document.documentElement;
+  root.style.setProperty('--color-bg', toChannels(preset.bg));
+  root.style.setProperty('--color-card', toChannels(preset.card));
+  root.style.setProperty('--color-card-hover', toChannels(preset.cardHover));
+  root.style.setProperty('--color-border', toChannels(preset.border));
 }

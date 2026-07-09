@@ -5,10 +5,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0f1117',
-        card: '#1e2130',
-        'card-hover': '#272b3d',
-        border: '#2c3142',
+        bg: 'rgb(var(--color-bg) / <alpha-value>)',
+        card: 'rgb(var(--color-card) / <alpha-value>)',
+        'card-hover': 'rgb(var(--color-card-hover) / <alpha-value>)',
+        border: 'rgb(var(--color-border) / <alpha-value>)',
         accent: 'rgb(var(--color-accent) / <alpha-value>)',
         'accent-hover': 'rgb(var(--color-accent-hover) / <alpha-value>)',
         muted: '#8b91a7',

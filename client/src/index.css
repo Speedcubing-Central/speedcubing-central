@@ -4,8 +4,13 @@
 
 :root {
   color-scheme: dark;
-  /* Default accent: #2b72ff — overridden at runtime via applyAccentColor() */
-  --color-accent: 43 114 255;
+  /* Default dark palette — overridden at runtime via applyThemePalette() /
+     applyAccentColor() when the user picks a different theme or accent. */
+  --color-bg: 15 17 23; /* #0f1117 */
+  --color-card: 30 33 48; /* #1e2130 */
+  --color-card-hover: 39 43 61; /* #272b3d */
+  --color-border: 44 49 66; /* #2c3142 */
+  --color-accent: 43 114 255; /* #2b72ff */
   --color-accent-hover: 37 97 217;
 }
 
