@@ -333,9 +333,13 @@ export default function BattleRoom() {
     }
     if (isInspectionPhase) {
       if (settings.inspectionDirection === 'up') {
-        return String(Math.floor(engine.inspectionElapsed / 1000));
+        const el = engine.inspectionElapsed;
+        if (el < 15000) return String(Math.floor(el / 1000));
+        return el < 17000 ? '+2' : 'DNF';
       }
-      return String(Math.max(0, Math.ceil(engine.inspectionRemaining / 1000)));
+      const rem = engine.inspectionRemaining;
+      if (rem > 0) return String(Math.ceil(rem / 1000));
+      return rem > -2000 ? '+2' : 'DNF';
     }
     if (engine.phase === 'running') {
       const ms = engine.elapsed;

@@ -163,7 +163,11 @@ export default function TimerPage() {
   const display = useMemo(() => {
     const p = engine.phase;
     if (inspection && (p === 'inspecting' || p === 'holding' || p === 'ready')) {
-      if (inspectionDirection === 'up') return String(Math.floor(engine.inspectionElapsed / 1000));
+      if (inspectionDirection === 'up') {
+        const el = engine.inspectionElapsed;
+        if (el < 15000) return String(Math.floor(el / 1000));
+        return el < 17000 ? '+2' : 'DNF';
+      }
       const rem = engine.inspectionRemaining;
       if (rem > 0) return String(Math.ceil(rem / 1000));
       return rem > -2000 ? '+2' : 'DNF';
