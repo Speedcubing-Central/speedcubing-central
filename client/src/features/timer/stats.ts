@@ -159,8 +159,21 @@ export function windowEndingAt(solves: SolveDTO[], index: number, size: number):
 export interface SolveAverage {
   size: AvgSize;
   value: number | null;
-  window: SolveDTO[];
-  droppedIndices: number[];
+  window: SolveDTO[]; // chronological order: first solve first, last solve last
+  droppedIndices: number[]; // indices into `window` (chronological order)
+}
+
+// `window` (from windowEndingAt) and the dropped indices computed over it are
+// both in the solves list's newest-first order — fine internally, but
+// consumers (AverageDetail, the copy-to-clipboard formatter) display them
+// numbered "1, 2, 3…" as if reading left-to-right through the solve, so they
+// need chronological order instead. Reverse both here, once, rather than
+// making every consumer remember to do it.
+function toChronological(size: number, window: SolveDTO[], droppedIndices: number[]): { window: SolveDTO[]; droppedIndices: number[] } {
+  return {
+    window: [...window].reverse(),
+    droppedIndices: droppedIndices.map((i) => size - 1 - i),
+  };
 }
 
 // Build a SolveAverage view for a window of `size` starting at `startIndex`.
@@ -168,7 +181,7 @@ export function makeAverageView(solves: SolveDTO[], startIndex: number, size: Av
   const window = windowEndingAt(solves, startIndex, size);
   if (!window) return null;
   const r = computeAvg(window.map(toTimed), size);
-  return { size, value: r.isDNF ? Infinity : r.value, window, droppedIndices: r.droppedIndices };
+  return { size, value: r.isDNF ? Infinity : r.value, ...toChronological(size, window, r.droppedIndices) };
 }
 
 // Averages (mo3/ao5/ao12/…) that were current at the moment the given solve completed.
@@ -178,7 +191,7 @@ export function averagesForSolve(solves: SolveDTO[], index: number): SolveAverag
     const window = windowEndingAt(solves, index, size);
     if (!window) continue;
     const r = computeAvg(window.map(toTimed), size);
-    out.push({ size, value: r.isDNF ? Infinity : r.value, window, droppedIndices: r.droppedIndices });
+    out.push({ size, value: r.isDNF ? Infinity : r.value, ...toChronological(size, window, r.droppedIndices) });
   }
   return out;
 }
