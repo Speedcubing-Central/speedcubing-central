@@ -47,26 +47,19 @@ function mapEvent(scrType: string, name: string): string | null {
   return base;
 }
 
-// cstimer's raw solve list is *usually* in chronological order (it appends
-// each new solve to the end), but a synced/merged export can genuinely
-// contain out-of-order runs — e.g. an older session recorded on another
-// device gets appended after newer solves once synced, producing a large
-// jump backward that has nothing to do with a same-second tie. Trusting
-// array position for ordering (as an earlier version of this function did)
-// gets that case badly wrong: it would read the jump as "just needs a 1ms
-// nudge" and collapse an entire older batch to (almost) the same instant as
-// the newer one, destroying real history. Sorting by each solve's own
-// recorded timestamp — not array position — gives the true chronological
-// order regardless of how cstimer happened to lay them out. Once sorted, any
-// *genuine* same-second tie (common on fast events like Pyraminx, where two
-// solves can land in the same whole-second timestamp cstimer records) still
-// needs a deterministic tiebreaker, since the DB orders by createdAt alone —
-// nudge those forward by 1ms; a stable sort keeps their original relative
-// (append) order, which is the correct tiebreak for genuine ties.
-function toChronologicalOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
-  const sorted = [...solves].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+// The DB orders solves purely by createdAt, so the import needs each solve's
+// timestamp to be strictly increasing in the same sequence cstimer lists
+// them in — matching cstimer's own display order exactly, rather than
+// re-deriving "true" chronological order from the recorded second values
+// (which a synced/merged export can't be trusted for: it can contain
+// same-second ties on fast events, or even a whole out-of-order run, e.g. an
+// older session from another device appended after newer solves once
+// synced). Walk the list in document order and nudge any timestamp forward
+// by 1ms whenever it wouldn't otherwise be later than the previous solve —
+// this guarantees the stored order always matches cstimer's own list.
+function enforceDocumentOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
   let prev = -Infinity;
-  return sorted.map((s) => {
+  return solves.map((s) => {
     let t = new Date(s.createdAt).getTime();
     if (t <= prev) t = prev + 1;
     prev = t;
@@ -126,7 +119,7 @@ export function parseCstimerExport(raw: string): CstimerParsedSession[] {
         createdAt: new Date(seconds * 1000).toISOString(),
       });
     }
-    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: toChronologicalOrder(solves) });
+    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: enforceDocumentOrder(solves) });
   }
   return results.sort((a, b) => b.solves.length - a.solves.length);
 }
