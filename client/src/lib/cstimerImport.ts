@@ -47,18 +47,26 @@ function mapEvent(scrType: string, name: string): string | null {
   return base;
 }
 
-// cstimer records each solve's timestamp at whole-second resolution, so two
-// solves finished within the same real-world second get an identical value —
-// common for fast events like Pyraminx. Left alone, that tie has no
-// deterministic tiebreaker once stored (the DB orders by createdAt with no
-// secondary key), so tied solves can come back in the wrong order. cstimer's
-// array order is itself the true chronological order (it appends each new
-// solve to the end of the list), so nudge any tied or out-of-order timestamp
-// forward by 1ms relative to the previous solve — preserves that order
-// exactly while staying visually identical to the second.
-function dedupeTimestamps(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
+// cstimer's raw solve list is *usually* in chronological order (it appends
+// each new solve to the end), but a synced/merged export can genuinely
+// contain out-of-order runs — e.g. an older session recorded on another
+// device gets appended after newer solves once synced, producing a large
+// jump backward that has nothing to do with a same-second tie. Trusting
+// array position for ordering (as an earlier version of this function did)
+// gets that case badly wrong: it would read the jump as "just needs a 1ms
+// nudge" and collapse an entire older batch to (almost) the same instant as
+// the newer one, destroying real history. Sorting by each solve's own
+// recorded timestamp — not array position — gives the true chronological
+// order regardless of how cstimer happened to lay them out. Once sorted, any
+// *genuine* same-second tie (common on fast events like Pyraminx, where two
+// solves can land in the same whole-second timestamp cstimer records) still
+// needs a deterministic tiebreaker, since the DB orders by createdAt alone —
+// nudge those forward by 1ms; a stable sort keeps their original relative
+// (append) order, which is the correct tiebreak for genuine ties.
+function toChronologicalOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
+  const sorted = [...solves].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   let prev = -Infinity;
-  return solves.map((s) => {
+  return sorted.map((s) => {
     let t = new Date(s.createdAt).getTime();
     if (t <= prev) t = prev + 1;
     prev = t;
@@ -118,7 +126,7 @@ export function parseCstimerExport(raw: string): CstimerParsedSession[] {
         createdAt: new Date(seconds * 1000).toISOString(),
       });
     }
-    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: dedupeTimestamps(solves) });
+    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: toChronologicalOrder(solves) });
   }
   return results.sort((a, b) => b.solves.length - a.solves.length);
 }
