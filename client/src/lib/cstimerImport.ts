@@ -47,6 +47,25 @@ function mapEvent(scrType: string, name: string): string | null {
   return base;
 }
 
+// cstimer records each solve's timestamp at whole-second resolution, so two
+// solves finished within the same real-world second get an identical value —
+// common for fast events like Pyraminx. Left alone, that tie has no
+// deterministic tiebreaker once stored (the DB orders by createdAt with no
+// secondary key), so tied solves can come back in the wrong order. cstimer's
+// array order is itself the true chronological order (it appends each new
+// solve to the end of the list), so nudge any tied or out-of-order timestamp
+// forward by 1ms relative to the previous solve — preserves that order
+// exactly while staying visually identical to the second.
+function dedupeTimestamps(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
+  let prev = -Infinity;
+  return solves.map((s) => {
+    let t = new Date(s.createdAt).getTime();
+    if (t <= prev) t = prev + 1;
+    prev = t;
+    return { ...s, createdAt: new Date(t).toISOString() };
+  });
+}
+
 // Parses a cstimer "export to file" .txt: a single JSON object shaped like
 // { session1: [...], session2: [...], ..., properties: { sessionData: "<json string>" } }.
 // Each solve entry is [[penaltyCode, timeMs], scramble, comment, unixSeconds];
@@ -99,7 +118,7 @@ export function parseCstimerExport(raw: string): CstimerParsedSession[] {
         createdAt: new Date(seconds * 1000).toISOString(),
       });
     }
-    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves });
+    if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: dedupeTimestamps(solves) });
   }
   return results.sort((a, b) => b.solves.length - a.solves.length);
 }

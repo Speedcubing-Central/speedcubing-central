@@ -94,9 +94,13 @@ router.get('/:id/solves', async (req, res, next) => {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
+    // Secondary sort on id (which — see cstimerImport.ts's dedupeTimestamps —
+    // is generated in insertion order even across a single createMany call)
+    // so solves sharing an identical createdAt still come back in a stable,
+    // correct order instead of whatever Postgres feels like for ties.
     const solves = await prisma.solve.findMany({
       where: { sessionId: session.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     res.json(solves.map(toSolveDTO));
   } catch (e) {
