@@ -1,7 +1,7 @@
 import type { SolveDTO } from '@scc/shared';
 import { trimmedAverage, mean, effectiveTime, type TimedSolve } from '@scc/shared';
 
-export const AVERAGE_SIZES = [3, 5, 12, 50, 100] as const;
+export const AVERAGE_SIZES = [3, 5, 12, 50, 100, 1000] as const;
 export type AvgSize = (typeof AVERAGE_SIZES)[number];
 
 const toTimed = (s: SolveDTO): TimedSolve => ({ time: s.time, penalty: s.penalty });
@@ -40,20 +40,107 @@ export function currentAverage(solves: SolveDTO[], size: number): number | null 
   return r.value;
 }
 
+// Binary-search insert/remove into an ascending sorted array. O(size) per
+// call (array splice), but that's still far cheaper than the full re-sort
+// (O(size log size), with real per-comparison overhead) the naive version
+// below used to pay for every single window position.
+function sortedInsert(arr: number[], v: number): void {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid] < v) lo = mid + 1;
+    else hi = mid;
+  }
+  arr.splice(lo, 0, v);
+}
+function sortedRemove(arr: number[], v: number): void {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid] < v) lo = mid + 1;
+    else hi = mid;
+  }
+  arr.splice(lo, 1);
+}
+
 // Best average of `size` across the whole session, plus the index (in the
-// newest-first list) it starts at — combined into one O(n·size) pass since
-// computing them separately (and a third time inside targetForBest) was the
-// single biggest cost in StatsTable for sessions with thousands of solves.
+// newest-first list) it starts at. Slides a `size`-wide window across
+// `solves` one solve at a time, maintaining a sorted copy of the current
+// window incrementally (remove the outgoing solve, insert the incoming one)
+// instead of re-sorting the whole window from scratch at every position —
+// that naive O(n·size·log(size)) approach was the single biggest cost in
+// StatsTable, taking several seconds once a session (and `size`, with
+// ao1000) got large enough. This is O(n·size): still touches every solve in
+// every window, but without the repeated full sort.
+//
+// A same-value tie for DNF is represented as Infinity throughout, and DNF
+// status only depends on how many Infinities are in the window (`dnfCount
+// > trim`) — if there are at most `trim` of them, every one necessarily
+// falls in the top `trim` (dropped-worst) slice of the sorted window, since
+// Infinity is the maximum possible value; there's no way for one to land in
+// the kept range without exceeding that count. So dnfCount alone is enough,
+// with no need to inspect the kept slice itself for a stray Infinity.
 export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value: number | null; index: number | null } {
+  const n = solves.length;
+  if (n < size) return { value: null, index: null };
+
+  const eff = (s: SolveDTO) => effectiveTime(s.time, s.penalty);
+
+  if (size === 3) {
+    // Mo3: mean of all 3, no trimming — any DNF makes the whole thing DNF.
+    let best: number | null = null;
+    let idx: number | null = null;
+    for (let i = 0; i + 3 <= n; i++) {
+      const a = eff(solves[i]);
+      const b = eff(solves[i + 1]);
+      const c = eff(solves[i + 2]);
+      if (isFinite(a) && isFinite(b) && isFinite(c)) {
+        const value = (a + b + c) / 3;
+        if (best === null || value < best) {
+          best = value;
+          idx = i;
+        }
+      }
+    }
+    return { value: best, index: idx };
+  }
+
+  const trim = Math.max(1, Math.ceil(size * 0.05));
+  const keptCount = size - 2 * trim;
+  let dnfCount = 0;
+  const window: number[] = [];
+  for (let k = 0; k < size; k++) {
+    const v = eff(solves[k]);
+    if (v === Infinity) dnfCount++;
+    sortedInsert(window, v);
+  }
+
   let best: number | null = null;
   let idx: number | null = null;
-  for (let i = 0; i + size <= solves.length; i++) {
-    const r = computeAvg(solves.slice(i, i + size).map(toTimed), size);
-    if (r.value !== null && (best === null || r.value < best)) {
-      best = r.value;
-      idx = i;
+  const evalWindow = (start: number) => {
+    if (dnfCount > trim) return;
+    let sum = 0;
+    for (let k = trim; k < size - trim; k++) sum += window[k];
+    const value = sum / keptCount;
+    if (best === null || value < best) {
+      best = value;
+      idx = start;
     }
+  };
+
+  evalWindow(0);
+  for (let start = 1; start + size <= n; start++) {
+    const outV = eff(solves[start - 1]);
+    const inV = eff(solves[start + size - 1]);
+    if (outV === Infinity) dnfCount--;
+    sortedRemove(window, outV);
+    if (inV === Infinity) dnfCount++;
+    sortedInsert(window, inV);
+    evalWindow(start);
   }
+
   return { value: best, index: idx };
 }
 
