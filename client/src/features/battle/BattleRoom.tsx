@@ -200,9 +200,14 @@ export default function BattleRoom() {
     onComplete: onTimerComplete,
   });
 
-  function submitSolve(penalty: Penalty) {
+  // `time` defaults to the already-set pendingTime (the normal confirm-screen
+  // path); the typing tile's DNF shortcut passes 0 explicitly so it doesn't
+  // have to wait a render for a just-called setPendingTime(0) to land.
+  function submitSolve(penalty: Penalty, time: number = pendingTime) {
     if (!code || !room) return;
-    solveComplete(code.toUpperCase(), pendingTime, penalty);
+    solveComplete(code.toUpperCase(), time, penalty);
+    setPendingTime(time);
+    setPendingPenalty(penalty);
     setSubmitted(true);
     setAwaitingSubmit(false);
     engine.cancel();
@@ -328,9 +333,9 @@ export default function BattleRoom() {
     }
     if (isInspectionPhase) {
       if (settings.inspectionDirection === 'up') {
-        return formatTime(engine.elapsed, 'NONE', 1);
+        return formatTime(engine.inspectionElapsed, 'NONE', 1);
       }
-      return String(Math.max(0, Math.ceil((15000 - engine.elapsed) / 1000)));
+      return String(Math.max(0, Math.ceil(engine.inspectionRemaining / 1000)));
     }
     if (engine.phase === 'running') {
       const ms = engine.elapsed;
@@ -491,7 +496,7 @@ export default function BattleRoom() {
               <div className="flex gap-2">
                 <button
                   className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
-                  onClick={() => { setPendingTime(0); setPendingPenalty('DNF'); setAwaitingSubmit(true); setTypingInput(''); }}
+                  onClick={() => { submitSolve('DNF', 0); setTypingInput(''); }}
                 >
                   DNF
                 </button>
