@@ -38,10 +38,7 @@ model User {
 
   sessions      Session[]
   solves        Solve[]
-  dailyResults  DailyResult[]
-  goals         UserGoal[]
   battleParts   BattleParticipant[]
-  letterPairs   LetterPair[]
   algProgress   AlgProgress[]
   algPrefs      UserAlgPref[]
   algSolves     AlgSolve[]
@@ -99,31 +96,6 @@ model AlgSolve {
   @@index([userId, setId])
 }
 
-model DailyScramble {
-  id       String   @id @default(cuid())
-  date     DateTime @db.Date
-  eventId  String
-  scramble String
-
-  results DailyResult[]
-
-  @@unique([date, eventId])
-}
-
-model DailyResult {
-  id              String   @id @default(cuid())
-  userId          String
-  dailyScrambleId String
-  time            Int
-  penalty         Penalty  @default(NONE)
-  createdAt       DateTime @default(now())
-
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  dailyScramble DailyScramble @relation(fields: [dailyScrambleId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, dailyScrambleId])
-}
-
 model BattleRoom {
   id          String       @id @default(cuid())
   name        String       @default("")
@@ -153,29 +125,6 @@ model BattleParticipant {
   user User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
-}
-
-model UserGoal {
-  id         String @id @default(cuid())
-  userId     String
-  eventId    String
-  targetTime Int // milliseconds
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-}
-
-// BLD trainer: a user's personalized letter-pair association
-model LetterPair {
-  id     String @id @default(cuid())
-  userId String
-  pair   String // e.g. "AB"
-  image  String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, pair])
 }
 
 enum AlgStatus {

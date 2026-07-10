@@ -27,7 +27,7 @@ This is an **npm workspaces monorepo** with three packages: `shared`, `server`, 
 ├── client/                 # React + Vite SPA
 │   └── src/
 │       ├── components/      # Layout, nav, toasts, CubeDiagram, ScramblePanel, Modal, shared settings UI
-│       ├── data/           # Hardcoded alg sets (OLL/PLL/F2L/COLL/ZBLL + 2×2 OrtegaOLL/PBL/CLL/EG-1/EG-2), Speffz lettering
+│       ├── data/           # Hardcoded alg sets (OLL/PLL/F2L/COLL/ZBLL + 2×2 OrtegaOLL/PBL/CLL/EG-1/EG-2)
 │       ├── features/       # One folder per feature (see Routes below)
 │       ├── lib/            # axios api client, scramble helper, cstimer import, time-input parsing, move metrics
 │       ├── store/          # Zustand stores: auth, settings, toast, ui
@@ -37,9 +37,8 @@ This is an **npm workspaces monorepo** with three packages: `shared`, `server`, 
 ├── server/                 # Express API + Socket.io
 │   └── src/
 │       ├── auth/           # jwt helpers, requireAuth/optionalAuth
-│       ├── routes/         # auth, sessions, solves, wca, profile, battle, bld, alg, algSolves,
-│       │                   # scramble, reconstructions, daily, cubingContests (see note below —
-│       │                   # not all of these have a client page wired up yet)
+│       ├── routes/         # auth, sessions, solves, wca, profile, battle, alg, algSolves,
+│       │                   # scramble, reconstructions, cubingContests
 │       ├── util/dto.ts     # Prisma model -> DTO mappers
 │       ├── cache.ts        # Redis-or-in-memory cache for the WCA proxy
 │       ├── scramble.ts     # cubing.js (worker) + scrambow wrappers
@@ -173,15 +172,12 @@ There is no admin account or admin role — see Roles below.
   thresholds the engine uses internally when the solve actually starts.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
-- **Backend routes with no client UI yet:** `profile.ts` (per-event stats + `UserGoal`
-  goals), `bld.ts` (`LetterPair` BLD memo associations), `daily.ts` (`DailyScramble`/
-  `DailyResult`, a daily-challenge concept), and the `/api/wca/rankings` +
-  `/api/wca/competitions` endpoints (an upcoming-competitions + cutoff-predictor idea
-  referenced in the Landing page's marketing copy) all exist and are mounted in
-  `app.ts`, but nothing in `client/src/features` currently calls them. Treat them as
-  scaffolding for possible future features, not documentation of something you can
-  currently reach in the app — don't assume a bug report about "rankings" or "goals"
-  refers to a live page without checking first.
+- **No BLD trainer, daily challenge, or goals/rankings pages.** These existed as backend
+  scaffolding (`bld.ts`, `daily.ts`, `UserGoal`, WCA `/rankings` + `/competitions` proxy
+  endpoints) with no client UI ever calling them, and have been removed. `profile.ts` now
+  only handles the display-name update actually used by `/settings`; `wca.ts` only the
+  competitor lookup/search actually used by `/results`. If reviving one of these, it'll
+  need to be built from scratch — there's nothing partially-there to resume.
 
 ## Environment variables
 

@@ -14,66 +14,6 @@ async function wcaGet<T>(path: string): Promise<T> {
   return resp.data;
 }
 
-// GET /api/wca/rankings?event=333&type=single&region=world
-// WCA's public API doesn't expose a clean "rankings" list, so we query the
-// search/results endpoints. We proxy + cache whatever the client needs.
-router.get('/rankings', async (req, res, next) => {
-  try {
-    const event = String(req.query.event ?? '333');
-    const type = String(req.query.type ?? 'single'); // single | average
-    const region = String(req.query.region ?? 'world');
-    const key = `wca:rankings:${event}:${type}:${region}`;
-    const data = await cached(key, ONE_HOUR, async () => {
-      // The unofficial but stable rankings endpoint.
-      const path = `/rankings/${event}/${type}${region && region !== 'world' ? `?region=${encodeURIComponent(region)}` : ''}`;
-      try {
-        return await wcaGet(path);
-      } catch {
-        // Fallback: return an empty rankings payload shape if WCA blocks it.
-        return { items: [], note: 'WCA rankings endpoint unavailable' };
-      }
-    });
-    res.json(data);
-  } catch (e) {
-    next(e);
-  }
-});
-
-// GET /api/wca/competitions?upcoming=true
-router.get('/competitions', async (req, res, next) => {
-  try {
-    const upcoming = req.query.upcoming !== 'false';
-    const key = `wca:competitions:${upcoming}`;
-    const data = await cached(key, ONE_HOUR, async () => {
-      return wcaGet(`/competitions?upcoming_json=true`);
-    });
-    res.json(data);
-  } catch (e) {
-    next(e);
-  }
-});
-
-// GET /api/wca/competitions/:id — full competition detail (rounds, events)
-router.get('/competitions/:id', async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const key = `wca:competition:${id}`;
-    const data = await cached(key, ONE_HOUR, async () => {
-      const comp = await wcaGet(`/competitions/${encodeURIComponent(id)}`);
-      let wcif: unknown = null;
-      try {
-        wcif = await wcaGet(`/competitions/${encodeURIComponent(id)}/wcif/public`);
-      } catch {
-        /* wcif may be unavailable */
-      }
-      return { competition: comp, wcif };
-    });
-    res.json(data);
-  } catch (e) {
-    next(e);
-  }
-});
-
 // GET /api/wca/competitor/:wcaId — competitor profile + results history
 router.get('/competitor/:wcaId', async (req, res, next) => {
   try {

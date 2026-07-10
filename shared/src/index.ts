@@ -95,18 +95,6 @@ export interface AlgSolveDTO {
   createdAt: string;
 }
 
-export interface GoalDTO {
-  eventId: string;
-  targetTime: number;
-}
-
-export interface DailyScrambleDTO {
-  id: string;
-  date: string;
-  eventId: string;
-  scramble: string;
-}
-
 export interface ReconstructionDTO {
   id: string;
   userId: string;
@@ -116,15 +104,6 @@ export interface ReconstructionDTO {
   solution: string;
   timeMs: number | null;
   createdAt: string;
-}
-
-export interface DailyLeaderboardEntry {
-  rank: number;
-  userId: string;
-  displayName: string;
-  wcaId?: string | null;
-  time: number;
-  penalty: Penalty;
 }
 
 export interface BattleParticipantDTO {

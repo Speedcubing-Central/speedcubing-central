@@ -4,8 +4,7 @@ import { Icon, type IconName } from '../../components/Icon';
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [
   { icon: 'timer', title: 'Pro Timer', desc: 'Spacebar & touch timing, inspection, live Ao5/Ao12/Ao100, multi-session.' },
   { icon: 'cube', title: 'Alg Trainer', desc: 'OLL, PLL, F2L, COLL & ZBLL with spaced-repetition drills.' },
-  { icon: 'trophy', title: 'WCA Rankings', desc: 'Live world rankings and full competitor result histories.' },
-  { icon: 'calendar', title: 'Competition Finder', desc: 'Upcoming comps with a personalized cutoff predictor.' },
+  { icon: 'trophy', title: 'WCA Results', desc: 'Look up any competitor and browse their full result history.' },
   { icon: 'swords', title: 'Battle Mode', desc: 'Race a friend head-to-head on identical scrambles in real time.' },
   { icon: 'film', title: 'Reconstruction', desc: '3D playback of any scramble + solution, move by move.' },
 ];
@@ -21,7 +20,7 @@ export default function Landing() {
           Train. Compete. <span className="text-accent">Improve.</span>
         </h1>
         <p className="text-muted max-w-xl mx-auto mt-4 text-lg">
-          A timer, algorithm trainer, WCA rankings, competition tools, and live battles — everything a cuber needs in
+          A timer, algorithm trainer, WCA results lookup, and live battles — everything a cuber needs in
           one place.
         </p>
         <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">

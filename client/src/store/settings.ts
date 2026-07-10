@@ -37,7 +37,6 @@ interface SettingsState {
   themeId: string;
   defaultEvent: string;
   currentEvent: string;
-  letteringScheme: 'speffz' | 'custom';
 
   // Timer settings
   inspection: boolean;
@@ -64,7 +63,6 @@ interface SettingsState {
   setThemeId: (id: string) => void;
   setDefaultEvent: (e: string) => void;
   setCurrentEvent: (e: string) => void;
-  setLetteringScheme: (s: 'speffz' | 'custom') => void;
   set: (patch: Partial<SettingsState>) => void;
 }
 
@@ -76,7 +74,6 @@ export const useSettings = create<SettingsState>()(
       themeId: 'default',
       defaultEvent: '333',
       currentEvent: '333',
-      letteringScheme: 'speffz',
 
       inspection: false,
       inspectionDirection: 'down',
@@ -103,7 +100,6 @@ export const useSettings = create<SettingsState>()(
       },
       setDefaultEvent: (defaultEvent) => set({ defaultEvent }),
       setCurrentEvent: (currentEvent) => set({ currentEvent }),
-      setLetteringScheme: (letteringScheme) => set({ letteringScheme }),
       set: (patch) => set(patch),
     }),
     { name: 'scc-settings' },

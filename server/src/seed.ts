@@ -1,7 +1,5 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma.js';
-import { getScramble } from './scramble.js';
-import { EVENT_IDS } from '@scc/shared';
 
 async function main() {
   console.log('Seeding database...');
@@ -27,19 +25,6 @@ async function main() {
     }
     console.log('  Demo session with sample solves created.');
   }
-
-  // Today's daily scrambles for a few events
-  const today = new Date().toISOString().slice(0, 10);
-  const dateObj = new Date(`${today}T00:00:00.000Z`);
-  for (const eventId of ['333', '222', '444', 'pyram']) {
-    await prisma.dailyScramble.upsert({
-      where: { date_eventId: { date: dateObj, eventId } },
-      update: {},
-      create: { date: dateObj, eventId, scramble: await getScramble(eventId) },
-    });
-  }
-  console.log(`  Daily scrambles seeded for ${today}.`);
-  void EVENT_IDS;
 
   console.log('Seed complete.');
 }
