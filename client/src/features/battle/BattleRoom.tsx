@@ -333,7 +333,7 @@ export default function BattleRoom() {
     }
     if (isInspectionPhase) {
       if (settings.inspectionDirection === 'up') {
-        return formatTime(engine.inspectionElapsed, 'NONE', 1);
+        return String(Math.floor(engine.inspectionElapsed / 1000));
       }
       return String(Math.max(0, Math.ceil(engine.inspectionRemaining / 1000)));
     }
