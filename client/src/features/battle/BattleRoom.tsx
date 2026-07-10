@@ -9,7 +9,7 @@ import { toast } from '../../store/toast';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
-import { useTimerEngine } from '../timer/useTimerEngine';
+import { useTimerEngine, formatInspectionDisplay } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -332,14 +332,7 @@ export default function BattleRoom() {
       return formatTime(pendingTime, 'NONE', settings.solvePrecision);
     }
     if (isInspectionPhase) {
-      if (settings.inspectionDirection === 'up') {
-        const el = engine.inspectionElapsed;
-        if (el < 15000) return String(Math.floor(el / 1000));
-        return el < 17000 ? '+2' : 'DNF';
-      }
-      const rem = engine.inspectionRemaining;
-      if (rem > 0) return String(Math.ceil(rem / 1000));
-      return rem > -2000 ? '+2' : 'DNF';
+      return formatInspectionDisplay(settings.inspectionDirection, engine.inspectionElapsed, engine.inspectionRemaining);
     }
     if (engine.phase === 'running') {
       const ms = engine.elapsed;

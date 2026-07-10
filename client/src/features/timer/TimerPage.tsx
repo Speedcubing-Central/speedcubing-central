@@ -11,7 +11,7 @@ import { Icon } from '../../components/Icon';
 import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useFittedFontSize } from '../../components/useFittedFontSize';
-import { useTimerEngine } from './useTimerEngine';
+import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
 import { singleStats, makeAverageView, type AvgSize, type SolveAverage } from './stats';
@@ -163,14 +163,7 @@ export default function TimerPage() {
   const display = useMemo(() => {
     const p = engine.phase;
     if (inspection && (p === 'inspecting' || p === 'holding' || p === 'ready')) {
-      if (inspectionDirection === 'up') {
-        const el = engine.inspectionElapsed;
-        if (el < 15000) return String(Math.floor(el / 1000));
-        return el < 17000 ? '+2' : 'DNF';
-      }
-      const rem = engine.inspectionRemaining;
-      if (rem > 0) return String(Math.ceil(rem / 1000));
-      return rem > -2000 ? '+2' : 'DNF';
+      return formatInspectionDisplay(inspectionDirection, engine.inspectionElapsed, engine.inspectionRemaining);
     }
     if (p === 'running') return runningStr(engine.elapsed);
     if (p === 'stopped') return formatTime(Math.round(engine.elapsed), 'NONE', solvePrecision);

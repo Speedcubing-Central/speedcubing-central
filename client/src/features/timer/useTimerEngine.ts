@@ -248,3 +248,21 @@ export function useTimerEngine(opts: Options) {
 
   return { phase, elapsed, inspectionElapsed, inspectionRemaining, press, release, cancel };
 }
+
+// Inspection display text for either counting direction, capping at the same
+// +2/DNF thresholds the engine itself applies at solve-start
+// (inspectionPenaltyAtStart above) — without this cap, count-up mode would
+// just keep counting seconds past 17 instead of reflecting the penalty
+// that's about to be assessed.
+export function formatInspectionDisplay(
+  direction: InspectionDirection,
+  inspectionElapsed: number,
+  inspectionRemaining: number,
+): string {
+  if (direction === 'up') {
+    if (inspectionElapsed < INSPECTION_MS) return String(Math.floor(inspectionElapsed / 1000));
+    return inspectionElapsed < INSPECTION_MS + 2000 ? '+2' : 'DNF';
+  }
+  if (inspectionRemaining > 0) return String(Math.ceil(inspectionRemaining / 1000));
+  return inspectionRemaining > -2000 ? '+2' : 'DNF';
+}
