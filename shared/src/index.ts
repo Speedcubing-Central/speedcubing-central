@@ -170,7 +170,7 @@ export function effectiveTime(time: number, penalty: Penalty): number {
 }
 
 // Format milliseconds as a cube timer string, e.g. 12345 -> "12.35", 73210 -> "1:13.21".
-// `decimals` controls displayed precision (2 = centiseconds, 3 = milliseconds).
+// `decimals` controls displayed precision (0 = whole seconds, 2 = centiseconds, 3 = milliseconds).
 export function formatTime(
   ms: number | null | undefined,
   penalty: Penalty = 'NONE',
@@ -179,10 +179,21 @@ export function formatTime(
   if (penalty === 'DNF') return 'DNF';
   if (ms === null || ms === undefined || !isFinite(ms)) return 'DNF';
   const withPenalty = penalty === 'PLUS2' ? ms + 2000 : ms;
-  const totalSeconds = withPenalty / 1000;
+  // Round to the displayed precision in whole milliseconds *before* splitting
+  // into minutes/seconds/fraction — rounding each piece independently (the
+  // previous approach) let a value like 59.9996s at 2 decimals round its
+  // seconds part up to "60" without carrying into minutes, e.g. "1:60.00"
+  // instead of "2:00.00". Rounding first means the carry always happens.
+  const roundTo = 10 ** (3 - decimals);
+  const rounded = Math.round(withPenalty / roundTo) * roundTo;
+  const totalSeconds = Math.floor(rounded / 1000);
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const secStr = seconds.toFixed(decimals).padStart(decimals + 3, '0');
-  const base = minutes > 0 ? `${minutes}:${secStr}` : seconds.toFixed(decimals);
+  const secs = totalSeconds % 60;
+  // No decimal point at all when decimals is 0 — the old `padStart(decimals
+  // + 3, '0')` assumed a "SS.ddd"-shaped string always existed, which broke
+  // for decimals=0 (no dot to account for): e.g. formatTime(62690, ..., 0)
+  // came out "1:003" instead of "1:03".
+  const frac = decimals > 0 ? `.${String(rounded % 1000).padStart(3, '0').slice(0, decimals)}` : '';
+  const base = minutes > 0 ? `${minutes}:${String(secs).padStart(2, '0')}${frac}` : `${secs}${frac}`;
   return penalty === 'PLUS2' ? `${base}+` : base;
 }
