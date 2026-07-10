@@ -104,6 +104,17 @@ export default function TimerPage() {
     [data, scr, event],
   );
 
+  // While a scramble fetch is in flight, `scr.scramble` still holds the
+  // scramble that was just solved — nothing re-renders it until the fetch
+  // resolves. Blocking input here (same pattern as `data.solvesLoading`)
+  // closes that window entirely: a new attempt literally cannot start
+  // until the replacement scramble has actually landed, so it's no longer
+  // possible to record two consecutive solves against the same scramble.
+  // This matters most for slower-to-generate events (e.g. square-1, whose
+  // random-state search can take up to ~2s) where the window would
+  // otherwise be wide enough to hit during ordinary, non-rushed solving.
+  const inputBlocked = data.solvesLoading || scr.loading;
+
   const engine = useTimerEngine({
     inspection,
     inspectionDirection,
@@ -111,7 +122,7 @@ export default function TimerPage() {
     holdToStart,
     holdDuration,
     startSound,
-    enabled: entryMode === 'keyboard' && !anyModalOpen && !data.solvesLoading,
+    enabled: entryMode === 'keyboard' && !anyModalOpen && !inputBlocked,
     onComplete,
   });
 
@@ -198,14 +209,14 @@ export default function TimerPage() {
       if (anyModalOpen) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-      if (engine.phase === 'idle' || engine.phase === 'stopped') {
+      if ((engine.phase === 'idle' || engine.phase === 'stopped') && !scr.loading) {
         e.preventDefault();
         scr.advance();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [entryMode, anyModalOpen, engine.phase, scr.advance]);
+  }, [entryMode, anyModalOpen, engine.phase, scr.loading, scr.advance]);
 
   const openAverage = useCallback(
     (size: AvgSize, startIndex: number) => {
@@ -316,8 +327,8 @@ export default function TimerPage() {
               ref={timerCardRef}
               className="card relative flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
               style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
-              onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen && !data.solvesLoading) engine.press(); }}
-              onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen && !data.solvesLoading) engine.release(); }}
+              onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.press(); }}
+              onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.release(); }}
             >
               <div
                 className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
@@ -326,7 +337,7 @@ export default function TimerPage() {
                 {display}
               </div>
               <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
-              {data.solvesLoading && <TimerLoadingOverlay />}
+              {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
             </div>
           ) : (
             <div
@@ -347,12 +358,12 @@ export default function TimerPage() {
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addTyped()}
-                  disabled={data.solvesLoading}
+                  disabled={inputBlocked}
                   autoFocus
                 />
-                <button className="btn-primary" onClick={addTyped} disabled={data.solvesLoading}>Add solve</button>
+                <button className="btn-primary" onClick={addTyped} disabled={inputBlocked}>Add solve</button>
               </div>
-              {data.solvesLoading && <TimerLoadingOverlay />}
+              {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
             </div>
           )}
 
@@ -452,14 +463,15 @@ export default function TimerPage() {
   );
 }
 
-// Blocks the timer card while the current session's solve history is still
-// loading, so a fast typist can't start a solve before stats/averages catch
-// up (see the comment on `solvesLoading` in useTimerData.ts).
-function TimerLoadingOverlay() {
+// Blocks the timer card while either the current session's solve history
+// (see `solvesLoading` in useTimerData.ts) or the next scramble (see
+// `inputBlocked` above) is still loading, so a solve can't be started
+// before the data it depends on has actually landed.
+function TimerLoadingOverlay({ message }: { message: string }) {
   return (
     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-card/80 backdrop-blur-sm">
       <Icon name="refresh" size={28} className="animate-spin text-accent" />
-      <p className="text-muted text-sm">Loading solves…</p>
+      <p className="text-muted text-sm">{message}</p>
     </div>
   );
 }

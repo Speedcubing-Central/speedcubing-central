@@ -65,21 +65,24 @@ export function formatScrambleForCopy(scramble: string, eventId: string): string
 }
 
 // Splits a Square-1 scramble into its "(a,b)" pairs, appending a trailing
-// " /" to every pair except the last. Rendered as individually non-wrapping
-// items in a flex-wrap container (see <ScrambleText>), so the browser's own
-// layout decides how many pairs fit per line — every line still starts with
-// a pair and ends with a slash, at any screen size.
-//
-// Defensively strips a stray trailing slash first: some upstream sources
-// (cubing.js's random-state sq1 output, in particular) occasionally end the
-// raw string with "... / " rather than a bare final pair — without this, the
-// last split segment keeps that slash attached (since "... / " ends the
-// string mid-delimiter, not with a full " / " to split on), so the very
-// last pair would wrongly render with a trailing slash too.
+// " /" to every pair except the last — UNLESS the raw scramble itself ends
+// with a slash, in which case the last pair keeps it too. Whether a sq1
+// scramble ends in "/" is genuinely meaningful (it means the final move
+// needs a slice turn to reach that state) and varies from scramble to
+// scramble — it is not a formatting artifact to discard. <ScrambleImage>
+// feeds this same raw string, unmodified, straight into the 3D
+// visualization, so dropping a trailing slash here would silently make the
+// displayed text one slice short of what the diagram actually shows.
+// Rendered as individually non-wrapping items in a flex-wrap container (see
+// <ScrambleText>), so the browser's own layout decides how many pairs fit
+// per line — every line still starts with a pair and ends with a slash (if
+// there is one), at any screen size.
 export function sq1Pairs(scramble: string): string[] {
   if (!scramble) return [];
-  const pairs = scramble.trim().replace(/\/\s*$/, '').trim().split(' / ');
-  return pairs.map((p, i) => (i < pairs.length - 1 ? `${p} /` : p));
+  const trimmed = scramble.trim();
+  const endsWithSlash = /\/\s*$/.test(trimmed);
+  const pairs = trimmed.replace(/\/\s*$/, '').trim().split(' / ');
+  return pairs.map((p, i) => (i < pairs.length - 1 || endsWithSlash ? `${p} /` : p));
 }
 
 // Fetch a WCA-quality random-state scramble from the server (cubing.js runs
