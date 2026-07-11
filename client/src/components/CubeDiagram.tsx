@@ -32,6 +32,51 @@ export function invertAlg(alg: string): string {
     .join(' ');
 }
 
+// Net quarter-turns for one move (mod 4): plain = 1, ' = 3 (i.e. -1), 2 = 2.
+function quarterTurns(move: string): number {
+  if (move.endsWith('2')) return 2;
+  if (move.endsWith("'")) return 3;
+  return 1;
+}
+// The face/axis a move acts on, e.g. "U'" -> "U", "Rw2" -> "Rw", "y'" -> "y".
+// Two moves only ever combine if this matches exactly, so a rotation (y)
+// never gets combined with a face turn (U) even though both are "U-ish".
+function faceOf(move: string): string {
+  return move.replace(/2$|'$/, '');
+}
+function moveFromQuarterTurns(face: string, qt: number): string | null {
+  const n = ((qt % 4) + 4) % 4;
+  if (n === 0) return null; // net identity — cancels out entirely
+  if (n === 1) return face;
+  if (n === 2) return `${face}2`;
+  return `${face}'`;
+}
+
+// Combines adjacent same-face moves into their net turn (or drops them
+// entirely if they cancel out), e.g. "U' U" -> "" and "U U" -> "U2". Used
+// wherever an AUF or setup move gets prepended to an existing algorithm —
+// blindly concatenating can otherwise land right next to that algorithm's
+// own first move on the same face, producing a redundant pair that's
+// mathematically a no-op but visibly confusing (e.g. "U' U R2 ...").
+// A simple left-to-right stack pass handles cascading cancellations
+// correctly (e.g. "U R R' U'" fully collapses: R/R' cancel, exposing the
+// now-adjacent U/U' pair, which then also cancels).
+export function simplifyAlg(alg: string): string {
+  const stack: string[] = [];
+  for (const move of alg.trim().split(/\s+/).filter(Boolean)) {
+    const face = faceOf(move);
+    const top = stack[stack.length - 1];
+    if (top !== undefined && faceOf(top) === face) {
+      stack.pop();
+      const combined = moveFromQuarterTurns(face, quarterTurns(top) + quarterTurns(move));
+      if (combined) stack.push(combined);
+    } else {
+      stack.push(move);
+    }
+  }
+  return stack.join(' ');
+}
+
 // After x2 in experimentalSetupAlg, the cube is visually flipped:
 //   Visual TOP  (yellow face) = D-layer pieces: CORNERS/EDGES indices 4-7, CENTER 5
 //   Visual BOT  (white face)  = U-layer pieces: CORNERS/EDGES indices 0-3, CENTER 0

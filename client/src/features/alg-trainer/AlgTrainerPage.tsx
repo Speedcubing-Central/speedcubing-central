@@ -5,7 +5,7 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, invertAlg,
+  RotatingCaseDiagram, invertAlg, simplifyAlg,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
 import { Icon } from '../../components/Icon';
@@ -601,6 +601,19 @@ function parseMoves(alg: string): string[] {
   return alg.trim().split(/\s+/).filter(Boolean);
 }
 
+// True if the algorithm's first or last move is a bare whole-cube rotation
+// (y/y'/y2/x/.../z2). A rotation there can't be dropped or simplified away —
+// unlike a face turn, it isn't optional notation, it's load-bearing for the
+// rest of the algorithm to solve the intended case — but when an alternate
+// with this shape gets picked for the scramble and a random AUF happens to
+// land right next to it, the result reads as an odd, unexplained rotation
+// sitting in what's supposed to look like an ordinary scramble.
+function startsOrEndsWithRotation(alg: string): boolean {
+  const tokens = alg.trim().split(/\s+/).filter(Boolean);
+  const isRotation = (t: string) => /^[xyz]['2]?$/.test(t);
+  return tokens.length > 0 && (isRotation(tokens[0]) || isRotation(tokens[tokens.length - 1]));
+}
+
 const AUF_MOVES = ['', 'U', "U'", 'U2'];
 
 // Live display while the timer is running, precision gated by the
@@ -667,15 +680,29 @@ function TrainingSession({
   const { randomAlg, auf } = useMemo(() => {
     const alts = currentCase.alts ?? [];
     const pool = alts.length > 0 ? alts : [currentCase.moves];
-    const alg = pool[Math.floor(Math.random() * pool.length)];
+    // Prefer candidates that don't start/end with a rotation (see
+    // startsOrEndsWithRotation) so the scramble reads like an ordinary
+    // scramble whenever an equally-valid alternate makes that possible;
+    // fall back to the full pool if every candidate has that shape rather
+    // than over-restricting variety.
+    const clean = pool.filter((alg) => !startsOrEndsWithRotation(alg));
+    const candidates = clean.length > 0 ? clean : pool;
+    const alg = candidates[Math.floor(Math.random() * candidates.length)];
     const a = s.trainerRandomAUF ? AUF_MOVES[Math.floor(Math.random() * AUF_MOVES.length)] : '';
     return { randomAlg: alg, auf: a };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCase, s.trainerRandomAUF]);
 
-  const solvingAlg = auf ? `${auf} ${randomAlg}` : randomAlg;
+  // simplifyAlg collapses a prepended AUF into whatever move the algorithm
+  // itself already starts with (e.g. auf "U'" + alg starting "U ..." would
+  // otherwise render as a literal, redundant "U' U ..." — mathematically a
+  // no-op but visibly confusing).
+  const solvingAlg = simplifyAlg(auf ? `${auf} ${randomAlg}` : randomAlg);
   const scramble = useMemo(() => invertAlg(solvingAlg), [solvingAlg]);
-  const moves = useMemo(() => parseMoves(auf ? `${auf} ${preferredAlg}` : preferredAlg), [preferredAlg, auf]);
+  const moves = useMemo(
+    () => parseMoves(simplifyAlg(auf ? `${auf} ${preferredAlg}` : preferredAlg)),
+    [preferredAlg, auf],
+  );
 
   const [revealed, setRevealed] = useState(0);
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'stopped'>('idle');
