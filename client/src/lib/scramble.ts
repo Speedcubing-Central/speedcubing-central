@@ -3,15 +3,39 @@ import { getEvent, normalizeScramble } from '@scc/shared';
 import { api } from './api';
 
 // Move sets for unofficial events as an emergency client-side fallback.
+// kilominx and fto were each missing a face here (kilominx had no FL/FR,
+// fto had no B at all) — verified against real cubing.js random-state
+// scrambles for both (which do use those faces) after a user report of
+// scrambles that left a whole layer/face untouched. That gap combined with
+// randomMoveScramble not checking for adjacent same-face moves (see below)
+// is what a "solved bottom layer" and visible "R R'"/"F F'" pairs actually
+// were: not this fallback being used *instead of* the real scrambler by
+// design, but the real scrambler's cold-start (see server/src/scramble.ts's
+// warm-up) taking long enough to hit getScramble's 5s timeout, silently
+// dropping into this — genuinely lower-quality — path.
 const UNOFFICIAL_MOVES: Record<string, string[]> = {
-  kilominx: ["U", "U'", "R", "R'", "D", "D'", "L", "L'", "F", "F'", "BR", "BR'", "BL", "BL'"],
-  fto: ["U", "U'", "F", "F'", "R", "R'", "L", "L'", "BL", "BL'", "BR", "BR'", "D", "D'"],
+  kilominx: ["U", "U'", "R", "R'", "D", "D'", "L", "L'", "F", "F'", "FR", "FR'", "FL", "FL'", "BR", "BR'", "BL", "BL'"],
+  fto: ["U", "U'", "F", "F'", "B", "B'", "R", "R'", "L", "L'", "BL", "BL'", "BR", "BR'", "D", "D'"],
   redi_cube: ["U", "U'", "R", "R'", "F", "F'", "L", "L'", "B", "B'", "D", "D'"],
 };
 
+// Picks `length` random moves, but never lets the same face turn twice in a
+// row (e.g. "R R'", "F F") — a scramble containing that is a functional
+// no-op at that point and is never something a real scrambler (random-move
+// or random-state) would produce; the previous version didn't check this at
+// all, so any adjacent pair here was possible purely by chance.
 function randomMoveScramble(moves: string[], length: number): string {
+  const faceOf = (m: string) => m.replace(/'$/, '');
   const out: string[] = [];
-  for (let i = 0; i < length; i++) out.push(moves[Math.floor(Math.random() * moves.length)]);
+  let lastFace: string | null = null;
+  for (let i = 0; i < length; i++) {
+    let next: string;
+    do {
+      next = moves[Math.floor(Math.random() * moves.length)];
+    } while (faceOf(next) === lastFace);
+    out.push(next);
+    lastFace = faceOf(next);
+  }
   return out.join(' ');
 }
 
