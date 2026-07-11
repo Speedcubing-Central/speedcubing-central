@@ -19,6 +19,24 @@ export function TrainerSettings({ open, onClose }: { open: boolean; onClose: () 
           />
         </Row>
 
+        <Row label="Hold to start" hint="Require holding before the timer arms">
+          <Toggle checked={s.holdToStart} onChange={(v) => s.set({ holdToStart: v })} />
+        </Row>
+
+        <Row label="Hold duration" hint="How long to hold before the timer turns green" disabled={!s.holdToStart}>
+          <select
+            className={selectCls}
+            disabled={!s.holdToStart}
+            value={s.holdDuration}
+            onChange={(e) => s.set({ holdDuration: Number(e.target.value) })}
+          >
+            <option value={300}>0.3 s</option>
+            <option value={550}>0.55 s</option>
+            <option value={800}>0.8 s</option>
+            <option value={1000}>1.0 s</option>
+          </select>
+        </Row>
+
         <Row label="Timer update" hint="Precision shown while the timer is running">
           <select className={selectCls} value={s.timerUpdate} onChange={(e) => s.set({ timerUpdate: e.target.value as never })}>
             <option value="centiseconds">0.00 (centiseconds)</option>
