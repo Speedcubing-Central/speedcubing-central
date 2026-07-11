@@ -1823,7 +1823,11 @@ export const VALID_ALTS: Record<string, string[]> = {
     "U R U2 R' U' R U R' U' R U' R' U'",
     "L U L' U L U' L' U L U2 L'"
   ],
-  "COLL-H2": [],
+  "COLL-H2": [
+    "f R U R' U' f' R U R' U' R' F R F'",
+    "F R2 U' R2 U' R2 U R2 F' U S' U2 S",
+    "R L' U' L U' L' U L U2 R' U L' U2 L"
+  ],
   "COLL-H3": [
     "R U R' U R U r' F R' F' r",
     "R' F' R U2 R U2 R' F U' R U' R'",

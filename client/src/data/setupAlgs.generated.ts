@@ -122,6 +122,7 @@ export const SETUP_ALGS: Record<string, string> = {
   "COLL-P5": "L' U' L U' L' U' R U' L U R'",
   "COLL-P6": "R' U2 R2 U R U R2 D' R U' R' D U' R'",
   "COLL-H1": "R U2 R' U' R U R' U' R U' R'",
+  "COLL-H2": "F U R U' R' U R U2 R' U' R U R' F'",
   "COLL-H3": "L' U R U' L U' R' U' R U' R'",
   "COLL-H4": "F U R U' R' U R U' R' U R U' R' F' y'"
 };
