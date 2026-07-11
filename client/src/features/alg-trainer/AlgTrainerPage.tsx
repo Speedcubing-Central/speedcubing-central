@@ -5,8 +5,8 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, invertAlg, simplifyAlg, stripLeadingRotation, stripTrailingRotation,
-  restrictToFaces, eliminateWideMoves,
+  RotatingCaseDiagram, invertAlg, simplifyAlg, cleanAlgForDisplay,
+  buildTrainerScrambleAndSolution,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
 import { Icon } from '../../components/Icon';
@@ -17,6 +17,7 @@ import { formatTime as fmtTime, type Penalty, type AlgSolveDTO } from '@scc/shar
 import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering } from './algDiagram';
+import { VALID_ALTS } from '../../data/validAlts.generated';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { useTimerEngine, type TimerPhase } from '../timer/useTimerEngine';
@@ -317,7 +318,7 @@ function CaseModal({
 
         <div>
           <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Setup (apply to solved cube)</div>
-          <AlgChip alg={invertAlg(displayAlg)} />
+          <AlgChip alg={invertAlg(cleanAlgForDisplay(displayAlg, IS_2x2(set.kind) ? '2x2x2' : '3x3x3'))} />
         </div>
 
         {/* Main algorithm — shows the current preferred (or default) */}
@@ -628,12 +629,10 @@ function parseMoves(alg: string): string[] {
 
 // True if the algorithm's first or last move is a bare whole-cube rotation
 // (y/y'/y2/x/.../z2). Used to prefer alternates without this shape when an
-// equally-valid one exists. A leading rotation isn't necessarily a problem
-// on its own — stripLeadingRotation removes it outright when that's proven
-// safe (y-axis, or no AUF) — but an x/z-axis leading rotation combined with
-// a non-empty AUF, or ANY trailing rotation, can't be stripped safely (see
-// those functions' doc comments), so for those shapes avoiding the alternate
-// entirely (when a clean one is available) is the only fix.
+// equally-valid one exists — purely cosmetic (buildTrainerScrambleAndSolution
+// is exact regardless), just so the scramble/solution read like an ordinary
+// alg without a stray rotation when an equally-valid alternate makes that
+// possible.
 function startsOrEndsWithRotation(alg: string): boolean {
   const tokens = alg.trim().split(/\s+/).filter(Boolean);
   const isRotation = (t: string) => /^[xyz]['2]?$/.test(t);
@@ -641,8 +640,6 @@ function startsOrEndsWithRotation(alg: string): boolean {
 }
 
 const AUF_MOVES = ['', 'U', "U'", 'U2'];
-// 2x2 scrambles are restricted to R/U/F — see restrictToFaces.
-const RUF_FACES = new Set(['R', 'U', 'F']);
 
 // Live display while the timer is running, precision gated by the
 // `timerUpdate` setting — mirrors TimerPage's runningStr.
@@ -703,15 +700,24 @@ function TrainingSession({
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
+  const puzzleKind = IS_2x2(set.kind) ? '2x2x2' : '3x3x3';
 
   // Pick an alternate (never the preferred alg, so it's not given away) plus
   // a random AUF, so the same case doesn't always render as one of a small
-  // fixed set of scrambles — see the plan's scramble-generation note. The
-  // AUF is prepended to whichever algorithm is used (both here and for the
-  // revealed solution below) so the two stay consistent with each other.
+  // fixed set of scrambles — see the plan's scramble-generation note.
+  //
+  // Only alts verified (at build time — see scripts/generate-valid-alts.ts)
+  // to actually solve the same case as `moves` are eligible: exhaustively
+  // checking the whole database found that most listed "alts" do NOT
+  // correctly correspond to their case once actually solved out — a
+  // pre-existing data quality issue, not something introduced by inverting
+  // them into scrambles. Falling back to `moves` alone (still varied by AUF)
+  // when a case has no verified alt is a real, common case, not a rare edge
+  // case — see VALID_ALTS's own doc comment for the numbers.
+  const usingValidatedAlt = (VALID_ALTS[currentCase.id] ?? []).length > 0;
   const { randomAlg, auf } = useMemo(() => {
-    const alts = currentCase.alts ?? [];
-    const pool = alts.length > 0 ? alts : [currentCase.moves];
+    const verified = VALID_ALTS[currentCase.id] ?? [];
+    const pool = verified.length > 0 ? verified : [currentCase.moves];
     // Prefer candidates that don't start/end with a rotation (see
     // startsOrEndsWithRotation) so the scramble reads like an ordinary
     // scramble whenever an equally-valid alternate makes that possible;
@@ -728,32 +734,30 @@ function TrainingSession({
   // simplifyAlg collapses a prepended AUF into whatever move the algorithm
   // itself already starts with (e.g. auf "U'" + alg starting "U ..." would
   // otherwise render as a literal, redundant "U' U ..." — mathematically a
-  // no-op but visibly confusing). stripLeadingRotation removes a leading
-  // rotation from randomAlg first when that's provably safe (see its doc
-  // comment) — this is what eliminates the reported "y U" pattern: the
-  // scramble's own trailing "y' U'" collapses to just "U'" once the
-  // now-redundant rotation is gone before the AUF is even attached.
-  const solvingAlg = simplifyAlg(
-    auf ? `${auf} ${stripLeadingRotation(randomAlg, auf)}` : stripLeadingRotation(randomAlg, auf),
+  // no-op but visibly confusing).
+  const solvingAlg = simplifyAlg(auf ? `${auf} ${randomAlg}` : randomAlg);
+  // buildTrainerScrambleAndSolution builds the scramble *and* the exact
+  // algorithm that solves it — see its doc comment for why "solvingAlg
+  // unchanged" isn't always the correct solution once a rotation embedded in
+  // it (e.g. a leading "y") gets dropped from the scramble side: naively
+  // reusing solvingAlg as-is broke exactly this case (an EG-1 solution that
+  // did a "y rotation to turn it into an L-case" and didn't even solve it).
+  const { scramble, solution: exactSolution } = useMemo(
+    () => buildTrainerScrambleAndSolution(solvingAlg, puzzleKind),
+    [solvingAlg, puzzleKind],
   );
-  // Restricting to a smaller move set only makes sense on the final,
-  // terminal scramble text (not on solvingAlg before it gets inverted) —
-  // see restrictToFaces'/eliminateWideMoves' doc comment for why a rotation
-  // can only be safely dropped once nothing remains after it to relabel,
-  // which is only true once the scramble is fully built.
-  const scramble = useMemo(() => {
-    const raw = invertAlg(solvingAlg);
-    if (IS_2x2(set.kind)) return restrictToFaces(raw, RUF_FACES);
-    return eliminateWideMoves(raw);
-  }, [solvingAlg, set.kind]);
-  // stripTrailingRotation removes a trailing rotation from the solution
-  // algorithm — always safe (it's the literal last move of the sequence),
-  // unlike a leading one, so no AUF-dependent condition is needed here.
-  const strippedPreferredAlg = stripTrailingRotation(preferredAlg);
-  const moves = useMemo(
-    () => parseMoves(simplifyAlg(auf ? `${auf} ${strippedPreferredAlg}` : strippedPreferredAlg)),
-    [strippedPreferredAlg, auf],
-  );
+  // When a verified alt is driving the scramble, the *displayed* solution is
+  // the case's own preferred algorithm (so drilling teaches the real alg,
+  // not whichever alternate happened to build the scramble) — cleaned up via
+  // cleanAlgForDisplay the same way the Library does, and validated (at
+  // build time) to reach the same case up to an allowed rotation. When
+  // there's no verified alt, the scramble was built from `moves` itself, so
+  // the only algebraically exact solution is the paired one
+  // buildTrainerScrambleAndSolution already computed.
+  const displaySolutionAlg = usingValidatedAlt
+    ? simplifyAlg(auf ? `${auf} ${cleanAlgForDisplay(preferredAlg, puzzleKind)}` : cleanAlgForDisplay(preferredAlg, puzzleKind))
+    : exactSolution;
+  const moves = useMemo(() => parseMoves(displaySolutionAlg), [displaySolutionAlg]);
 
   const [revealed, setRevealed] = useState(0);
   const [manualInput, setManualInput] = useState('');

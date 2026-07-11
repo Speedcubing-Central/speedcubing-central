@@ -233,11 +233,11 @@ function relabelSliceThroughPending(letter: string, mag: string, pending: string
   return [l, m];
 }
 
-// Restricts a scramble to only use moves on `allowedFaces` (a subset of
-// R/U/D/L/F/B) — used to keep 2x2 Trainer scrambles to R/U/F. See file
-// header for why this must run on the final scramble text, not an
-// algorithm that's still going to be inverted afterward.
-export function restrictToFaces(alg: string, allowedFaces: Set<string>): string {
+// Shared core of restrictToFaces: also returns the leftover `pending`
+// rotation content, since callers that need to know whether dropping it was
+// actually *safe* (see cleanAlgForDisplay below) can't tell from the output
+// string alone.
+function restrictToFacesCore(alg: string, allowedFaces: Set<string>): { output: string[]; pending: string[] } {
   const pending: string[] = [];
   const output: string[] = [];
   for (const token of alg.trim().split(/\s+/).filter(Boolean)) {
@@ -266,16 +266,20 @@ export function restrictToFaces(alg: string, allowedFaces: Set<string>): string 
     // one), so it's prepended, not appended.
     pending.unshift(rot);
   }
+  return { output, pending };
+}
+
+// Restricts a scramble to only use moves on `allowedFaces` (a subset of
+// R/U/D/L/F/B) — used to keep 2x2 Trainer scrambles to R/U/F. See file
+// header for why this must run on the final scramble text, not an
+// algorithm that's still going to be inverted afterward.
+export function restrictToFaces(alg: string, allowedFaces: Set<string>): string {
+  const { output } = restrictToFacesCore(alg, allowedFaces);
   return simplifyAlg(output.join(' '));
 }
 
-// Eliminates wide moves (Rw/r, Fw/f, ...) from a scramble, replacing each
-// with the opposite outer-layer face plus a compensating rotation pushed
-// through the rest of the scramble the same way restrictToFaces does.
-// Slice moves (M/E/S) aren't reducible to a single outer-layer turn the way
-// a wide move is, so they're never substituted away — but they still get
-// relabeled through any pending rotation, same as everything else.
-export function eliminateWideMoves(alg: string): string {
+// Shared core of eliminateWideMoves — see restrictToFacesCore.
+function eliminateWideMovesCore(alg: string): { output: string[]; pending: string[] } {
   const pending: string[] = [];
   const output: string[] = [];
   for (const rawToken of alg.trim().split(/\s+/).filter(Boolean)) {
@@ -313,7 +317,98 @@ export function eliminateWideMoves(alg: string): string {
     // See restrictToFaces — the compensation is prepended, not appended.
     pending.unshift(rot);
   }
+  return { output, pending };
+}
+
+// Eliminates wide moves (Rw/r, Fw/f, ...) from a scramble, replacing each
+// with the opposite outer-layer face plus a compensating rotation pushed
+// through the rest of the scramble the same way restrictToFaces does.
+// Slice moves (M/E/S) aren't reducible to a single outer-layer turn the way
+// a wide move is, so they're never substituted away — but they still get
+// relabeled through any pending rotation, same as everything else.
+export function eliminateWideMoves(alg: string): string {
+  const { output } = eliminateWideMovesCore(alg);
   return simplifyAlg(output.join(' '));
+}
+
+// Cleans up an algorithm meant to be *displayed and executed directly*
+// (a Trainer solution, or a Library case's diagram-setup source) rather
+// than inverted into a scramble — e.g. resolves "x R2 D2 R U R' D2 R U' R x'"
+// (a real, standard A-perm written with a grip-changing x rotation) down to
+// the equivalent pure-outer-face "R2 B2 R F R' B2 R F' R", so it doesn't
+// display a confusing mid-algorithm rotation.
+//
+// Unlike restrictToFaces/eliminateWideMoves (used for scrambles, where ANY
+// leftover rotation can be safely dropped because the scramble's own
+// resulting pattern — not some other algorithm's ability to solve it — is
+// all that's being judged), relabeling a *solution* through a rotation and
+// then dropping that rotation only reconstructs the *exact same* operation
+// when the rotation fully cancels out (pending ends up empty) — e.g. a
+// leading and trailing rotation on the same axis, like the A-perm example.
+// A single *uncancelled* leading rotation looks harmless by the same
+// "keeps U mapped to U" test, but relabeling-and-dropping it actually
+// produces alg · rotation⁻¹ as an operation — a genuinely different
+// algorithm, verified to solve a different (if related) state — so this
+// only cleans up when pending is fully empty, and returns the alg
+// completely unchanged otherwise rather than silently displaying something
+// that doesn't actually solve the scrambled case shown.
+//
+// `pending` accumulates every rotation token encountered (each `x`/`y`/`z`
+// hit while scanning gets pushed, regardless of what's between it and any
+// later one) — it is never merged as it's built, so a genuinely cancelling
+// pair like the A-perm's leading `x` ... trailing `x'` still leaves two
+// entries in the raw array. Checking `pending.length === 0` therefore missed
+// exactly the paired-rotation case this function's own doc comment above
+// uses as its motivating example — simplifying the joined pending content
+// first (adjacent-move cancellation, same as any other alg) is what actually
+// detects "fully cancels out".
+export function cleanAlgForDisplay(alg: string, puzzle: string): string {
+  const is2x2 = puzzle === '2x2x2';
+  const { output, pending } = is2x2
+    ? restrictToFacesCore(alg, new Set(['U', 'D', 'L', 'R', 'F', 'B']))
+    : eliminateWideMovesCore(alg);
+  return simplifyAlg(pending.join(' ')) === '' ? simplifyAlg(output.join(' ')) : alg;
+}
+
+// Builds an *exactly*-paired {scramble, solution} for a Trainer round from
+// the algorithm actually chosen to scramble with (`solvingAlg` — the picked
+// alt, or `moves` as a fallback, with AUF already prepended). This is the
+// one case where the solution shown must be provably exact (not just "up to
+// an allowed rotation" — see VALID_ALTS) because there's no other, distinct
+// algorithm to fall back on validating against.
+//
+// scramble = eliminateWideMoves(invertAlg(solvingAlg)) drops whatever
+// rotation content is left "pending" once nothing remains to relabel it
+// through (see eliminateWideMoves' doc comment — safe for a scramble, since
+// only the resulting *pattern* is judged). But dropping that pending content
+// changes *which* operation the scramble text represents: writing raw's
+// tokens as scramble ++ pending (pending applied last) means
+// solved.applyAlg(scramble) == solved.applyAlg(raw).applyAlg(invertAlg(pending)),
+// and since raw == invertAlg(solvingAlg) by construction, solvingAlg *alone*
+// is provably NOT the exact inverse of `scramble` whenever pending is
+// non-empty — verified directly against cubing.js (a leading "y" in
+// solvingAlg reliably ends up as trailing "y'" pending, and applying
+// solvingAlg on top of the pending-dropped scramble reaches a conjugate of
+// that rotation, not solved).
+//
+// Solving algebraically for the exact solution X (pending * X == solvingAlg,
+// as operations) gives X = pending ++ solvingAlg — i.e. re-prepending the
+// exact rotation content the scramble step dropped, *not* inverted, cancels
+// it out again (e.g. leading "y" + dropped-pending "y'" -> "y' y ..." ->
+// simplifies away entirely). When pending is empty this reduces to
+// solvingAlg unchanged, so this subsumes the simple case too.
+export function buildTrainerScrambleAndSolution(
+  solvingAlg: string,
+  puzzle: string,
+): { scramble: string; solution: string } {
+  const is2x2 = puzzle === '2x2x2';
+  const raw = invertAlg(solvingAlg);
+  const { output, pending } = is2x2
+    ? restrictToFacesCore(raw, new Set(['R', 'U', 'F']))
+    : eliminateWideMovesCore(raw);
+  const scramble = simplifyAlg(output.join(' '));
+  const solution = simplifyAlg(pending.length > 0 ? `${pending.join(' ')} ${solvingAlg}` : solvingAlg);
+  return { scramble, solution };
 }
 
 // After x2 in experimentalSetupAlg, the cube is visually flipped:
@@ -401,7 +496,13 @@ function spawn3D(
   el.puzzle = puzzle;
   el.visualization = 'PG3D';
   el.alg = '';
-  el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + invertAlg(alg);
+  // cleanAlgForDisplay resolves a grip-changing rotation embedded in `alg`
+  // (e.g. a real A-perm written as "x R2 D2 ... R x'") down to pure
+  // outer-face moves first, whenever that's exact (fully-cancelling — see
+  // its doc comment) — otherwise a case whose source alg happens to use a
+  // rotation for an ergonomic regrip renders its case on the wrong face
+  // here, since `invertAlg` alone doesn't account for it.
+  el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + invertAlg(cleanAlgForDisplay(alg, puzzle));
   const mask = buildStickeringMask(stickering, puzzle);
   if (mask) el.experimentalStickeringMaskOrbits = mask;
 }
