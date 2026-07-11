@@ -19,11 +19,25 @@ export interface CstimerParsedSession {
 // scramble types that produce full, storable solves are mapped — case-
 // drilling types (oll/pll/2gen/easyc/lsll2/wvls/f2l/...) aren't full solves
 // and have no equivalent session here, so they're left unmapped and skipped.
+//
+// cstimer uses distinct scrType codes for OH/BLD, not the plain "333"/
+// "444wca"/"555wca" codes their sighted counterparts use (verified against
+// cstimer's own src/lang/en-us.js scrdata list) — a previous version of
+// this mapping assumed otherwise (that OH/BLD reused the sighted scrType,
+// with only the session *name* distinguishing them), which meant a
+// well-formed cstimer OH or BLD export had no entry here at all: mapEvent
+// returned null, and the caller skips any session with no mapped event —
+// the whole session silently vanished from the import rather than merely
+// landing in the wrong place.
 const SCRTYPE_TO_EVENT: Record<string, string> = {
   '222so': '222',
   '333': '333',
+  '333oh': '333oh',
+  '333ni': '333bf',
   '444wca': '444',
+  '444bld': '444bf',
   '555wca': '555',
+  '555bld': '555bf',
   '666wca': '666',
   '777wca': '777',
   clkwca: 'clock',
@@ -34,9 +48,10 @@ const SCRTYPE_TO_EVENT: Record<string, string> = {
   ftoso: 'fto',
 };
 
-// cstimer uses the plain "333" scramble type for OH and BLD sessions too
-// (same scrambler, different solving method) — the session name is the only
-// signal, so sniff it for those two common cases.
+// Defensive fallback only, for any export where scrType genuinely is the
+// plain "333" but the session is actually OH/BLD (e.g. an older export, or
+// a session someone hand-edited) — see SCRTYPE_TO_EVENT's doc comment for
+// why this is no longer the primary way OH/BLD get recognized.
 function mapEvent(scrType: string, name: string): string | null {
   const base = SCRTYPE_TO_EVENT[scrType];
   if (!base) return null;
