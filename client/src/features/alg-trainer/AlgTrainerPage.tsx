@@ -1221,10 +1221,11 @@ function TrainerTab({
       .catch(() => {});
   }, [setId, isAuthed]);
 
-  // Restore the case selection the user last drilled in this set (if any)
-  // and jump straight into training with it, instead of making them
-  // re-select from scratch every visit — see CaseSelector's "Start
-  // Training" handler below, which is what saves it in the first place.
+  // Fetch the case selection the user last drilled in this set (if any) so
+  // CaseSelector can pre-check it — the user still lands on CaseSelector
+  // every visit and picks "Start Training" themselves; this only saves them
+  // from having to re-check the same boxes again. See CaseSelector's "Start
+  // Training" handler below, which is what saves the selection in the first place.
   useEffect(() => {
     setSessionCases(null);
     setSavedCaseIds(null);
@@ -1233,23 +1234,8 @@ function TrainerTab({
       setSelectionChecked(true);
       return;
     }
-    const set = getSet(setId);
-    if (!set) {
-      setSelectionChecked(true);
-      return;
-    }
     const applySavedIds = (caseIds: string[] | null | undefined) => {
-      if (caseIds && caseIds.length > 0) {
-        setSavedCaseIds(caseIds);
-        const wanted = new Set(caseIds);
-        const restored = set.cases.filter((c) => wanted.has(c.id));
-        // Only auto-start if every saved id still resolves to a real case —
-        // a partial match means the set's case list changed since this
-        // selection was saved, so it's safer to have them re-select (with
-        // whatever's still valid pre-checked, once they open CaseSelector)
-        // than silently drill a different subset than they last chose.
-        if (restored.length === caseIds.length) setSessionCases(restored);
-      }
+      if (caseIds && caseIds.length > 0) setSavedCaseIds(caseIds);
       setSelectionChecked(true);
     };
     if (isAuthed) {
