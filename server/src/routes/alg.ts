@@ -114,4 +114,37 @@ router.put('/pref', async (req, res, next) => {
   }
 });
 
+// GET /api/alg/selection/:setId — the case IDs the user last chose to drill
+// in this set, or null if they've never made a selection here yet.
+router.get('/selection/:setId', async (req, res, next) => {
+  try {
+    const row = await prisma.algSetSelection.findUnique({
+      where: { userId_setId: { userId: req.user!.sub, setId: req.params.setId } },
+    });
+    res.json(row ? { caseIds: row.caseIds } : null);
+  } catch (e) {
+    next(e);
+  }
+});
+
+const selectionSchema = z.object({
+  setId: z.string(),
+  caseIds: z.array(z.string()).min(1),
+});
+
+// PUT /api/alg/selection — upsert the case selection for a set
+router.put('/selection', async (req, res, next) => {
+  try {
+    const { setId, caseIds } = selectionSchema.parse(req.body);
+    const saved = await prisma.algSetSelection.upsert({
+      where: { userId_setId: { userId: req.user!.sub, setId } },
+      update: { caseIds },
+      create: { userId: req.user!.sub, setId, caseIds },
+    });
+    res.json({ caseIds: saved.caseIds });
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

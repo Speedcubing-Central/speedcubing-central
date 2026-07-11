@@ -18,6 +18,7 @@ import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering, twoByTwoStickering } from './algDiagram';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
+import { guestAlgSelectionStore } from './algLocalStore';
 import { TrainerSettings } from './TrainerSettings';
 import { AlgSolveDetail } from './AlgSolveDetail';
 import { SET_TO_URL, URL_TO_SET } from './algUrls';
@@ -479,19 +480,25 @@ function CaseBrowser({
 
 // Case selection screen
 function CaseSelector({
-  setId, prefs, onStart, onBack,
+  setId, prefs, onStart, onBack, initialSelectedIds,
 }: {
   setId: string;
   prefs: PrefsMap;
   onStart: (cases: AlgCase[]) => void;
   onBack: () => void;
+  // Pre-check the last-saved selection (see TrainerTab) instead of
+  // defaulting to every case, so revisiting this screen to tweak a
+  // selection starts from what was actually last drilled.
+  initialSelectedIds?: string[] | null;
 }) {
   const set = getSet(setId)!;
   const hasGroups = useMemo(() => set.cases.some((c) => c.group), [set]);
   const groups = useMemo(() => Array.from(new Set(set.cases.map((c) => c.group))), [set]);
   const [statusFilter, setStatusFilter] = useState<AlgStatus | 'All'>('All');
   const [groupFilter, setGroupFilter] = useState('All');
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(set.cases.map((c) => c.id)));
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(initialSelectedIds && initialSelectedIds.length > 0 ? initialSelectedIds : set.cases.map((c) => c.id)),
+  );
 
   const visible = useMemo(() => {
     let list = groupFilter === 'All' ? set.cases : set.cases.filter((c) => c.group === groupFilter);
@@ -1147,9 +1154,14 @@ function TrainerTab({
   const navigate = useNavigate();
   const [sessionCases, setSessionCases] = useState<AlgCase[] | null>(null);
   const [prefs, setPrefs] = useState<PrefsMap>({});
-
-  // Clear active session when the set changes
-  useEffect(() => { setSessionCases(null); }, [puzzle, setId]);
+  // Gates rendering CaseSelector until we know whether a saved selection
+  // exists for this set — otherwise it'd flash empty/all-selected for a
+  // moment before jumping into a restored session.
+  const [selectionChecked, setSelectionChecked] = useState(false);
+  // Kept separately from sessionCases so CaseSelector can still pre-check
+  // the last-saved selection when the user goes back to "Cases" to tweak
+  // it, even though sessionCases itself gets cleared to show that screen.
+  const [savedCaseIds, setSavedCaseIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!setId || !isAuthed) return;
@@ -1161,6 +1173,57 @@ function TrainerTab({
       })
       .catch(() => {});
   }, [setId, isAuthed]);
+
+  // Restore the case selection the user last drilled in this set (if any)
+  // and jump straight into training with it, instead of making them
+  // re-select from scratch every visit — see CaseSelector's "Start
+  // Training" handler below, which is what saves it in the first place.
+  useEffect(() => {
+    setSessionCases(null);
+    setSavedCaseIds(null);
+    setSelectionChecked(false);
+    if (!setId) {
+      setSelectionChecked(true);
+      return;
+    }
+    const set = getSet(setId);
+    if (!set) {
+      setSelectionChecked(true);
+      return;
+    }
+    const applySavedIds = (caseIds: string[] | null | undefined) => {
+      if (caseIds && caseIds.length > 0) {
+        setSavedCaseIds(caseIds);
+        const wanted = new Set(caseIds);
+        const restored = set.cases.filter((c) => wanted.has(c.id));
+        // Only auto-start if every saved id still resolves to a real case —
+        // a partial match means the set's case list changed since this
+        // selection was saved, so it's safer to have them re-select (with
+        // whatever's still valid pre-checked, once they open CaseSelector)
+        // than silently drill a different subset than they last chose.
+        if (restored.length === caseIds.length) setSessionCases(restored);
+      }
+      setSelectionChecked(true);
+    };
+    if (isAuthed) {
+      api.get<{ caseIds: string[] } | null>(`/alg/selection/${setId}`)
+        .then((r) => applySavedIds(r.data?.caseIds))
+        .catch(() => setSelectionChecked(true));
+    } else {
+      applySavedIds(guestAlgSelectionStore.get(setId));
+    }
+  }, [setId, isAuthed]);
+
+  function saveSelection(cases: AlgCase[]) {
+    if (!setId) return;
+    const caseIds = cases.map((c) => c.id);
+    setSavedCaseIds(caseIds);
+    if (isAuthed) {
+      api.put('/alg/selection', { setId, caseIds }).catch(() => {});
+    } else {
+      guestAlgSelectionStore.set(setId, caseIds);
+    }
+  }
 
   if (!puzzle) {
     return (
@@ -1179,6 +1242,9 @@ function TrainerTab({
       />
     );
   }
+  if (!selectionChecked) {
+    return <div className="p-8 text-muted text-sm">Loading…</div>;
+  }
   if (sessionCases) {
     return (
       <TrainingSession
@@ -1194,8 +1260,12 @@ function TrainerTab({
     <CaseSelector
       setId={setId}
       prefs={prefs}
+      initialSelectedIds={savedCaseIds}
       onBack={() => navigate(`/algorithms/trainer/${puzzle}`)}
-      onStart={(cases) => setSessionCases(cases)}
+      onStart={(cases) => {
+        saveSelection(cases);
+        setSessionCases(cases);
+      }}
     />
   );
 }

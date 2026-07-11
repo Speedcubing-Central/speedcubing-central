@@ -65,3 +65,31 @@ export const guestAlgStore = {
     write(data);
   },
 };
+
+// Guest persistence of which cases were last selected to drill in a set —
+// separate key from solves since it's a different concern (one snapshot per
+// set, not an append-only history).
+const SELECTION_KEY = 'scc-guest-alg-selection';
+
+type GuestSelectionData = Record<string, string[]>; // setId -> caseIds
+
+function readSelection(): GuestSelectionData {
+  try {
+    const raw = localStorage.getItem(SELECTION_KEY);
+    if (raw) return JSON.parse(raw) as GuestSelectionData;
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+export const guestAlgSelectionStore = {
+  get(setId: string): string[] | null {
+    return readSelection()[setId] ?? null;
+  },
+  set(setId: string, caseIds: string[]) {
+    const data = readSelection();
+    data[setId] = caseIds;
+    localStorage.setItem(SELECTION_KEY, JSON.stringify(data));
+  },
+};

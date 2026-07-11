@@ -42,6 +42,7 @@ model User {
   algProgress   AlgProgress[]
   algPrefs      UserAlgPref[]
   algSolves     AlgSolve[]
+  algSelections AlgSetSelection[]
   reconstructions Reconstruction[]
 
   @@index([wcaId])
@@ -146,6 +147,21 @@ model UserAlgPref {
 
   @@unique([userId, setId, caseId])
   @@index([userId, setId])
+}
+
+// Which cases a user last chose to drill within one algorithm set (Trainer
+// tab's "Select Cases" screen) — restored on their next visit so they can
+// jump straight into training instead of re-picking from scratch.
+model AlgSetSelection {
+  id        String   @id @default(cuid())
+  userId    String
+  setId     String
+  caseIds   String[]
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, setId])
 }
 
 // Spaced repetition progress for algorithm trainer (SM-2)
