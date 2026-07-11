@@ -471,6 +471,31 @@ function buildStickeringMask(kind: StickeringKind, puzzle: string): unknown {
   return null;
 }
 
+// Resolves the moves to hand to `experimentalSetupAlg` for a case: starts
+// from an authoritative `setup` (from SETUP_ALGS, sourced from SpeedCubeDB
+// and verified against our own `moves` at build time — see
+// scripts/generate-setup-algs.ts) when the caller has one, since it's real
+// data rather than something derived by inverting `alg`; otherwise falls
+// back to invertAlg(alg).
+//
+// Either way, the result is run through cleanAlgForDisplay before use here
+// — this is NOT optional even for the authoritative setup, which routinely
+// includes a real, grip-changing rotation (e.g. Ab Perm's setup is
+// literally "x R' U' R' D2 R U' R' D2 R2 x'", matching how SpeedCubeDB
+// itself writes it, and how a solver would actually type it in with a
+// regrip). That's completely valid notation for a *person* to execute — the
+// leading/trailing x cancels out through their own physical regrip — but
+// composed with the `'x2 ' + ...` prefix this function's callers add for
+// camera framing, the embedded rotation does NOT cancel the same way for a
+// *fixed camera*: verified directly against cubing.js that leaving it
+// unresolved renders a case with twisted (not just permuted) corners and
+// pieces split across the wrong position groups. cleanAlgForDisplay
+// resolves it to the equivalent pure-outer-face form first, which composes
+// correctly with the camera-framing prefix.
+function resolveSetupMoves(alg: string, puzzle: string, setup?: string): string {
+  return cleanAlgForDisplay(setup ?? invertAlg(alg), puzzle);
+}
+
 function spawn3D(
   container: HTMLDivElement,
   alg: string,
@@ -480,6 +505,7 @@ function spawn3D(
   puzzle = '3x3x3',
   diagramPrefix = '',
   stickering: StickeringKind = 'full',
+  setup?: string,
 ) {
   while (container.firstChild) container.removeChild(container.firstChild);
   if (!alg) return;
@@ -496,32 +522,26 @@ function spawn3D(
   el.puzzle = puzzle;
   el.visualization = 'PG3D';
   el.alg = '';
-  // cleanAlgForDisplay resolves a grip-changing rotation embedded in `alg`
-  // (e.g. a real A-perm written as "x R2 D2 ... R x'") down to pure
-  // outer-face moves first, whenever that's exact (fully-cancelling — see
-  // its doc comment) — otherwise a case whose source alg happens to use a
-  // rotation for an ergonomic regrip renders its case on the wrong face
-  // here, since `invertAlg` alone doesn't account for it.
-  el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + invertAlg(cleanAlgForDisplay(alg, puzzle));
+  el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + resolveSetupMoves(alg, puzzle, setup);
   const mask = buildStickeringMask(stickering, puzzle);
   if (mask) el.experimentalStickeringMaskOrbits = mask;
 }
 
-export function OllDiagram({ alg, size = 80 }: { alg: string; size?: number }) {
+export function OllDiagram({ alg, size = 80, setup }: { alg: string; size?: number; setup?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'oll'); }, [alg, size]);
+  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'oll', setup); }, [alg, size, setup]);
   return <div ref={ref} style={{ width: size, height: size }} />;
 }
 
-export function PllDiagram({ alg, size = 80 }: { alg: string; size?: number }) {
+export function PllDiagram({ alg, size = 80, setup }: { alg: string; size?: number; setup?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'pll'); }, [alg, size]);
+  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'pll', setup); }, [alg, size, setup]);
   return <div ref={ref} style={{ width: size, height: size }} />;
 }
 
-export function CollDiagram({ alg, size = 80 }: { alg: string; size?: number }) {
+export function CollDiagram({ alg, size = 80, setup }: { alg: string; size?: number; setup?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'coll'); }, [alg, size]);
+  useEffect(() => { if (ref.current) spawn3D(ref.current, alg, size, 72, 25, '3x3x3', '', 'coll', setup); }, [alg, size, setup]);
   return <div ref={ref} style={{ width: size, height: size }} />;
 }
 
@@ -538,13 +558,15 @@ export function TwoByTwoDiagram({ alg, size = 80, diagramPrefix = '', stickering
 }
 
 export function RotatingCaseDiagram({
-  alg, size = 280, defaultLat = 30, puzzle = '3x3x3', diagramPrefix = '', stickering = 'full' as StickeringKind, resetSignal = 0,
+  alg, size = 280, defaultLat = 30, puzzle = '3x3x3', diagramPrefix = '', stickering = 'full' as StickeringKind, resetSignal = 0, setup,
 }: {
   alg: string; size?: number; defaultLat?: number; puzzle?: string; diagramPrefix?: string; stickering?: StickeringKind;
   // Bumping this (e.g. from a "Reset Perspective" button elsewhere on the
   // page) snaps the camera back to its default angle without remounting the
   // twisty-player element.
   resetSignal?: number;
+  // Authoritative setup override — see resolveSetupMoves.
+  setup?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const elRef = useRef<TwistyEl | null>(null);
@@ -574,7 +596,7 @@ export function RotatingCaseDiagram({
     el.puzzle = puzzle;
     el.visualization = 'PG3D';
     el.alg = '';
-    el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + invertAlg(alg);
+    el.experimentalSetupAlg = (diagramPrefix ? diagramPrefix + ' ' : '') + 'x2 ' + resolveSetupMoves(alg, puzzle, setup);
     const mask = buildStickeringMask(stickering, puzzle);
     if (mask) el.experimentalStickeringMaskOrbits = mask;
 
@@ -583,7 +605,7 @@ export function RotatingCaseDiagram({
       wrap.innerHTML = '';
       elRef.current = null;
     };
-  }, [alg, size, stickering]);
+  }, [alg, size, stickering, setup]);
 
   // Camera stays wherever the user last dragged it (no idle auto-spin) until
   // this resets it — either on mount, or when the caller bumps resetSignal.

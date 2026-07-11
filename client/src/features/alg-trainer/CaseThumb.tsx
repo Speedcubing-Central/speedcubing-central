@@ -3,14 +3,16 @@ import {
 } from '../../components/CubeDiagram';
 import type { AlgCase, AlgSet } from '../../data/algSets';
 import { IS_2x2, twoByTwoStickering } from './algDiagram';
+import { SETUP_ALGS } from '../../data/setupAlgs.generated';
 
 // Small static case thumbnail — used wherever a case needs a quick visual
 // reference (stats table rows, solve history) without the personalized
 // preferred-alg resolution the live trainer/library views use.
 export function CaseThumb({ c, set, size = 48 }: { c: AlgCase; set: AlgSet; size?: number }) {
-  if (set.kind === 'pll') return <PllDiagram alg={c.moves} size={size} />;
-  if (set.kind === 'oll') return <OllDiagram alg={c.moves} size={size} />;
-  if (set.kind === 'coll') return <CollDiagram alg={c.moves} size={size} />;
+  const setup = SETUP_ALGS[c.id];
+  if (set.kind === 'pll') return <PllDiagram alg={c.moves} size={size} setup={setup} />;
+  if (set.kind === 'oll') return <OllDiagram alg={c.moves} size={size} setup={setup} />;
+  if (set.kind === 'coll') return <CollDiagram alg={c.moves} size={size} setup={setup} />;
   if (IS_2x2(set.kind)) {
     return <TwoByTwoDiagram alg={c.moves} size={size} diagramPrefix={c.diagramPrefix} stickering={twoByTwoStickering(set.kind)} />;
   }

@@ -18,6 +18,7 @@ import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering } from './algDiagram';
 import { VALID_ALTS } from '../../data/validAlts.generated';
+import { SETUP_ALGS } from '../../data/setupAlgs.generated';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { useTimerEngine, type TimerPhase } from '../timer/useTimerEngine';
@@ -272,6 +273,14 @@ function CaseModal({
   const currentPref = pref?.preferredAlg ?? null;
   const currentStatus: AlgStatus = pref?.status ?? 'NEW';
   const displayAlg = effectiveAlg(c, pref);
+  const puzzleKind = IS_2x2(set.kind) ? '2x2x2' : '3x3x3';
+  // The authoritative setup (from SpeedCubeDB, verified against c.moves —
+  // see setupAlgs.generated.ts) is tied to the case's own `moves`, not
+  // whichever alt the user may have set as preferred, but it still shows
+  // the case correctly regardless — the case is the same either way, only
+  // the notation used to solve it differs. Falls back to deriving one from
+  // whatever's currently displayed when SpeedCubeDB doesn't cover this set.
+  const setupAlg = SETUP_ALGS[c.id] ?? invertAlg(cleanAlgForDisplay(displayAlg, puzzleKind));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -310,15 +319,16 @@ function CaseModal({
             alg={displayAlg}
             size={280}
             defaultLat={30}
-            puzzle={IS_2x2(set.kind) ? '2x2x2' : '3x3x3'}
+            puzzle={puzzleKind}
             diagramPrefix={c.diagramPrefix}
             stickering={rotatingStickering(set.kind)}
+            setup={SETUP_ALGS[c.id]}
           />
         </div>
 
         <div>
           <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Setup (apply to solved cube)</div>
-          <AlgChip alg={invertAlg(cleanAlgForDisplay(displayAlg, IS_2x2(set.kind) ? '2x2x2' : '3x3x3'))} />
+          <AlgChip alg={setupAlg} />
         </div>
 
         {/* Main algorithm — shows the current preferred (or default) */}
@@ -967,7 +977,7 @@ function TrainingLeftColumn({
 
   return (
     <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
-      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} />
+      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} setup={SETUP_ALGS[currentCase.id]} />
 
       <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
         {/* Move reveal */}

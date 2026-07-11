@@ -1,0 +1,855 @@
+OLL 1
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+F R' F' R U2' F R' F' R2' U2' R'
+Standard Alg:
+(R U2 R') (R' F R F') U2 (R' F R F')
+R U2 R2 F R F' U2 R' F R F'
+y R U' R2 D' r U' r' D R2 U R'
+f R U R' U' R f' U' r' U' R U M'
+L' U2 L2 F' L' F U2 L F' L' F
+More Algorithms
+OLL 2
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+f U R U' R' f' F U R U' R' F'
+Standard Alg:
+F (R U R' U') F' f (R U R' U') f'
+y' R U' R2 D' r U r' D R2 U R'
+F R U R' U' S R U R' U' f'
+F R U R' U' F' f R U R' U' f'
+y r U r' U2 R U2 R' U2 r U' r'
+More Algorithms
+OLL 3
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+F U R U' R' F' U f U R U' R' f' y
+Standard Alg:
+y' f (R U R' U') f' (U') F (R U R' U') F'
+y' f R U R' U' f' U' F R U R' U' F'
+y R' F2 R2 U2 R' F R U2 R2 F2 R
+r' R2 U R' U r U2 r' U M'
+M R U R' U r U2 r' U M'
+More Algorithms
+OLL 4
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+F U R U' R' F' U' f U R U' R' f' y
+Standard Alg:
+y' f (R U R' U') f' (U) F (R U R' U') F'
+y' R' F2 R2 U2 R' F' R U2 R2 F2 R
+y' f R U R' U' f' U F R U R' U' F'
+R' F R F' U' S R' U' R U R S'
+y F U R U' R' F' U' F R U R' U' F'
+More Algorithms
+OLL 5
+3x3
+-
+OLL
+-
+Square Shapes
+setup:
+r' U' R U' R' U2' r
+Standard Alg:
+r' U2 (R U R' U) r
+r' U2 R U R' U r
+y2 l' U2 L U L' U l
+y2 R' F2 r U r' F R
+y2 R' F2 L F L' F R
+More Algorithms
+OLL 6
+3x3
+-
+OLL
+-
+Square Shapes
+setup:
+r U R' U R U2' r'
+Standard Alg:
+r U2 (R' U' R U') r'
+r U2 R' U' R U' r'
+F U' R2 D R' U' R D' R2 U F'
+y2 l U2 L' U' L U' l'
+y' x' D R2 U' R' U R' D' x
+More Algorithms
+OLL 7
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+r U2' R' U' R U' r'
+Standard Alg:
+r (U R' U R) U2 r'
+r U R' U R U2 r'
+S' R U R' U R U2 R' U S
+L' U2 L U2 L F' L' F
+y2 l U L' U L U2 l'
+More Algorithms
+OLL 8
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+r' U2' R U R' U r y2'
+Standard Alg:
+y2 r' (U' R U' R') U2 r
+y2 r' U' R U' R' U2 r
+l' U' L U' L' U2 l
+R U2 R' U2 R' F R F'
+R' F' r U' r' F2 R
+More Algorithms
+OLL 9
+3x3
+-
+OLL
+-
+Fish Shapes
+setup:
+F U R U' R2' F' R U R U' R' y'
+Standard Alg:
+y (R U R' U') (R' F R) (R U R' U') F'
+y R U R' U' R' F R2 U R' U' F'
+R U2 R' U' S' R U' R' S
+y2 F' U' F r U' r' U r U r'
+y' L' U' L U' L F' L' F L' U2 L
+More Algorithms
+OLL 10
+3x3
+-
+OLL
+-
+Fish Shapes
+setup:
+R U2' R' F R' F' R U' R U' R'
+Standard Alg:
+(R U R' U) (R' F R F') (R U2 R')
+R U R' U R' F R F' R U2 R'
+y F U F' R' F R U' R' F' R
+y M' R' U2 R U R' U R U M
+y2 L' U' L U L F' L2 U' L U F
+More Algorithms
+OLL 11
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+M U' R U2' R' U' R U' R2' r
+Standard Alg:
+M (R U R' U R U2 R') U M'
+r' R2 U R' U R U2 R' U M'
+y2 r U R' U R' F R F' R U2 r'
+S R U R' U R U2 R' U2 S'
+M R U R' U R U2 R' U M'
+More Algorithms
+OLL 12
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+F U R U' R' F' U' F U R U' R' F'
+Standard Alg:
+y' M' (R' U' R U' R' U2 R) U' M
+y' M' R' U' R U' R' U2 R U' M
+F R U R' U' F' U F R U R' U' F'
+y' S R' U' R U' R' U2 R U2 S'
+y M L' U' L U' L' U2 L U' M'
+More Algorithms
+OLL 13
+3x3
+-
+OLL
+-
+Knight Move Shapes
+setup:
+F' U' F r U' r' U r U r'
+Standard Alg:
+(r U' r') U' (r U r') (F' U F)
+F U R U2 R' U' R U R' F'
+F U R U' R2 F' R U R U' R'
+r U' r' U' r U r' F' U F
+y2 f R U R2 U' R' U R U' f'
+More Algorithms
+OLL 14
+3x3
+-
+OLL
+-
+Knight Move Shapes
+setup:
+F U F' R' F R U' R' F' R
+Standard Alg:
+R' F (R U R') F' R (F U' F')
+R' F R U R' F' R F U' F'
+r U R' U' r' F R2 U R' U' F'
+l' U l U l' U' l F U' F'
+F' U' L' U L2 F L' U' L' U L
+More Algorithms
+OLL 15
+3x3
+-
+OLL
+-
+Knight Move Shapes
+setup:
+r' U' r U' R' U R r' U r
+Standard Alg:
+(r' U' r) (R' U' R U) (r' U r)
+r' U' r R' U' R U r' U r
+y2 l' U' l L' U' L U l' U l
+r' U' M' U' R U r' U r
+y2 R' F' R L' U' L U R' F R
+More Algorithms
+OLL 16
+3x3
+-
+OLL
+-
+Knight Move Shapes
+setup:
+r U r' U R U' R' r U' r'
+Standard Alg:
+(r U r') (R U R' U') (r U' r')
+r U r' R U R' U' r U' r'
+r U M U R' U' r U' r'
+y2 R' F R U R' U' F' R U' R' U2 R
+y2 l U l' L U L' U' l U' l'
+More Algorithms
+OLL 17
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+F R' F' R U2' F R' F' R U' R U' R'
+Standard Alg:
+(R U R' U) (R' F R F') U2 (R' F R F')
+R U R' U R' F R F' U2 R' F R F'
+y2 F R' F' R U S' R U' R' S
+y2 F R' F' R2 r' U R U' R' U' M'
+y' F' r U r' U' S r' F r S'
+More Algorithms
+OLL 18
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+r' U2' R U R' U r2' U2' R' U' R U' r'
+Standard Alg:
+y (R U2 R') (R' F R F') U2 M' (U R U' r')
+y R U2 R2 F R F' U2 M' U R U' r'
+r U R' U R U2 r2 U' R U' R' U2 r
+y F S' R U' R' S R U2 R' U' F'
+R D r' U' r D' R' U' R2 F R F' R
+More Algorithms
+OLL 19
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+F R' F' R M U R U' R' U' M'
+Standard Alg:
+M U (R U R' U') M' (R' F R F')
+y S' R U R' S U' R' F R F'
+M U R U R' U' M' R' F R F'
+R' U2 F R U R' U' F2 U2 F R
+r' R U R U R' U' r R2 F R F'
+More Algorithms
+OLL 20
+3x3
+-
+OLL
+-
+Dot Case
+setup:
+r U R' U' M2' U R U' R' U' M'
+Standard Alg:
+(r U R' U') M2 (U R U' R') U' M'
+r U R' U' M2 U R U' R' U' M'
+M' U2 M U2 M' U M U2 M' U2 M
+S' R U R' S U' M' U R U' r'
+S R' U' R U R U R U' R' S'
+More Algorithms
+OLL 21
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R U R' U R U' R' U R U2' R' y'
+Standard Alg:
+(R U R' U) (R U' R' U) (R U2 R')
+R U R' U R U' R' U R U2 R'
+y R U2 R' U' R U R' U' R U' R'
+y F R U R' U' R U R' U' R U R' U' F'
+R' U' R U' R' U R U' R' U2 R
+More Algorithms
+OLL 22
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R' U2' R2' U R2' U R2' U2' R'
+Standard Alg:
+R U2 (R2' U') (R2 U') (R2' U') U' R
+R U2 R2 U' R2 U' R2 U2 R
+R' U2 R2 U R2 U R2 U2 R'
+f R U R' U' S' R U R' U' F'
+f R U R' U' f' F R U R' U' F'
+More Algorithms
+OLL 23
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R U2' R D R' U2' R D' R2'
+Standard Alg:
+R2 D (R' U2 R) D' (R' U2 R')
+R2 D R' U2 R D' R' U2 R'
+y2 R2 D' R U2 R' D R U2 R
+R U R' U R U2 R2 U' R U' R' U2 R
+y R U R' U' R U' R' U2 R U' R' U2 R U R'
+More Algorithms
+OLL 24
+3x3
+-
+OLL
+-
+OCLL
+setup:
+F R' F' r U R U' r'
+Standard Alg:
+(r U R' U') (r' F R F')
+r U R' U' r' F R F'
+y2 R' F' r U R U' r' F
+y' x' R U R' D R U' R' D' x
+y R U R D R' U' R D' R2
+More Algorithms
+OLL 25
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R' F' r U R U' r' F y'
+Standard Alg:
+y (F' r U R') (U' r' F R)
+R U2 R D R' U2 R D' R2
+y F' r U R' U' r' F R
+F R' F' r U R U' r'
+x R' U R D' R' U' R D x'
+More Algorithms
+OLL 26
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R U R' U R U2' R' y'
+Standard Alg:
+y R U2 (R' U' R U') R'
+y R U2 R' U' R U' R'
+R' U' R U' R' U2 R
+y2 L' U' L U' L' U2 L
+y2 L' U R U' L U R'
+More Algorithms
+OLL 27
+3x3
+-
+OLL
+-
+OCLL
+setup:
+R U2' R' U' R U' R'
+Standard Alg:
+(R U R' U) (R U2 R')
+R U R' U R U2 R'
+y' R' U2 R U R' U R
+y L' U2 L U L' U L
+y2 L U L' U L U2 L'
+More Algorithms
+OLL 28
+3x3
+-
+OLL
+-
+All Corners Oriented
+setup:
+R U R' U' M' U R U' r'
+Standard Alg:
+(r U R' U') M (U R U' R')
+r U R' U' M U R U' R'
+R' F R S R' F' R S'
+r U R' U' r' R U R U' R'
+y2 M' U M U2 M' U M
+More Algorithms
+OLL 29
+3x3
+-
+OLL
+-
+Awkward Shapes
+setup:
+M F R' F' R U R U' R' U' M'
+Standard Alg:
+y (R U R') U' (R U' R') (F' U' F) (R U R')
+r2 D' r U r' D r2 U' r' U' r
+y R U R' U' R U' R' F' U' F R U R'
+y S' R U R' U' R' F R F' U S
+M U R U R' U' R' F R F' M'
+More Algorithms
+OLL 30
+3x3
+-
+OLL
+-
+Awkward Shapes
+setup:
+F U R U2' R' U R U2' R' U' F' y2'
+Standard Alg:
+y2 F U (R U2 R') U' (R U2 R') U' F'
+y' r' D' r U' r' D r2 U' r' U r U r'
+y2 F U R U2 R' U' R U2 R' U' F'
+y2 F R' F R2 U' R' U' R U R' F2
+y S' R' U' R f R' U R U' F'
+More Algorithms
+OLL 31
+3x3
+-
+OLL
+-
+P Shapes
+setup:
+R' F R U R' U' F' U R
+Standard Alg:
+(R' U' F) (U R U' R') F' R
+R' U' F U R U' R' F' R
+y2 S' L' U' L U L F' L' f
+y S R U R' U' f' U' F
+y' F R' F' R U R U R' U' R U' R'
+More Algorithms
+OLL 32
+3x3
+-
+OLL
+-
+P Shapes
+setup:
+f R' F' R U R U' R' S'
+Standard Alg:
+S (R U R' U') (R' F R f')
+S R U R' U' R' F R f'
+y2 L U F' U' L' U L F L'
+R U B' U' R' U R B R'
+y' R' F R F' U' r U' r' U r U r'
+More Algorithms
+OLL 33
+3x3
+-
+OLL
+-
+T Shapes
+setup:
+F R' F' R U R U' R'
+Standard Alg:
+(R U R' U') (R' F R F')
+R U R' U' R' F R F'
+y2 L' U' L U L F' L' F
+y2 r' F' r U r U' r' F
+R U R' F' U' F R U' R'
+More Algorithms
+OLL 34
+3x3
+-
+OLL
+-
+C Shapes
+setup:
+F U R' U' R' F' R U R2' U' R' y2'
+Standard Alg:
+y2 R U R2 U' R' F (R U R U') F'
+y f R f' U' r' U' R U M'
+y2 R U R2 U' R' F R U R U' F'
+F R U R' U' R' F' r U R U' r'
+y2 R U R' U' B' R' F R F' B
+More Algorithms
+OLL 35
+3x3
+-
+OLL
+-
+Fish Shapes
+setup:
+R U2' R' F R' F' R2' U2' R'
+Standard Alg:
+(R U2 R') (R' F R F') (R U2 R')
+R U2 R2 F R F' R U2 R'
+f R U R' U' f' R U R' U R U2 R'
+R U2 R' d' R' F R U' R' F' R
+y L' U2 L2 F' L' F L' U2 L
+More Algorithms
+OLL 36
+3x3
+-
+OLL
+-
+W Shapes
+setup:
+F' L F L' U' L' U' L U L' U L y2'
+Standard Alg:
+y2 (L' U' L U') (L' U L U) (L F' L' F)
+y R U R2 F' U' F U R2 U2 R'
+y2 L' U' L U' L' U L U L F' L' F
+y2 R U R' F' R U R' U' R' F R U' R' F R F'
+y2 R' F' U' F2 U R U' R' F' R
+More Algorithms
+OLL 37
+3x3
+-
+OLL
+-
+Fish Shapes
+setup:
+F R U' R' U R U R' F'
+Standard Alg:
+F R (U' R' U') (R U R') F'
+F R' F' R U R U' R'
+F R U' R' U' R U R' F'
+y F' r U r' U' r' F r
+y2 r2 D' r U' r' D r U r
+More Algorithms
+OLL 38
+3x3
+-
+OLL
+-
+W Shapes
+setup:
+F R' F' R U R U R' U' R U' R'
+Standard Alg:
+(R U R' U) (R U' R' U') (R' F R F')
+R U R' U R U' R' U' R' F R F'
+y F R U' R' S U' R U R' f'
+r U R' U' r' F R U R U' R' F'
+y2 L U L' U L U' L' U' L' B L B'
+More Algorithms
+OLL 39
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+L U F' U' L' U L F L' y'
+Standard Alg:
+y L F' (L' U' L U) F U' L'
+y' f' r U r' U' r' F r S
+y' R U R' F' U' F U R U2 R'
+y L F' L' U' L U F U' L'
+y' f' L F L' U' L' U L S
+More Algorithms
+OLL 40
+3x3
+-
+OLL
+-
+Lightning Shapes
+setup:
+R' U' F U R U' R' F' R y'
+Standard Alg:
+y R' F (R U R' U') F' U R
+y R' F R U R' U' F' U R
+y' f R' F' R U R U' R' S'
+R r D r' U r D' r' U' R'
+y' L' U' L F U F' U' L' U2 L
+More Algorithms
+OLL 41
+3x3
+-
+OLL
+-
+Awkward Shapes
+setup:
+F U R U' R' F' R U2' R' U' R U' R' y2'
+Standard Alg:
+y2 (R U R' U) (R U2 R') F (R U R' U') F'
+y2 R U R' U R U2 R' F R U R' U' F'
+y2 F U R2 D R' U' R D' R2 F'
+y' S U' R' F' U' F U R S'
+M U' F' L' U' L U F M'
+More Algorithms
+OLL 42
+3x3
+-
+OLL
+-
+Awkward Shapes
+setup:
+F U R U' R' F' R' U2' R U R' U R
+Standard Alg:
+(R' U' R U') (R' U2 R) F (R U R' U') F'
+R' U' R U' R' U2 R F R U R' U' F'
+y F S' R U R' U' F' U S
+y R' F R F' R' F R F' R U R' U' R U R'
+y R' U' F2 u' R U R' D R2 B
+More Algorithms
+OLL 43
+3x3
+-
+OLL
+-
+P Shapes
+setup:
+f' U' L' U L f
+Standard Alg:
+y R' U' (F' U F) R
+y R' U' F' U F R
+y2 F' U' L' U L F
+f' L' U' L U f
+B' U' R' U R B
+More Algorithms
+OLL 44
+3x3
+-
+OLL
+-
+P Shapes
+setup:
+f U R U' R' f'
+Standard Alg:
+f (R U R' U') f'
+f R U R' U' f'
+y2 F U R U' R' F'
+y R U B U' B' R'
+y' L U F U' F' L'
+More Algorithms
+OLL 45
+3x3
+-
+OLL
+-
+T Shapes
+setup:
+F U R U' R' F'
+Standard Alg:
+F (R U R' U') F'
+F R U R' U' F'
+y R' F' U' F U R
+y2 f U R U' R' f'
+y2 F' L' U' L U F
+More Algorithms
+OLL 46
+3x3
+-
+OLL
+-
+C Shapes
+setup:
+R' U' F R' F' R U R
+Standard Alg:
+R' U' (R' F R F') U R
+R' U' R' F R F' U R
+R' F' U' F R U' R' U2 R
+y F R U R' U' F' U' R U R' U R U2 R'
+l' U2 L2 F' L' F U L' U l
+More Algorithms
+OLL 47
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+F' U' L' U L U' L' U L F
+Standard Alg:
+F' (L' U' L U) (L' U' L U) F
+y' F R' F' R U2 R U' R' U R U2 R'
+F' L' U' L U L' U' L U F
+R' U' R' F R F' R' F R F' U R
+y' R' F' U' F U F' U' F U R
+More Algorithms
+OLL 48
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+F U R U' R' U R U' R' F'
+Standard Alg:
+F (R U R' U') (R U R' U') F'
+F R U R' U' R U R' U' F'
+y2 f U R U' R' U R U' R' f'
+R U2 R' U' R U R' U2 R' F R F'
+F R' F' U2 R U R' U R2 U2 R'
+More Algorithms
+OLL 49
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+r' U r2' U' r2' U' r2' U r' y2'
+Standard Alg:
+y2 r U' (r2 U) (r2 U) (r2) U' r
+y2 r U' r2 U r2 U r2 U' r
+l U' l2 U l2 U l2 U' l
+R B' R2 F R2 B R2 F' R
+y2 R' F R' F' R2 U2 B' R B R'
+More Algorithms
+OLL 50
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+r U' r2' U r2' U r2' U' r
+Standard Alg:
+r' U (r2 U') (r2 U') (r2) U r'
+r' U r2 U' r2 U' r2 U r'
+y2 R' F R2 B' R2 F' R2 B R'
+y' R U2 R' U' R U' R' F R U R' U' F'
+y2 l' U l2 U' l2 U' l2 U l'
+More Algorithms
+OLL 51
+3x3
+-
+OLL
+-
+Line Shapes
+setup:
+f U R U' R' U R U' R' f'
+Standard Alg:
+f (R U R' U') (R U R' U') f'
+y2 F U R U' R' U R U' R' F'
+f R U R' U' R U R' U' f'
+y' R' U' R' F R F' R U' R' U2 R
+y r' F' U' F U F' U' F U r
+More Algorithms
+OLL 52
+3x3
+-
+OLL
+-
+Line Shapes
+setup:
+F R U R' d R' U' R U' R'
+Standard Alg:
+y2 R' (F' U' F U') (R U R' U) R
+y2 R' F' U' F U' R U R' U R
+R U R' U R U' B U' B' R'
+R U R' U R d' R U' R' F'
+R U R' U R U' y R U' R' F'
+More Algorithms
+OLL 53
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+r' U2' R U R' U' R U R' U r
+Standard Alg:
+(r' U' R U') (R' U R U') (R' U2 r)
+r' U' R U' R' U R U' R' U2 r
+y2 l' U' L U' L' U L U' L' U2 l
+y r' U2 R U R' U' R U R' U r
+y' l' U2 L U L' U' L U L' U l
+More Algorithms
+OLL 54
+3x3
+-
+OLL
+-
+L Shapes
+setup:
+r U2' R' U' R U R' U' R U' r'
+Standard Alg:
+(r U R' U) (R U' R' U) (R U2 r')
+r U R' U R U' R' U R U2 r'
+y' r U2 R' U' R U R' U' R U' r'
+y' r U r' R U R' U' R U R' U' r U' r'
+y2 l U L' U L U' L' U L U2 l'
+More Algorithms
+OLL 55
+3x3
+-
+OLL
+-
+Line Shapes
+setup:
+F R' F' U2' R U R' U R2' U2' R'
+Standard Alg:
+R U2 R2 (U' R U' R') U2 (F R F')
+y R' F U R U' R2 F' R2 U R' U' R
+y R' F R U R U' R2 F' R2 U' R' U R U R'
+R U2 R2 U' R U' R' U2 F R F'
+r U2 R2 F R F' U2 r' F R F'
+More Algorithms
+OLL 56
+3x3
+-
+OLL
+-
+Line Shapes
+setup:
+r U r' R U R' U' R U R' U' r U' r'
+Standard Alg:
+(r U r') (U R U' R') (U R U' R') (r U' r')
+r U r' U R U' R' U R U' R' r U' r'
+r U r' U R U' R' M' U R U2 r'
+F R U R' U' R F' r U R' U' r'
+r' U' r U' R' U R U' R' U R r' U r
+More Algorithms
+OLL 57
+3x3
+-
+OLL
+-
+All Corners Oriented
+setup:
+r U R' U' M U R U' R'
+Standard Alg:
+(R U R' U') M' (U R U' r')
+R U R' U' M' U R U' r'
+y R U' R' S' R U R' S
+y R U R' S' R U' R' S
+R U R' U' R' r U R U' r'
+More Algorithms

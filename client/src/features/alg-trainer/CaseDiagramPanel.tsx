@@ -26,6 +26,7 @@ export function CaseDiagramPanel({
   scrambleText,
   maxHeight,
   resetSignal,
+  setup,
 }: {
   set: AlgSet;
   c: AlgCase;
@@ -33,6 +34,7 @@ export function CaseDiagramPanel({
   scrambleText: string;
   maxHeight?: number;
   resetSignal?: number;
+  setup?: string;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,7 @@ export function CaseDiagramPanel({
         diagramPrefix={c.diagramPrefix}
         stickering={rotatingStickering(set.kind)}
         resetSignal={resetSignal}
+        setup={setup}
       />
       <div ref={textRef} className="font-mono text-base font-semibold text-primary text-center leading-relaxed break-all w-full">
         {scrambleText}
