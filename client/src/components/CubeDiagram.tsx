@@ -250,14 +250,21 @@ export function TwoByTwoDiagram({ alg, size = 80, diagramPrefix = '', stickering
   return <div ref={ref} style={{ width: size, height: size }} />;
 }
 
-export function RotatingCaseDiagram({ alg, size = 280, defaultLat = 30, puzzle = '3x3x3', diagramPrefix = '', stickering = 'full' as StickeringKind }: { alg: string; size?: number; defaultLat?: number; puzzle?: string; diagramPrefix?: string; stickering?: StickeringKind }) {
+export function RotatingCaseDiagram({
+  alg, size = 280, defaultLat = 30, puzzle = '3x3x3', diagramPrefix = '', stickering = 'full' as StickeringKind, resetSignal = 0,
+}: {
+  alg: string; size?: number; defaultLat?: number; puzzle?: string; diagramPrefix?: string; stickering?: StickeringKind;
+  // Bumping this (e.g. from a "Reset Perspective" button elsewhere on the
+  // page) snaps the camera back to its default angle without remounting the
+  // twisty-player element.
+  resetSignal?: number;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const elRef = useRef<TwistyEl | null>(null);
   const lon = useRef(25);
   const lat = useRef(defaultLat);
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
-  const rotRaf = useRef<number | null>(null);
   const snapRaf = useRef<number | null>(null);
   const [grabbing, setGrabbing] = useState(false);
 
@@ -284,22 +291,23 @@ export function RotatingCaseDiagram({ alg, size = 280, defaultLat = 30, puzzle =
     const mask = buildStickeringMask(stickering, puzzle);
     if (mask) el.experimentalStickeringMaskOrbits = mask;
 
-    const autoRotate = () => {
-      if (!dragging.current) {
-        lon.current += 0.25;
-        el.setAttribute('camera-longitude', String(lon.current));
-      }
-      rotRaf.current = requestAnimationFrame(autoRotate);
-    };
-    rotRaf.current = requestAnimationFrame(autoRotate);
-
     return () => {
-      if (rotRaf.current) cancelAnimationFrame(rotRaf.current);
       if (snapRaf.current) cancelAnimationFrame(snapRaf.current);
       wrap.innerHTML = '';
       elRef.current = null;
     };
   }, [alg, size, stickering]);
+
+  // Camera stays wherever the user last dragged it (no idle auto-spin) until
+  // this resets it — either on mount, or when the caller bumps resetSignal.
+  useEffect(() => {
+    if (snapRaf.current) { cancelAnimationFrame(snapRaf.current); snapRaf.current = null; }
+    lon.current = 25;
+    lat.current = defaultLat;
+    elRef.current?.setAttribute('camera-longitude', String(lon.current));
+    elRef.current?.setAttribute('camera-latitude', String(lat.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     dragging.current = true;

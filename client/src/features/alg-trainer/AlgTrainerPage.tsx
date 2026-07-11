@@ -15,7 +15,7 @@ import { useSettings } from '../../store/settings';
 import { formatTime as fmtTime, type Penalty, type AlgSolveDTO } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
-import { IS_2x2, rotatingStickering, twoByTwoStickering } from './algDiagram';
+import { IS_2x2, rotatingStickering } from './algDiagram';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { guestAlgSelectionStore } from './algLocalStore';
@@ -81,15 +81,23 @@ function CubingIcon({ event, className }: { event: string; className?: string })
   return <span className={clsx('cubing-icon', `event-${event}`, className)} />;
 }
 
-function CaseImage({ c, set, size = 80, pref }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref }) {
+// Drag-to-rotate (no idle auto-spin — see RotatingCaseDiagram), matching the
+// popup and Trainer's live diagram. `defaultLat={72}` reproduces the more
+// top-down framing the old static per-kind diagrams used here, vs. the more
+// three-quarter default angle used elsewhere.
+function CaseImage({ c, set, size = 80, pref, resetSignal }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref; resetSignal?: number }) {
   const alg = effectiveAlg(c, pref);
-  if (set.kind === 'pll') return <PllDiagram alg={alg} size={size} />;
-  if (set.kind === 'oll') return <OllDiagram alg={alg} size={size} />;
-  if (set.kind === 'coll') return <CollDiagram alg={alg} size={size} />;
-  if (IS_2x2(set.kind)) {
-    return <TwoByTwoDiagram alg={alg} size={size} diagramPrefix={c.diagramPrefix} stickering={twoByTwoStickering(set.kind)} />;
-  }
-  return <F2LDiagram alg={alg} size={size} />;
+  return (
+    <RotatingCaseDiagram
+      alg={alg}
+      size={size}
+      defaultLat={72}
+      puzzle={IS_2x2(set.kind) ? '2x2x2' : '3x3x3'}
+      diagramPrefix={c.diagramPrefix}
+      stickering={rotatingStickering(set.kind)}
+      resetSignal={resetSignal}
+    />
+  );
 }
 
 function effectiveAlg(c: AlgCase, pref: AlgPref | undefined): string {
@@ -363,9 +371,9 @@ function CaseModal({
 }
 
 function CaseCard({
-  c, set, pref, onSelect,
+  c, set, pref, onSelect, resetSignal,
 }: {
-  c: AlgCase; set: AlgSet; pref: AlgPref | undefined; onSelect: (c: AlgCase) => void;
+  c: AlgCase; set: AlgSet; pref: AlgPref | undefined; onSelect: (c: AlgCase) => void; resetSignal?: number;
 }) {
   const startPos = useRef({ x: 0, y: 0 });
   const dragged = useRef(false);
@@ -381,7 +389,7 @@ function CaseCard({
       }}
       onClick={() => { if (!dragged.current) onSelect(c); }}
     >
-      <div className="shrink-0"><CaseImage c={c} set={set} size={80} pref={pref} /></div>
+      <div className="shrink-0"><CaseImage c={c} set={set} size={80} pref={pref} resetSignal={resetSignal} /></div>
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-sm flex items-center gap-2 flex-wrap">
           {c.name}
@@ -408,6 +416,9 @@ function CaseBrowser({
   const [group, setGroup] = useState('All');
   const [statusFilter, setStatusFilter] = useState<AlgStatus | 'All'>('All');
   const [selected, setSelected] = useState<AlgCase | null>(null);
+  // Every case thumbnail is drag-to-rotate; bumping this snaps them all back
+  // to their default viewing angle in one click (see CaseImage/RotatingCaseDiagram).
+  const [resetSignal, setResetSignal] = useState(0);
 
   const cases = useMemo(() => {
     let list = group === 'All' ? set.cases : set.cases.filter((c) => c.group === group);
@@ -426,7 +437,19 @@ function CaseBrowser({
         <span className="text-muted">/</span>
         <span className="font-semibold">{set.name}</span>
       </div>
-      <PageHeader title={set.name} subtitle={set.description} />
+      <PageHeader
+        title={set.name}
+        subtitle={set.description}
+        action={
+          <button
+            onClick={() => setResetSignal((n) => n + 1)}
+            className="btn-ghost flex items-center gap-1.5 text-sm"
+            title="Reset every case's diagram back to its default viewing angle"
+          >
+            <Icon name="refresh" size={15} /> Reset Perspective
+          </button>
+        }
+      />
 
       {hasGroups && (
         <div className="flex flex-wrap gap-2 mb-4">
@@ -456,7 +479,7 @@ function CaseBrowser({
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {cases.map((c) => (
-          <CaseCard key={c.id} c={c} set={set} pref={prefs[c.id]} onSelect={setSelected} />
+          <CaseCard key={c.id} c={c} set={set} pref={prefs[c.id]} onSelect={setSelected} resetSignal={resetSignal} />
         ))}
       </div>
 
@@ -650,6 +673,10 @@ function TrainingSession({
   const [showSettings, setShowSettings] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const anyModalOpen = showSettings || detailIndex !== null;
+  // The live diagram is drag-to-rotate and (unlike the popup) stays mounted
+  // across every case in the session, so a drag on one case would otherwise
+  // carry over into the next ones — bumping this snaps it back to default.
+  const [diagramResetSignal, setDiagramResetSignal] = useState(0);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
@@ -832,6 +859,13 @@ function TrainingSession({
             <Icon name="target" size={15} /> Stats
           </button>
           <button
+            onClick={() => setDiagramResetSignal((n) => n + 1)}
+            className="btn-ghost flex items-center gap-1.5 text-sm"
+            title="Reset the diagram back to its default viewing angle"
+          >
+            <Icon name="refresh" size={15} /> Reset Perspective
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             className="btn-ghost flex items-center gap-1.5 text-sm"
           >
@@ -856,6 +890,7 @@ function TrainingSession({
           timerState={timerState}
           showCaseName={s.trainerShowCaseName}
           availableHeight={rowHeight}
+          resetSignal={diagramResetSignal}
         />
 
         {/* Right: timer tile (grows to fill) + solves tile (fills remaining space, scrolls internally) */}
@@ -905,7 +940,7 @@ function TrainingSession({
 // directly, since its own height genuinely doesn't depend on anything sized
 // from `availableHeight` — no settling cascade there.
 function TrainingLeftColumn({
-  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName, availableHeight,
+  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName, availableHeight, resetSignal,
 }: {
   set: AlgSet;
   currentCase: AlgCase;
@@ -916,6 +951,7 @@ function TrainingLeftColumn({
   timerState: 'idle' | 'running' | 'stopped';
   showCaseName: boolean;
   availableHeight: number | undefined;
+  resetSignal?: number;
 }) {
   const belowRef = useRef<HTMLDivElement>(null);
   const belowHeight = useElementHeight(belowRef);
@@ -935,7 +971,7 @@ function TrainingLeftColumn({
 
   return (
     <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
-      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} />
+      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} />
 
       <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
         {/* Move reveal */}
