@@ -5,7 +5,7 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, invertAlg, simplifyAlg, cleanAlgForDisplay,
+  RotatingCaseDiagram, simplifyAlg, cleanAlgForDisplay,
   buildTrainerScrambleAndSolution,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
@@ -16,9 +16,8 @@ import { useSettings } from '../../store/settings';
 import { formatTime as fmtTime, type Penalty, type AlgSolveDTO } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
-import { IS_2x2, rotatingStickering } from './algDiagram';
+import { IS_2x2, rotatingStickering, resolveCaseSetup, resolveCaseSetupText } from './algDiagram';
 import { VALID_ALTS } from '../../data/validAlts.generated';
-import { SETUP_ALGS } from '../../data/setupAlgs.generated';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { useTimerEngine, type TimerPhase } from '../timer/useTimerEngine';
@@ -100,7 +99,7 @@ function CaseImage({ c, set, size = 80, pref, resetSignal }: { c: AlgCase; set: 
       diagramPrefix={c.diagramPrefix}
       stickering={rotatingStickering(set.kind)}
       resetSignal={resetSignal}
-      setup={SETUP_ALGS[c.id]}
+      setup={resolveCaseSetup(c)}
     />
   );
 }
@@ -275,13 +274,9 @@ function CaseModal({
   const currentStatus: AlgStatus = pref?.status ?? 'NEW';
   const displayAlg = effectiveAlg(c, pref);
   const puzzleKind = IS_2x2(set.kind) ? '2x2x2' : '3x3x3';
-  // The authoritative setup (from SpeedCubeDB, verified against c.moves —
-  // see setupAlgs.generated.ts) is tied to the case's own `moves`, not
-  // whichever alt the user may have set as preferred, but it still shows
-  // the case correctly regardless — the case is the same either way, only
-  // the notation used to solve it differs. Falls back to deriving one from
-  // whatever's currently displayed when SpeedCubeDB doesn't cover this set.
-  const setupAlg = SETUP_ALGS[c.id] ?? invertAlg(cleanAlgForDisplay(displayAlg, puzzleKind));
+  // Tied to the case's own `moves`, never whichever alt the user has set as
+  // preferred — see resolveCaseSetup/resolveCaseSetupText's doc comments.
+  const setupAlg = resolveCaseSetupText(c, puzzleKind);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -323,7 +318,7 @@ function CaseModal({
             puzzle={puzzleKind}
             diagramPrefix={c.diagramPrefix}
             stickering={rotatingStickering(set.kind)}
-            setup={SETUP_ALGS[c.id]}
+            setup={resolveCaseSetup(c)}
           />
         </div>
 
@@ -978,7 +973,7 @@ function TrainingLeftColumn({
 
   return (
     <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
-      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} setup={SETUP_ALGS[currentCase.id]} />
+      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} setup={resolveCaseSetup(currentCase)} />
 
       <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
         {/* Move reveal */}
