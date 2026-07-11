@@ -18,31 +18,28 @@ type TwistyEl = HTMLElement & {
 
 export type StickeringKind = 'oll' | 'pll' | 'f2l' | 'coll' | '2x2-oll' | 'full';
 
-export function invertAlg(alg: string): string {
-  return alg
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .reverse()
-    .map((move) => {
-      if (move.endsWith("'")) return move.slice(0, -1);
-      if (move.endsWith('2')) return move;
-      return move + "'";
-    })
-    .join(' ');
-}
-
-// Net quarter-turns for one move (mod 4): plain = 1, ' = 3 (i.e. -1), 2 = 2.
+// Net quarter-turns for one move (mod 4). Handles the standard plain/2/'
+// suffixes, PLUS a literal '3' amount (e.g. "R3", "y3") that a few imported
+// algorithms use to mean "three quarter turns" — the same net rotation as
+// R' — since some source data represents moves this way instead of using
+// prime notation. Also tolerates the "2'"/"3'" combinations that show up in
+// a couple of entries (e.g. "R2'", "M3'") by computing the net amount the
+// same way an actual cube would, rather than treating the trailing "'" and
+// digit as mutually exclusive.
 function quarterTurns(move: string): number {
-  if (move.endsWith('2')) return 2;
-  if (move.endsWith("'")) return 3;
-  return 1;
+  const hasPrime = move.endsWith("'");
+  const body = hasPrime ? move.slice(0, -1) : move;
+  const amount = body.endsWith('3') ? 3 : body.endsWith('2') ? 2 : 1;
+  return hasPrime ? (4 - amount) % 4 : amount;
 }
-// The face/axis a move acts on, e.g. "U'" -> "U", "Rw2" -> "Rw", "y'" -> "y".
-// Two moves only ever combine if this matches exactly, so a rotation (y)
-// never gets combined with a face turn (U) even though both are "U-ish".
+// The face/axis a move acts on, e.g. "U'" -> "U", "Rw2" -> "Rw", "y'" -> "y",
+// "R3" -> "R". Two moves only ever combine if this matches exactly, so a
+// rotation (y) never gets combined with a face turn (U) even though both
+// are "U-ish".
 function faceOf(move: string): string {
-  return move.replace(/2$|'$/, '');
+  const hasPrime = move.endsWith("'");
+  const body = hasPrime ? move.slice(0, -1) : move;
+  return body.endsWith('3') || body.endsWith('2') ? body.slice(0, -1) : body;
 }
 function moveFromQuarterTurns(face: string, qt: number): string | null {
   const n = ((qt % 4) + 4) % 4;
@@ -50,6 +47,22 @@ function moveFromQuarterTurns(face: string, qt: number): string | null {
   if (n === 1) return face;
   if (n === 2) return `${face}2`;
   return `${face}'`;
+}
+
+// Inverts an algorithm. Goes through quarterTurns/faceOf/moveFromQuarterTurns
+// (rather than a naive per-token suffix flip) so it's correct for — and
+// always re-renders in standard notation out of — any "3"-amount or
+// prime-combination tokens (see quarterTurns above), instead of e.g. turning
+// "R3" into the meaningless "R3'".
+export function invertAlg(alg: string): string {
+  return alg
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .reverse()
+    .map((move) => moveFromQuarterTurns(faceOf(move), -quarterTurns(move)))
+    .filter((move): move is string => move !== null)
+    .join(' ');
 }
 
 // Combines adjacent same-face moves into their net turn (or drops them
@@ -60,7 +73,11 @@ function moveFromQuarterTurns(face: string, qt: number): string | null {
 // mathematically a no-op but visibly confusing (e.g. "U' U R2 ...").
 // A simple left-to-right stack pass handles cascading cancellations
 // correctly (e.g. "U R R' U'" fully collapses: R/R' cancel, exposing the
-// now-adjacent U/U' pair, which then also cancels).
+// now-adjacent U/U' pair, which then also cancels). Every move — not just
+// ones that end up combining with a neighbor — gets re-rendered through
+// moveFromQuarterTurns, so this also normalizes any non-standard "3"-amount
+// token (see quarterTurns) into standard notation even when it has no
+// adjacent same-face move to combine with.
 export function simplifyAlg(alg: string): string {
   const stack: string[] = [];
   for (const move of alg.trim().split(/\s+/).filter(Boolean)) {
@@ -71,17 +88,18 @@ export function simplifyAlg(alg: string): string {
       const combined = moveFromQuarterTurns(face, quarterTurns(top) + quarterTurns(move));
       if (combined) stack.push(combined);
     } else {
-      stack.push(move);
+      const normalized = moveFromQuarterTurns(face, quarterTurns(move));
+      if (normalized) stack.push(normalized);
     }
   }
   return stack.join(' ');
 }
 
 function isRotationToken(t: string): boolean {
-  return /^[xyz]['2]?$/.test(t);
+  return ['x', 'y', 'z'].includes(faceOf(t));
 }
 function isYAxisRotationToken(t: string): boolean {
-  return /^y['2]?$/.test(t);
+  return faceOf(t) === 'y';
 }
 
 // Strips a leading whole-cube rotation from `alg` when doing so is provably

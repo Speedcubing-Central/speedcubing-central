@@ -231,7 +231,7 @@ function AlgChip({ alg, selected, onClick }: { alg: string; selected?: boolean; 
         onClick && !selected ? 'hover:bg-gray-200 dark:hover:bg-card-hover/80' : '',
       )}
     >
-      {alg}
+      {simplifyAlg(alg)}
     </div>
   );
 }
