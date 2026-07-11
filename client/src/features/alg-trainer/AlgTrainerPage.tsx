@@ -100,6 +100,7 @@ function CaseImage({ c, set, size = 80, pref, resetSignal }: { c: AlgCase; set: 
       diagramPrefix={c.diagramPrefix}
       stickering={rotatingStickering(set.kind)}
       resetSignal={resetSignal}
+      setup={SETUP_ALGS[c.id]}
     />
   );
 }
