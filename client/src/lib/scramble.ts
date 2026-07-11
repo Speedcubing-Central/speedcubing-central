@@ -2,47 +2,21 @@ import { Scrambow } from 'scrambow';
 import { getEvent, normalizeScramble } from '@scc/shared';
 import { api } from './api';
 
-// Move sets for unofficial events as an emergency client-side fallback.
-// kilominx and fto were each missing a face here (kilominx had no FL/FR,
-// fto had no B at all) — verified against real cubing.js random-state
-// scrambles for both (which do use those faces) after a user report of
-// scrambles that left a whole layer/face untouched. That gap combined with
-// randomMoveScramble not checking for adjacent same-face moves (see below)
-// is what a "solved bottom layer" and visible "R R'"/"F F'" pairs actually
-// were: not this fallback being used *instead of* the real scrambler by
-// design, but the real scrambler's cold-start (see server/src/scramble.ts's
-// warm-up) taking long enough to hit getScramble's 5s timeout, silently
-// dropping into this — genuinely lower-quality — path.
-const UNOFFICIAL_MOVES: Record<string, string[]> = {
-  kilominx: ["U", "U'", "R", "R'", "D", "D'", "L", "L'", "F", "F'", "FR", "FR'", "FL", "FL'", "BR", "BR'", "BL", "BL'"],
-  fto: ["U", "U'", "F", "F'", "B", "B'", "R", "R'", "L", "L'", "BL", "BL'", "BR", "BR'", "D", "D'"],
-  redi_cube: ["U", "U'", "R", "R'", "F", "F'", "L", "L'", "B", "B'", "D", "D'"],
-};
-
-// Picks `length` random moves, but never lets the same face turn twice in a
-// row (e.g. "R R'", "F F") — a scramble containing that is a functional
-// no-op at that point and is never something a real scrambler (random-move
-// or random-state) would produce; the previous version didn't check this at
-// all, so any adjacent pair here was possible purely by chance.
-function randomMoveScramble(moves: string[], length: number): string {
-  const faceOf = (m: string) => m.replace(/'$/, '');
-  const out: string[] = [];
-  let lastFace: string | null = null;
-  for (let i = 0; i < length; i++) {
-    let next: string;
-    do {
-      next = moves[Math.floor(Math.random() * moves.length)];
-    } while (faceOf(next) === lastFace);
-    out.push(next);
-    lastFace = faceOf(next);
-  }
-  return out.join(' ');
-}
-
-// Synchronous client-side fallback — used only if the server API is unreachable.
+// Synchronous client-side fallback for when the server API is unreachable —
+// scrambow-quality (i.e. genuinely random-state, same standard as
+// TNoodle/cubing.js) for the events it actually supports. There is
+// deliberately no fallback of any kind for events scrambow doesn't support
+// (kilominx, fto, redi_cube — see shared's WcaEvent.scrambowType, empty for
+// these three): this file used to carry a hand-rolled random-*move*
+// generator for exactly those three as a last resort, which produced
+// materially worse scrambles (verified: adjacent cancelling moves like
+// "R R'", and — because its move lists were also incomplete — some faces
+// never turning at all, "solving" whatever was only reachable through
+// them). Per explicit product decision, a scramble for these events must
+// always be genuinely random-state or the app must keep trying — never
+// something lower-quality, even temporarily. See getScramble below for the
+// retry loop this feeds into.
 export function generateScramble(eventId: string): string {
-  const unofficial = UNOFFICIAL_MOVES[eventId];
-  if (unofficial) return randomMoveScramble(unofficial, 20);
   const type = getEvent(eventId)?.scrambowType;
   if (!type) return '';
   try {
@@ -53,6 +27,10 @@ export function generateScramble(eventId: string): string {
   } catch {
     return '';
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Formats a scramble for multi-line display.
@@ -111,13 +89,38 @@ export function sq1Pairs(scramble: string): string[] {
 
 // Fetch a WCA-quality random-state scramble from the server (cubing.js runs
 // server-side via Node.js worker_threads, avoiding browser Web Worker issues).
-// If the server doesn't respond within 5 s, fall back to client-side scrambow.
+// If the server doesn't respond in time, fall back to client-side scrambow
+// for events it supports — but for the events it doesn't (kilominx, fto,
+// redi_cube), there is no lower-quality option to drop into (see
+// generateScramble's doc comment): this keeps retrying the server,
+// forever, with capped exponential backoff, rather than ever hand back a
+// scramble that isn't genuinely random-state. `useScrambler`'s `loading`
+// state stays true — and touch/manual entry stays blocked — for exactly as
+// long as this takes, the same way it already does for any other
+// slow-to-generate event.
+//
+// The 20s timeout here is deliberately longer than the server's own 15s
+// internal cubing.js timeout (server/src/scramble.ts) — not arbitrary.
+// Aborting an axios request client-side doesn't cancel the in-flight
+// computation server-side; retrying *before* the server has given up on the
+// previous attempt just piles another concurrent computation on top of an
+// abandoned one still running. Verified live: with a shorter client timeout,
+// repeated retries against a struggling server compounded into every
+// request eventually timing out. Waiting slightly past the server's own
+// timeout means each retry only ever starts after the previous attempt has
+// actually finished (successfully or not), so retries can't pile up.
 export async function getScramble(eventId: string): Promise<string> {
-  try {
-    const { data } = await api.get<{ scramble: string }>(`/scramble/${eventId}`, { timeout: 5000 });
-    if (data.scramble) return data.scramble;
-  } catch (e) {
-    console.warn('Server scramble failed, falling back:', e);
+  let delayMs = 500;
+  for (;;) {
+    try {
+      const { data } = await api.get<{ scramble: string }>(`/scramble/${eventId}`, { timeout: 20_000 });
+      if (data.scramble) return data.scramble;
+    } catch (e) {
+      console.warn('Server scramble failed, retrying:', e);
+    }
+    const fallback = generateScramble(eventId);
+    if (fallback) return fallback;
+    await sleep(delayMs);
+    delayMs = Math.min(delayMs * 2, 8000);
   }
-  return generateScramble(eventId);
 }
