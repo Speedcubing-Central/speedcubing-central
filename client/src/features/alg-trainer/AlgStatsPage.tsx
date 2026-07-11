@@ -17,7 +17,7 @@ export default function AlgStatsPage() {
   const { solvePrecision } = useSettings();
   const setId = setSlug ? URL_TO_SET[setSlug] ?? null : null;
   const set = setId ? getSet(setId) : null;
-  const data = useAlgTrainerData(setId);
+  const data = useAlgTrainerData(useMemo(() => (setId ? [setId] : []), [setId]));
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const caseStats = useMemo(() => statsByCase(data.solves), [data.solves]);
@@ -87,7 +87,6 @@ export default function AlgStatsPage() {
           onClose={() => setDetailIndex(null)}
           solves={data.solves}
           index={detailIndex}
-          setId={setId}
           onUpdatePenalty={data.updatePenalty}
           onUpdateTime={data.updateTime}
           onDelete={data.deleteSolve}

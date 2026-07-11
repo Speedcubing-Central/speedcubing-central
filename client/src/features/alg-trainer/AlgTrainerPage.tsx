@@ -6,6 +6,7 @@ import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
   RotatingCaseDiagram, invertAlg, simplifyAlg, stripLeadingRotation, stripTrailingRotation,
+  restrictToFaces, eliminateWideMoves,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
 import { Icon } from '../../components/Icon';
@@ -178,9 +179,35 @@ const SET_CARDS_2x2 = [
     preview: <TwoByTwoDiagram alg="F R2 U R' U2 R U R2 U F'" size={80} /> },
 ];
 
-function SetPicker({ puzzle, onSelect, onBack }: { puzzle: string; onSelect: (id: string) => void; onBack: () => void }) {
+// `multiSelect` (Trainer only — Library keeps the old single-click-to-browse
+// behavior) lets the user toggle several sets on before continuing, so one
+// Trainer session can mix cases from more than one algorithm set.
+function SetPicker({
+  puzzle, onSelect, onSelectMultiple, onBack, multiSelect,
+}: {
+  puzzle: string;
+  onSelect?: (id: string) => void;
+  onSelectMultiple?: (ids: string[]) => void;
+  onBack: () => void;
+  multiSelect?: boolean;
+}) {
   const is3x3 = puzzle === '3x3';
   const label = is3x3 ? '3×3' : '2×2';
+  const cards = is3x3 ? SET_CARDS_3x3 : SET_CARDS_2x2;
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  const handleClick = (id: string) => {
+    if (multiSelect) {
+      setPicked((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    } else {
+      onSelect?.(id);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -190,34 +217,46 @@ function SetPicker({ puzzle, onSelect, onBack }: { puzzle: string; onSelect: (id
         <span className="text-muted">/</span>
         <span className="font-semibold">{label}</span>
       </div>
-      <PageHeader title={`${label} Algorithm Sets`} subtitle="Choose a set to browse and learn." />
-      {is3x3 ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {SET_CARDS_3x3.map((s) => (
-            <button key={s.id} onClick={() => onSelect(s.id)}
-              className="card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center">
-              <div className="w-20 h-20 flex items-center justify-center">{s.preview}</div>
-              <div>
-                <div className="font-bold text-lg">{s.label}</div>
-                <div className="text-xs text-muted mt-0.5">{s.description}</div>
-                <div className="text-xs text-accent font-semibold mt-1">{s.count} cases</div>
+      <PageHeader
+        title={`${label} Algorithm Sets`}
+        subtitle={multiSelect ? 'Choose one or more sets to train together.' : 'Choose a set to browse and learn.'}
+      />
+      <div className={clsx('grid gap-4', is3x3 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3')}>
+        {cards.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => handleClick(s.id)}
+            className={clsx(
+              'card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center relative',
+              multiSelect && picked.has(s.id) && 'border-accent/60 bg-accent/5 ring-1 ring-accent',
+            )}
+          >
+            {multiSelect && (
+              <div className={clsx(
+                'absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center border',
+                picked.has(s.id) ? 'bg-accent border-accent text-white' : 'border-gray-300 dark:border-border',
+              )}>
+                {picked.has(s.id) && <Icon name="check" size={12} />}
               </div>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SET_CARDS_2x2.map((s) => (
-            <button key={s.id} onClick={() => onSelect(s.id)}
-              className="card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center">
-              <div className="w-20 h-20 flex items-center justify-center">{s.preview}</div>
-              <div>
-                <div className="font-bold text-lg">{s.label}</div>
-                <div className="text-xs text-muted mt-0.5">{s.description}</div>
-                <div className="text-xs text-accent font-semibold mt-1">{s.count} cases</div>
-              </div>
-            </button>
-          ))}
+            )}
+            <div className="w-20 h-20 flex items-center justify-center">{s.preview}</div>
+            <div>
+              <div className="font-bold text-lg">{s.label}</div>
+              <div className="text-xs text-muted mt-0.5">{s.description}</div>
+              <div className="text-xs text-accent font-semibold mt-1">{s.count} cases</div>
+            </div>
+          </button>
+        ))}
+      </div>
+      {multiSelect && (
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={() => picked.size > 0 && onSelectMultiple?.(Array.from(picked))}
+            disabled={picked.size === 0}
+            className="btn-primary px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Select Cases ({picked.size} set{picked.size !== 1 ? 's' : ''})
+          </button>
         </div>
       )}
     </div>
@@ -501,39 +540,63 @@ function CaseBrowser({
 // Trainer tab
 // ---------------------------------------------------------------------------
 
-// Case selection screen
+// Case selection screen. Takes one or more algorithm sets (a Trainer session
+// can mix cases from several — see TrainerTab/SetPicker's multiSelect mode)
+// and combines their cases into one pool. Group and status filters are
+// multi-select (toggle any combination on) rather than pick-one, so e.g.
+// "Learning" + "Done" or several OLL subgroups at once can be filtered
+// together.
 function CaseSelector({
-  setId, prefs, onStart, onBack, initialSelectedIds,
+  setIds, prefs, onStart, onBack, initialSelectedIds,
 }: {
-  setId: string;
+  setIds: string[];
   prefs: PrefsMap;
-  onStart: (cases: AlgCase[]) => void;
+  onStart: (cases: AlgCase[], caseSetId: Record<string, string>) => void;
   onBack: () => void;
   // Pre-check the last-saved selection (see TrainerTab) instead of
   // defaulting to every case, so revisiting this screen to tweak a
   // selection starts from what was actually last drilled.
   initialSelectedIds?: string[] | null;
 }) {
-  const set = getSet(setId)!;
-  const hasGroups = useMemo(() => set.cases.some((c) => c.group), [set]);
-  const groups = useMemo(() => Array.from(new Set(set.cases.map((c) => c.group))), [set]);
-  const [statusFilter, setStatusFilter] = useState<AlgStatus | 'All'>('All');
-  const [groupFilter, setGroupFilter] = useState('All');
+  const sets = useMemo(
+    () => setIds.map((id) => getSet(id)).filter((s): s is AlgSet => Boolean(s)),
+    [setIds],
+  );
+  // Case ids are unique across sets (each is prefixed by its own set), so a
+  // flat id -> owning-set-id map is enough to resolve any case back to its
+  // set without needing to carry the set alongside every case everywhere.
+  const caseSetId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of sets) for (const c of s.cases) map[c.id] = s.id;
+    return map;
+  }, [sets]);
+  const allCases = useMemo(() => sets.flatMap((s) => s.cases), [sets]);
+  const multiSet = sets.length > 1;
+
+  const hasGroups = useMemo(() => allCases.some((c) => c.group), [allCases]);
+  const groups = useMemo(() => Array.from(new Set(allCases.map((c) => c.group).filter(Boolean))), [allCases]);
+  const [statusFilter, setStatusFilter] = useState<Set<AlgStatus>>(new Set());
+  const [groupFilter, setGroupFilter] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(initialSelectedIds && initialSelectedIds.length > 0 ? initialSelectedIds : set.cases.map((c) => c.id)),
+    () => new Set(initialSelectedIds && initialSelectedIds.length > 0 ? initialSelectedIds : allCases.map((c) => c.id)),
   );
 
   const visible = useMemo(() => {
-    let list = groupFilter === 'All' ? set.cases : set.cases.filter((c) => c.group === groupFilter);
-    if (statusFilter !== 'All') list = list.filter((c) => (prefs[c.id]?.status ?? 'NEW') === statusFilter);
+    let list = allCases;
+    if (groupFilter.size > 0) list = list.filter((c) => groupFilter.has(c.group));
+    if (statusFilter.size > 0) list = list.filter((c) => statusFilter.has(prefs[c.id]?.status ?? 'NEW'));
     return list;
-  }, [set, groupFilter, statusFilter, prefs]);
+  }, [allCases, groupFilter, statusFilter, prefs]);
 
-  const toggle = (id: string) => setSelected((prev) => {
-    const next = new Set(prev);
+  const toggleInSet = <T,>(set: Set<T>, id: T) => {
+    const next = new Set(set);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
-  });
+  };
+
+  const toggle = (id: string) => setSelected((prev) => toggleInSet(prev, id));
+  const toggleGroup = (g: string) => setGroupFilter((prev) => toggleInSet(prev, g));
+  const toggleStatus = (st: AlgStatus) => setStatusFilter((prev) => toggleInSet(prev, st));
 
   const toggleAll = () => {
     const allVisible = visible.map((c) => c.id);
@@ -545,7 +608,8 @@ function CaseSelector({
     });
   };
 
-  const selectedCases = set.cases.filter((c) => selected.has(c.id));
+  const selectedCases = allCases.filter((c) => selected.has(c.id));
+  const title = sets.map((s) => s.name).join(' + ') || 'Select Cases';
 
   return (
     <div>
@@ -554,7 +618,7 @@ function CaseSelector({
           <Icon name="arrowLeft" size={14} /> Sets
         </button>
         <span className="text-muted">/</span>
-        <span className="font-semibold">{set.name}</span>
+        <span className="font-semibold">{title}</span>
         <span className="text-muted">/</span>
         <span className="font-semibold">Select Cases</span>
       </div>
@@ -562,23 +626,22 @@ function CaseSelector({
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         {hasGroups && (
           <div className="flex flex-wrap gap-2">
-            {['All', ...groups].map((g) => (
-              <button key={g} onClick={() => setGroupFilter(g)}
+            {groups.map((g) => (
+              <button key={g} onClick={() => toggleGroup(g)}
                 className={clsx('px-2.5 py-1 rounded text-xs font-semibold',
-                  groupFilter === g ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
+                  groupFilter.has(g) ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
                 {g}
               </button>
             ))}
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          {(['All', 'NEW', 'LEARNING', 'LEARNED'] as const).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)}
+          {(['NEW', 'LEARNING', 'LEARNED'] as const).map((st) => (
+            <button key={st} onClick={() => toggleStatus(st)}
               className={clsx('px-2.5 py-1 rounded text-xs font-semibold transition-colors',
-                statusFilter === s
-                  ? s === 'All' ? 'bg-accent text-white' : STATUS_COLORS[s] + ' ring-1 ring-current'
-                  : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
-              {s === 'All' ? 'All' : STATUS_LABELS[s]}
+                statusFilter.has(st)
+                  ? STATUS_COLORS[st] + ' ring-1 ring-current' : 'bg-gray-100 dark:bg-card-hover text-muted hover:text-primary')}>
+              {STATUS_LABELS[st]}
             </button>
           ))}
         </div>
@@ -594,6 +657,7 @@ function CaseSelector({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 mb-6">
         {visible.map((c) => {
           const on = selected.has(c.id);
+          const cSet = getSet(caseSetId[c.id])!;
           return (
             <button
               key={c.id}
@@ -603,8 +667,9 @@ function CaseSelector({
                 on ? 'border-accent/60 bg-accent/5' : 'opacity-50',
               )}
             >
-              <div className="pointer-events-none"><CaseImage c={c} set={set} size={64} pref={prefs[c.id]} /></div>
+              <div className="pointer-events-none"><CaseImage c={c} set={cSet} size={64} pref={prefs[c.id]} /></div>
               <div className="font-semibold leading-tight">{c.name}</div>
+              {multiSet && <div className="text-muted text-[10px] leading-tight">{cSet.name}</div>}
               {prefs[c.id]?.status && prefs[c.id].status !== 'NEW' && (
                 <StatusBadge status={prefs[c.id].status} />
               )}
@@ -615,7 +680,7 @@ function CaseSelector({
 
       <div className="flex justify-end">
         <button
-          onClick={() => selectedCases.length > 0 && onStart(selectedCases)}
+          onClick={() => selectedCases.length > 0 && onStart(selectedCases, caseSetId)}
           disabled={selectedCases.length === 0}
           className="btn-primary px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -646,6 +711,8 @@ function startsOrEndsWithRotation(alg: string): boolean {
 }
 
 const AUF_MOVES = ['', 'U', "U'", 'U2'];
+// 2x2 scrambles are restricted to R/U/F — see restrictToFaces.
+const RUF_FACES = new Set(['R', 'U', 'F']);
 
 // Live display while the timer is running, precision gated by the
 // `timerUpdate` setting — mirrors TimerPage's runningStr.
@@ -657,17 +724,23 @@ function runningDisplay(ms: number, timerUpdate: string): string {
 }
 
 function TrainingSession({
-  cases, setId, puzzle, prefs, onBack,
+  cases, caseSetId, puzzle, prefs, onBack,
 }: {
   cases: AlgCase[];
-  setId: string;
+  // Maps each case's id to the real set it came from — a session can
+  // combine cases from several sets (see CaseSelector's multi-set support).
+  caseSetId: Record<string, string>;
   puzzle: string;
   prefs: PrefsMap;
   onBack: () => void;
 }) {
-  const set = getSet(setId)!;
+  const setIds = useMemo(() => Array.from(new Set(Object.values(caseSetId))), [caseSetId]);
+  const setNames = useMemo(
+    () => setIds.map((id) => getSet(id)?.name).filter(Boolean).join(' + '),
+    [setIds],
+  );
   const s = useSettings();
-  const data = useAlgTrainerData(setId);
+  const data = useAlgTrainerData(setIds);
   const navigate = useNavigate();
 
   const [showSettings, setShowSettings] = useState(false);
@@ -705,6 +778,8 @@ function TrainingSession({
 
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
+  const currentSetId = caseSetId[currentCase.id];
+  const currentSet = getSet(currentSetId)!;
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
 
   // Pick an alternate (never the preferred alg, so it's not given away) plus
@@ -739,7 +814,16 @@ function TrainingSession({
   const solvingAlg = simplifyAlg(
     auf ? `${auf} ${stripLeadingRotation(randomAlg, auf)}` : stripLeadingRotation(randomAlg, auf),
   );
-  const scramble = useMemo(() => invertAlg(solvingAlg), [solvingAlg]);
+  // Restricting to a smaller move set only makes sense on the final,
+  // terminal scramble text (not on solvingAlg before it gets inverted) —
+  // see restrictToFaces'/eliminateWideMoves' doc comment for why a rotation
+  // can only be safely dropped once nothing remains after it to relabel,
+  // which is only true once the scramble is fully built.
+  const scramble = useMemo(() => {
+    const raw = invertAlg(solvingAlg);
+    if (IS_2x2(currentSet.kind)) return restrictToFaces(raw, RUF_FACES);
+    return eliminateWideMoves(raw);
+  }, [solvingAlg, currentSet.kind]);
   // stripTrailingRotation removes a trailing rotation from the solution
   // algorithm — always safe (it's the literal last move of the sequence),
   // unlike a leading one, so no AUF-dependent condition is needed here.
@@ -758,7 +842,12 @@ function TrainingSession({
   const rafId = useRef<number | null>(null);
 
   const nextCase = useCallback(() => {
-    setCaseIndex(Math.floor(Math.random() * cases.length));
+    setCaseIndex((prev) => {
+      if (cases.length <= 1) return prev;
+      let next = Math.floor(Math.random() * cases.length);
+      while (next === prev) next = Math.floor(Math.random() * cases.length);
+      return next;
+    });
     setRevealed(0);
     setTimerState('idle');
     setElapsed(0);
@@ -795,7 +884,7 @@ function TrainingSession({
         const finalMs = Math.round(Date.now() - startTime.current);
         setElapsed(finalMs);
         setTimerState('stopped');
-        data.addSolve(currentCase.id, finalMs, 'NONE', scramble);
+        data.addSolve(currentSetId, currentCase.id, finalMs, 'NONE', scramble);
         return;
       }
 
@@ -828,7 +917,7 @@ function TrainingSession({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timerState, nextCase, moves.length, s.entryMode, anyModalOpen, currentCase, scramble, data]);
+  }, [timerState, nextCase, moves.length, s.entryMode, anyModalOpen, currentCase, currentSetId, scramble, data]);
 
   const submitManual = () => {
     const parsed = parseTimeInput(manualInput, s.solvePrecision);
@@ -837,7 +926,7 @@ function TrainingSession({
     setPenalty(parsed.penalty);
     setTimerState('stopped');
     setManualInput('');
-    data.addSolve(currentCase.id, parsed.time, parsed.penalty, scramble);
+    data.addSolve(currentSetId, currentCase.id, parsed.time, parsed.penalty, scramble);
   };
 
   return (
@@ -849,12 +938,13 @@ function TrainingSession({
             <Icon name="arrowLeft" size={14} /> Cases
           </button>
           <span className="text-muted">/</span>
-          <span className="font-semibold">{set.name} Trainer</span>
+          <span className="font-semibold">{setNames} Trainer</span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[setId] ?? setId.toLowerCase()}/stats`)}
+            onClick={() => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[currentSetId] ?? currentSetId.toLowerCase()}/stats`)}
             className="btn-ghost flex items-center gap-1.5 text-sm"
+            title={setIds.length > 1 ? `Stats for ${currentSet.name} (the current case's set)` : undefined}
           >
             <Icon name="target" size={15} /> Stats
           </button>
@@ -881,7 +971,7 @@ function TrainingSession({
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* Left: diagram + scramble + move reveal + case-name reveal */}
         <TrainingLeftColumn
-          set={set}
+          set={currentSet}
           currentCase={currentCase}
           solvingAlg={solvingAlg}
           scramble={scramble}
@@ -895,7 +985,6 @@ function TrainingSession({
 
         {/* Right: timer tile (grows to fill) + solves tile (fills remaining space, scrolls internally) */}
         <TrainingRightColumn
-          set={set}
           timerState={timerState}
           elapsed={elapsed}
           penalty={penalty}
@@ -919,7 +1008,6 @@ function TrainingSession({
           onClose={() => setDetailIndex(null)}
           solves={data.solves}
           index={detailIndex}
-          setId={setId}
           onUpdatePenalty={data.updatePenalty}
           onUpdateTime={data.updateTime}
           onDelete={data.deleteSolve}
@@ -1024,10 +1112,9 @@ const TRAINER_SOLVE_GRID = 'grid grid-cols-[1.8rem_1fr_4.5rem_1.25rem] gap-2 ite
 // this same explicit height, only using a live ResizeObserver for width
 // (which doesn't have that staleness problem).
 function TrainingRightColumn({
-  set, timerState, elapsed, penalty, entryMode, timerUpdate, solvePrecision,
+  timerState, elapsed, penalty, entryMode, timerUpdate, solvePrecision,
   manualInput, setManualInput, submitManual, nextCase, solves, onOpenSolve, availableHeight,
 }: {
-  set: AlgSet;
   timerState: 'idle' | 'running' | 'stopped';
   elapsed: number;
   penalty: Penalty;
@@ -1140,7 +1227,6 @@ function TrainingRightColumn({
                   index={i}
                   solve={sv}
                   total={solves.length}
-                  set={set}
                   precision={solvePrecision}
                   onOpen={() => onOpenSolve(i)}
                 />
@@ -1154,16 +1240,17 @@ function TrainingRightColumn({
 }
 
 function TrainerSolveRow({
-  index, solve, total, set, precision, onOpen,
+  index, solve, total, precision, onOpen,
 }: {
   index: number;
   solve: AlgSolveDTO;
   total: number;
-  set: AlgSet;
   precision: number;
   onOpen: () => void;
 }) {
-  const c = set.cases.find((cc) => cc.id === solve.caseId);
+  // Each solve carries its own setId — a session can mix cases from several
+  // sets (see CaseSelector's multi-set support), so this resolves per-solve.
+  const c = getSet(solve.setId)?.cases.find((cc) => cc.id === solve.caseId);
   return (
     <div className={`${TRAINER_SOLVE_GRID} px-1 py-2 text-sm`}>
       <span className="text-muted text-xs text-right">{total - index}.</span>
@@ -1192,69 +1279,95 @@ function TrainerSolveRow({
 // ---------------------------------------------------------------------------
 
 function TrainerTab({
-  puzzle, setId, isAuthed,
+  puzzle, setIds, isAuthed,
 }: {
   puzzle: string | null;
-  setId: string | null;
+  setIds: string[];
   isAuthed: boolean;
 }) {
   const navigate = useNavigate();
   const [sessionCases, setSessionCases] = useState<AlgCase[] | null>(null);
+  // Which real set each in-session case came from — a session can combine
+  // cases from several sets (see CaseSelector), so this is what lets
+  // TrainingSession resolve the right set (diagram kind, solve history,
+  // stats link, ...) per case instead of assuming just one.
+  const [caseSetId, setCaseSetId] = useState<Record<string, string>>({});
   const [prefs, setPrefs] = useState<PrefsMap>({});
   // Gates rendering CaseSelector until we know whether a saved selection
-  // exists for this set — otherwise it'd flash empty/all-selected for a
-  // moment before jumping into a restored session.
+  // exists for these sets — otherwise it'd flash empty/all-selected for a
+  // moment before the pre-check lands.
   const [selectionChecked, setSelectionChecked] = useState(false);
   // Kept separately from sessionCases so CaseSelector can still pre-check
   // the last-saved selection when the user goes back to "Cases" to tweak
   // it, even though sessionCases itself gets cleared to show that screen.
-  const [savedCaseIds, setSavedCaseIds] = useState<string[] | null>(null);
+  // Selections are still saved per-individual-set (unchanged persistence
+  // shape) — this just tracks each involved set's own saved ids.
+  const [savedCaseIds, setSavedCaseIds] = useState<Record<string, string[]>>({});
+
+  const setsKey = useMemo(() => setIds.slice().sort().join(','), [setIds]);
 
   useEffect(() => {
-    if (!setId || !isAuthed) return;
-    api.get<AlgPref[]>(`/alg/prefs/${setId}`)
-      .then((r) => {
+    if (setIds.length === 0 || !isAuthed) return;
+    let cancelled = false;
+    Promise.all(setIds.map((id) => api.get<AlgPref[]>(`/alg/prefs/${id}`).then((r) => r.data).catch(() => [] as AlgPref[])))
+      .then((lists) => {
+        if (cancelled) return;
         const map: PrefsMap = {};
-        for (const p of r.data) map[p.caseId] = p;
+        for (const list of lists) for (const p of list) map[p.caseId] = p;
         setPrefs(map);
-      })
-      .catch(() => {});
-  }, [setId, isAuthed]);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setsKey, isAuthed]);
 
-  // Fetch the case selection the user last drilled in this set (if any) so
+  // Fetch the case selection the user last drilled in each set (if any) so
   // CaseSelector can pre-check it — the user still lands on CaseSelector
   // every visit and picks "Start Training" themselves; this only saves them
   // from having to re-check the same boxes again. See CaseSelector's "Start
   // Training" handler below, which is what saves the selection in the first place.
   useEffect(() => {
     setSessionCases(null);
-    setSavedCaseIds(null);
+    setCaseSetId({});
+    setSavedCaseIds({});
     setSelectionChecked(false);
-    if (!setId) {
+    if (setIds.length === 0) {
       setSelectionChecked(true);
       return;
     }
-    const applySavedIds = (caseIds: string[] | null | undefined) => {
-      if (caseIds && caseIds.length > 0) setSavedCaseIds(caseIds);
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(setIds.map(async (id): Promise<[string, string[] | undefined]> => {
+        if (isAuthed) {
+          const caseIds = await api.get<{ caseIds: string[] } | null>(`/alg/selection/${id}`)
+            .then((r) => r.data?.caseIds)
+            .catch(() => undefined);
+          return [id, caseIds];
+        }
+        return [id, guestAlgSelectionStore.get(id) ?? undefined];
+      }));
+      if (cancelled) return;
+      const map: Record<string, string[]> = {};
+      for (const [id, caseIds] of entries) if (caseIds && caseIds.length > 0) map[id] = caseIds;
+      setSavedCaseIds(map);
       setSelectionChecked(true);
-    };
-    if (isAuthed) {
-      api.get<{ caseIds: string[] } | null>(`/alg/selection/${setId}`)
-        .then((r) => applySavedIds(r.data?.caseIds))
-        .catch(() => setSelectionChecked(true));
-    } else {
-      applySavedIds(guestAlgSelectionStore.get(setId));
-    }
-  }, [setId, isAuthed]);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setsKey, isAuthed]);
 
-  function saveSelection(cases: AlgCase[]) {
-    if (!setId) return;
-    const caseIds = cases.map((c) => c.id);
-    setSavedCaseIds(caseIds);
-    if (isAuthed) {
-      api.put('/alg/selection', { setId, caseIds }).catch(() => {});
-    } else {
-      guestAlgSelectionStore.set(setId, caseIds);
+  // Persist per-set, same shape as before — split the combined selection
+  // back out by each case's own originating set.
+  function saveSelection(cases: AlgCase[], resolvedCaseSetId: Record<string, string>) {
+    const bySet: Record<string, string[]> = {};
+    for (const c of cases) {
+      const sid = resolvedCaseSetId[c.id];
+      if (!sid) continue;
+      (bySet[sid] ??= []).push(c.id);
+    }
+    setSavedCaseIds(bySet);
+    for (const [sid, caseIds] of Object.entries(bySet)) {
+      if (isAuthed) api.put('/alg/selection', { setId: sid, caseIds }).catch(() => {});
+      else guestAlgSelectionStore.set(sid, caseIds);
     }
   }
 
@@ -1266,12 +1379,16 @@ function TrainerTab({
       />
     );
   }
-  if (!setId) {
+  if (setIds.length === 0) {
     return (
       <SetPicker
         puzzle={puzzle}
+        multiSelect
         onBack={() => navigate('/algorithms/trainer')}
-        onSelect={(sid) => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[sid] ?? sid.toLowerCase()}`)}
+        onSelectMultiple={(ids) => {
+          const slug = ids.map((sid) => SET_TO_URL[sid] ?? sid.toLowerCase()).join('+');
+          navigate(`/algorithms/trainer/${puzzle}/${slug}`);
+        }}
       />
     );
   }
@@ -1282,21 +1399,25 @@ function TrainerTab({
     return (
       <TrainingSession
         cases={sessionCases}
-        setId={setId}
+        caseSetId={caseSetId}
         puzzle={puzzle}
         prefs={prefs}
         onBack={() => setSessionCases(null)}
       />
     );
   }
+  // Case ids are unique across sets, so the per-set saved selections can be
+  // flattened into one combined pre-check list for CaseSelector.
+  const combinedSavedIds = Object.values(savedCaseIds).flat();
   return (
     <CaseSelector
-      setId={setId}
+      setIds={setIds}
       prefs={prefs}
-      initialSelectedIds={savedCaseIds}
+      initialSelectedIds={combinedSavedIds}
       onBack={() => navigate(`/algorithms/trainer/${puzzle}`)}
-      onStart={(cases) => {
-        saveSelection(cases);
+      onStart={(cases, resolvedCaseSetId) => {
+        saveSelection(cases, resolvedCaseSetId);
+        setCaseSetId(resolvedCaseSetId);
         setSessionCases(cases);
       }}
     />
@@ -1366,6 +1487,13 @@ export default function AlgTrainerPage() {
   const tab: 'library' | 'trainer' = tabParam === 'trainer' ? 'trainer' : 'library';
   const puzzle = puzzleParam ?? null;
   const setId = setSlug ? (URL_TO_SET[setSlug] ?? null) : null;
+  // Trainer sessions can combine several sets — the URL joins their slugs
+  // with "+" (e.g. /algorithms/trainer/3x3/oll+pll). Library stays
+  // single-set (`setId` above), unaffected.
+  const setIds = useMemo(
+    () => (setSlug ? setSlug.split('+').map((s) => URL_TO_SET[s]).filter((s): s is string => Boolean(s)) : []),
+    [setSlug],
+  );
 
   return (
     <div>
@@ -1385,7 +1513,7 @@ export default function AlgTrainerPage() {
       </div>
       {tab === 'library'
         ? <LibraryTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
-        : <TrainerTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
+        : <TrainerTab puzzle={puzzle} setIds={setIds} isAuthed={isAuthed} />
       }
     </div>
   );

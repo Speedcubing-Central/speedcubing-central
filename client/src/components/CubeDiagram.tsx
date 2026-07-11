@@ -130,6 +130,192 @@ export function stripTrailingRotation(alg: string): string {
   return tokens.slice(0, -1).join(' ');
 }
 
+// ---------------------------------------------------------------------------
+// Move-set restriction (Trainer scrambles) — restrictToFaces/eliminateWideMoves
+// ---------------------------------------------------------------------------
+// Rewrites a *scramble* (a terminal sequence — meant to be executed as-is,
+// nothing computed from it further) so it only uses a target set of
+// outer-layer faces (2x2 restricted to R/U/F) or has its wide moves
+// eliminated (3x3), by substituting each disallowed move with an allowed
+// one on the same axis plus a compensating whole-cube rotation, then
+// pushing that rotation rightward through the rest of the scramble
+// (relabeling every later move it passes, so nothing is silently left
+// inconsistent) instead of leaving it sitting in the middle of the output.
+//
+// Only a rotation left pending at the very end — after every token has been
+// processed, with nothing left to relabel — gets dropped, since it's then
+// the literal last move of a sequence meant to be executed as terminal
+// instructions: dropping it only changes the final viewing angle, not the
+// case being scrambled. Dropping a *leading* rotation without relabeling
+// everything after it is NOT generally safe (verified — it's a materially
+// different case), which is exactly why this only ever discards pending
+// rotation content once nothing remains for it to interact with, never
+// partway through. All of the relabeling/substitution facts below were
+// verified empirically against cubing.js rather than hand-derived, since a
+// handedness/sign mistake here would silently corrupt every scramble.
+
+// relabel(face, rotation) = the face a plain quarter-turn of `face` becomes
+// once a *later* move needs to be pushed in front of `rotation` instead of
+// after it, i.e. `rotation face = relabel(face,rotation) rotation`.
+const FACE_RELABEL: Record<string, Record<string, string>> = {
+  x: { U: 'F', F: 'D', D: 'B', B: 'U', R: 'R', L: 'L' },
+  "x'": { U: 'B', B: 'D', D: 'F', F: 'U', R: 'R', L: 'L' },
+  x2: { U: 'D', D: 'U', F: 'B', B: 'F', R: 'R', L: 'L' },
+  y: { F: 'R', R: 'B', B: 'L', L: 'F', U: 'U', D: 'D' },
+  "y'": { F: 'L', L: 'B', B: 'R', R: 'F', U: 'U', D: 'D' },
+  y2: { F: 'B', B: 'F', R: 'L', L: 'R', U: 'U', D: 'D' },
+  z: { U: 'L', L: 'D', D: 'R', R: 'U', F: 'F', B: 'B' },
+  "z'": { U: 'R', R: 'D', D: 'L', L: 'U', F: 'F', B: 'B' },
+  z2: { U: 'D', D: 'U', L: 'R', R: 'L', F: 'F', B: 'B' },
+};
+
+// Substitutes a disallowed outer-face turn for an allowed one on the same
+// axis, plus the rotation needed to compensate (e.g. L2 = R2 x2, verified),
+// keyed by the disallowed face+magnitude ("L", "L'", "L2", ...).
+const FACE_SUBSTITUTE: Record<string, [face: string, rotation: string]> = {
+  L: ['R', "x'"], "L'": ["R'", 'x'], L2: ['R2', 'x2'],
+  D: ['U', "y'"], "D'": ["U'", 'y'], D2: ['U2', 'y2'],
+  B: ['F', "z'"], "B'": ["F'", 'z'], B2: ['F2', 'z2'],
+};
+
+// Wide-move elimination (Rw/r etc. -> the opposite outer face + rotation,
+// e.g. r = L x, verified). "Xw" and lowercase "x" (e.g. "Rw"/"r") are the
+// same move; both funnel through this table once normalized to lowercase.
+const WIDE_SUBSTITUTE: Record<string, [face: string, rotation: string]> = {
+  r: ['L', 'x'], "r'": ["L'", "x'"], r2: ['L2', 'x2'],
+  l: ['R', "x'"], "l'": ["R'", 'x'], l2: ['R2', 'x2'],
+  u: ['D', 'y'], "u'": ["D'", "y'"], u2: ['D2', 'y2'],
+  d: ['U', "y'"], "d'": ["U'", 'y'], d2: ['U2', 'y2'],
+  f: ['B', 'z'], "f'": ["B'", "z'"], f2: ['B2', 'z2'],
+  b: ['F', "z'"], "b'": ["F'", 'z'], b2: ['F2', 'z2'],
+};
+
+// Relabels a face letter through a run of pending rotation tokens, applying
+// the most-recently-pending rotation first (equivalent to pushing that
+// whole run rightward past the move, one rotation at a time).
+function relabelThroughPending(face: string, pending: string[]): string {
+  let f = face;
+  for (let i = pending.length - 1; i >= 0; i--) f = FACE_RELABEL[pending[i]][f];
+  return f;
+}
+
+// Slice moves (M/E/S) relabel differently from outer faces: conjugating one
+// by a rotation can flip its sign as well as change its letter (e.g.
+// `y2 M = M' y2`, verified — unlike an outer face, which only ever changes
+// which letter it is, never its sign). [newLetter, signFlips].
+const SLICE_RELABEL: Record<string, Record<string, [letter: string, flip: boolean]>> = {
+  x: { M: ['M', false], E: ['S', true], S: ['E', false] },
+  "x'": { M: ['M', false], E: ['S', false], S: ['E', true] },
+  x2: { M: ['M', false], E: ['E', true], S: ['S', true] },
+  y: { M: ['S', false], E: ['E', false], S: ['M', true] },
+  "y'": { M: ['S', true], E: ['E', false], S: ['M', false] },
+  y2: { M: ['M', true], E: ['E', false], S: ['S', true] },
+  z: { M: ['E', false], E: ['M', true], S: ['S', false] },
+  "z'": { M: ['E', true], E: ['M', false], S: ['S', false] },
+  z2: { M: ['M', true], E: ['E', true], S: ['S', false] },
+};
+function invertMag(mag: string): string {
+  if (mag === '') return "'";
+  if (mag === "'") return '';
+  return mag; // '2' is its own inverse
+}
+// Same idea as relabelThroughPending, but for a slice move's (letter,
+// magnitude) pair, since a sign flip can accumulate across multiple pending
+// rotations.
+function relabelSliceThroughPending(letter: string, mag: string, pending: string[]): [string, string] {
+  let l = letter;
+  let m = mag;
+  for (let i = pending.length - 1; i >= 0; i--) {
+    const [newL, flip] = SLICE_RELABEL[pending[i]][l];
+    l = newL;
+    if (flip) m = invertMag(m);
+  }
+  return [l, m];
+}
+
+// Restricts a scramble to only use moves on `allowedFaces` (a subset of
+// R/U/D/L/F/B) — used to keep 2x2 Trainer scrambles to R/U/F. See file
+// header for why this must run on the final scramble text, not an
+// algorithm that's still going to be inverted afterward.
+export function restrictToFaces(alg: string, allowedFaces: Set<string>): string {
+  const pending: string[] = [];
+  const output: string[] = [];
+  for (const token of alg.trim().split(/\s+/).filter(Boolean)) {
+    if (isRotationToken(token)) {
+      pending.push(token);
+      continue;
+    }
+    const face = faceOf(token);
+    const mag = token.slice(face.length);
+    if (!/^[UDLRFB]$/.test(face)) {
+      // Unrecognized token (malformed data, etc.) — leave it as-is rather
+      // than risk mangling something this function doesn't understand.
+      output.push(token);
+      continue;
+    }
+    const relabeled = relabelThroughPending(face, pending);
+    if (allowedFaces.has(relabeled)) {
+      output.push(relabeled + mag);
+      continue;
+    }
+    const [subFace, rot] = FACE_SUBSTITUTE[relabeled + mag];
+    output.push(subFace);
+    // The compensating rotation is inserted right where the substitution
+    // happened — i.e. *before* whatever was already pending (that content
+    // came from earlier in the stream and still needs to end up after this
+    // one), so it's prepended, not appended.
+    pending.unshift(rot);
+  }
+  return simplifyAlg(output.join(' '));
+}
+
+// Eliminates wide moves (Rw/r, Fw/f, ...) from a scramble, replacing each
+// with the opposite outer-layer face plus a compensating rotation pushed
+// through the rest of the scramble the same way restrictToFaces does.
+// Slice moves (M/E/S) aren't reducible to a single outer-layer turn the way
+// a wide move is, so they're never substituted away — but they still get
+// relabeled through any pending rotation, same as everything else.
+export function eliminateWideMoves(alg: string): string {
+  const pending: string[] = [];
+  const output: string[] = [];
+  for (const rawToken of alg.trim().split(/\s+/).filter(Boolean)) {
+    if (isRotationToken(rawToken)) {
+      pending.push(rawToken);
+      continue;
+    }
+    const wideMatch = rawToken.match(/^([UDLRFB])w(['2]?)$/);
+    const lowerMatch = rawToken.match(/^([udlrfb])(['2]?)$/);
+    if (!wideMatch && !lowerMatch) {
+      // Plain face turn, slice move, or unrecognized token — none of these
+      // get eliminated, but still need relabeling through any pending
+      // rotation (a slice move's meaning changes under a rotation just like
+      // any other move's does — skipping this was a real bug, caught by
+      // exhaustive verification: an M/E/S appearing after an earlier
+      // substitution had accumulated a pending rotation was silently left
+      // un-relabeled, producing a scramble for the wrong case).
+      const face = faceOf(rawToken);
+      const mag = rawToken.slice(face.length);
+      if (/^[UDLRFB]$/.test(face)) {
+        output.push(relabelThroughPending(face, pending) + mag);
+      } else if (/^[MES]$/.test(face)) {
+        const [l, m] = relabelSliceThroughPending(face, mag, pending);
+        output.push(l + m);
+      } else {
+        output.push(rawToken);
+      }
+      continue;
+    }
+    const base = (wideMatch ? wideMatch[1] : lowerMatch![1]).toLowerCase();
+    const mag = wideMatch ? wideMatch[2] : lowerMatch![2];
+    const relabeledBase = relabelThroughPending(base.toUpperCase(), pending).toLowerCase();
+    const [subFace, rot] = WIDE_SUBSTITUTE[relabeledBase + mag];
+    output.push(subFace);
+    // See restrictToFaces — the compensation is prepended, not appended.
+    pending.unshift(rot);
+  }
+  return simplifyAlg(output.join(' '));
+}
+
 // After x2 in experimentalSetupAlg, the cube is visually flipped:
 //   Visual TOP  (yellow face) = D-layer pieces: CORNERS/EDGES indices 4-7, CENTER 5
 //   Visual BOT  (white face)  = U-layer pieces: CORNERS/EDGES indices 0-3, CENTER 0

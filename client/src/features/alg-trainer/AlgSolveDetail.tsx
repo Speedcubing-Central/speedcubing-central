@@ -15,7 +15,6 @@ export function AlgSolveDetail({
   onClose,
   solves,
   index,
-  setId,
   onUpdatePenalty,
   onUpdateTime,
   onDelete,
@@ -24,7 +23,6 @@ export function AlgSolveDetail({
   onClose: () => void;
   solves: AlgSolveDTO[];
   index: number;
-  setId: string;
   onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
   onUpdateTime: (solveId: string, time: number) => void;
   onDelete: (solveId: string) => void;
@@ -34,7 +32,10 @@ export function AlgSolveDetail({
   const [editValue, setEditValue] = useState('');
 
   const solve = solves[index];
-  const set = getSet(setId);
+  // Each solve carries its own setId (a session can mix cases from several
+  // sets — see CaseSelector's multi-set support), so this resolves per-solve
+  // rather than trusting a single set passed down from a parent.
+  const set = solve ? getSet(solve.setId) : undefined;
   if (!solve || !set) return null;
   const c = set.cases.find((cc) => cc.id === solve.caseId);
 
