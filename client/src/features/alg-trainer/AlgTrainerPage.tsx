@@ -5,7 +5,7 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, simplifyAlg, cleanAlgForDisplay,
+  RotatingCaseDiagram, simplifyAlg, cleanAlgForDisplay, attachAuf,
   buildTrainerScrambleAndSolution,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
@@ -18,6 +18,7 @@ import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering, resolveCaseSetup, resolveCaseSetupText } from './algDiagram';
 import { VALID_ALTS } from '../../data/validAlts.generated';
+import { SOLUTION_ALGS } from '../../data/solutionAlgs.generated';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
 import { useTimerEngine, type TimerPhase } from '../timer/useTimerEngine';
@@ -737,11 +738,11 @@ function TrainingSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCase, s.trainerRandomAUF]);
 
-  // simplifyAlg collapses a prepended AUF into whatever move the algorithm
-  // itself already starts with (e.g. auf "U'" + alg starting "U ..." would
-  // otherwise render as a literal, redundant "U' U ..." — mathematically a
-  // no-op but visibly confusing).
-  const solvingAlg = simplifyAlg(auf ? `${auf} ${randomAlg}` : randomAlg);
+  // attachAuf combines the AUF with the algorithm, placing a leading
+  // whole-cube rotation *before* the AUF rather than after it (a solver
+  // does the regrip, then the AUF turn — not the reverse; see its doc
+  // comment for why that reordering is exact, not just cosmetic).
+  const solvingAlg = attachAuf(auf, randomAlg);
   // buildTrainerScrambleAndSolution builds the scramble *and* the exact
   // algorithm that solves it — see its doc comment for why "solvingAlg
   // unchanged" isn't always the correct solution once a rotation embedded in
@@ -752,17 +753,26 @@ function TrainingSession({
     () => buildTrainerScrambleAndSolution(solvingAlg, puzzleKind),
     [solvingAlg, puzzleKind],
   );
-  // When a verified alt is driving the scramble, the *displayed* solution is
-  // the case's own preferred algorithm (so drilling teaches the real alg,
-  // not whichever alternate happened to build the scramble) — cleaned up via
-  // cleanAlgForDisplay the same way the Library does, and validated (at
-  // build time) to reach the same case up to an allowed rotation. When
-  // there's no verified alt, the scramble was built from `moves` itself, so
-  // the only algebraically exact solution is the paired one
-  // buildTrainerScrambleAndSolution already computed.
-  const displaySolutionAlg = usingValidatedAlt
-    ? simplifyAlg(auf ? `${auf} ${cleanAlgForDisplay(preferredAlg, puzzleKind)}` : cleanAlgForDisplay(preferredAlg, puzzleKind))
-    : exactSolution;
+  // SOLUTION_ALGS (scripts/generate-solution-algs.ts) precomputes, for the
+  // case's own default `moves` and every AUF, the shortest algorithm
+  // verified to solve that (case, AUF) pairing — reordered per attachAuf
+  // *and* stripped of any move a build-time cubing.js check proved
+  // contributes nothing for this specific case (e.g. reported live: an
+  // EG-2 case whose defining pattern is a rotationally-symmetric bottom
+  // layer swap, where neither a U turn nor a y rotation change anything,
+  // so a naive "AUF + solution" display showed two pointless leading
+  // moves). This can only be precomputed for the case's own default
+  // algorithm — when the user has set a *custom* preferred alg, there's no
+  // build-time table for that arbitrary text, so this falls back to the
+  // still-correct (reordered, but unminimized) runtime construction; when
+  // there's no verified alt for a custom alg either, buildTrainerScrambleAndSolution's
+  // exact pairing is the only remaining guarantee of correctness.
+  const usingDefaultAlg = preferredAlg === currentCase.moves;
+  const displaySolutionAlg = usingDefaultAlg
+    ? (SOLUTION_ALGS[currentCase.id]?.[auf] ?? exactSolution)
+    : usingValidatedAlt
+      ? attachAuf(auf, cleanAlgForDisplay(preferredAlg, puzzleKind))
+      : exactSolution;
   const moves = useMemo(() => parseMoves(displaySolutionAlg), [displaySolutionAlg]);
 
   const [revealed, setRevealed] = useState(0);

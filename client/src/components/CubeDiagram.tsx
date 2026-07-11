@@ -102,21 +102,25 @@ function isYAxisRotationToken(t: string): boolean {
   return faceOf(t) === 'y';
 }
 
-// Strips a leading whole-cube rotation from `alg` when doing so is provably
-// safe (verified empirically via cubing.js simulation, not just by
-// eyeballing notation): a y-axis rotation (y/y'/y2) always commutes with a
-// U-axis AUF, so it can be pushed past `auf` to the true end of the eventual
-// (inverted) scramble, where — like any trailing rotation — it only
-// reorients the final result and can be dropped without changing which case
-// the scramble represents. An x/z-axis rotation does NOT commute with a
-// U-axis AUF (it relabels which physical face U turns into), so stripping
-// it is only safe when there's no AUF to conflict with in the first place.
-export function stripLeadingRotation(alg: string, auf: string): string {
+// Combines an AUF (a plain U-face move, possibly empty) with an algorithm
+// meant for display/execution, placing a leading whole-cube rotation on
+// `alg` *before* the AUF rather than after it: a y-axis rotation (y/y'/y2)
+// always commutes with a U-axis move (verified — y-axis rotations don't
+// change which physical layer is U/D), so "auf y ..." and "y auf ..." are
+// the exact same operation, just differently ordered. The latter reads far
+// more naturally — a solver does the regrip/rotation first, then the AUF,
+// rather than turning U and only then re-gripping through what they just
+// turned. An x/z-axis leading rotation doesn't commute with a U move in
+// general, so it's left in place (auf still goes in front) rather than
+// risk reordering into a different operation.
+export function attachAuf(auf: string, alg: string): string {
+  if (!auf) return simplifyAlg(alg);
   const tokens = alg.trim().split(/\s+/).filter(Boolean);
   const first = tokens[0];
-  if (!first || !isRotationToken(first)) return alg;
-  if (isYAxisRotationToken(first) || !auf) return tokens.slice(1).join(' ');
-  return alg;
+  if (first && isYAxisRotationToken(first)) {
+    return simplifyAlg([first, auf, ...tokens.slice(1)].join(' '));
+  }
+  return simplifyAlg(`${auf} ${alg}`);
 }
 
 // Strips a trailing whole-cube rotation. Always safe regardless of axis or
