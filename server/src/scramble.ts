@@ -42,15 +42,25 @@ async function getCubingJsScramble(eventId: string): Promise<string> {
 
 // Pre-initialize cubing.js on server startup so the first real scramble
 // request (timer page load, Battle round start) doesn't pay the cold-start
-// cost of loading the WASM module and spawning worker threads.
+// cost of loading the WASM module and spawning worker threads. '333' alone
+// only warms the shared cubing/scramble dynamic import and the generic
+// worker-thread machinery — kilominx (its own WASM "twips" module) and FTO
+// (its own dedicated solver chunk) are each loaded on first use of that
+// specific event, independent of '333' having already run. Without warming
+// them too, the first kilominx/FTO scramble a user ever requests can take
+// long enough to hit the client's 5s timeout, which silently falls back to
+// a random-move scramble instead — so this isn't just slowness, it can
+// transiently defeat random-state scrambling entirely for those events.
+const WARM_UP_EVENTS = ['333', 'kilominx', 'fto'];
 export async function warmUpScrambler(): Promise<void> {
-  if (SCRAMBOW_PREFERRED.has('333')) return; // shouldn't happen, but guard
-  try {
-    await getCubingJsScramble('333');
-    console.log('[scramble] cubing.js warmed up');
-  } catch (e) {
-    console.warn('[scramble] warm-up failed (non-fatal):', e instanceof Error ? e.message : e);
-  }
+  await Promise.all(WARM_UP_EVENTS.map(async (eventId) => {
+    try {
+      await getCubingJsScramble(eventId);
+      console.log('[scramble] cubing.js warmed up for', eventId);
+    } catch (e) {
+      console.warn('[scramble] warm-up failed for', eventId, '(non-fatal):', e instanceof Error ? e.message : e);
+    }
+  }));
 }
 
 // WCA-quality random-state scramble. Scrambow-preferred events use scrambow
