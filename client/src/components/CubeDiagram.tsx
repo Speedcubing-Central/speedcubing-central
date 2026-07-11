@@ -77,6 +77,41 @@ export function simplifyAlg(alg: string): string {
   return stack.join(' ');
 }
 
+function isRotationToken(t: string): boolean {
+  return /^[xyz]['2]?$/.test(t);
+}
+function isYAxisRotationToken(t: string): boolean {
+  return /^y['2]?$/.test(t);
+}
+
+// Strips a leading whole-cube rotation from `alg` when doing so is provably
+// safe (verified empirically via cubing.js simulation, not just by
+// eyeballing notation): a y-axis rotation (y/y'/y2) always commutes with a
+// U-axis AUF, so it can be pushed past `auf` to the true end of the eventual
+// (inverted) scramble, where — like any trailing rotation — it only
+// reorients the final result and can be dropped without changing which case
+// the scramble represents. An x/z-axis rotation does NOT commute with a
+// U-axis AUF (it relabels which physical face U turns into), so stripping
+// it is only safe when there's no AUF to conflict with in the first place.
+export function stripLeadingRotation(alg: string, auf: string): string {
+  const tokens = alg.trim().split(/\s+/).filter(Boolean);
+  const first = tokens[0];
+  if (!first || !isRotationToken(first)) return alg;
+  if (isYAxisRotationToken(first) || !auf) return tokens.slice(1).join(' ');
+  return alg;
+}
+
+// Strips a trailing whole-cube rotation. Always safe regardless of axis or
+// what precedes it: it's the literal last move of the sequence, so dropping
+// it only changes the final viewing orientation, never the solved-ness (up
+// to rotation) of what comes before it.
+export function stripTrailingRotation(alg: string): string {
+  const tokens = alg.trim().split(/\s+/).filter(Boolean);
+  const last = tokens[tokens.length - 1];
+  if (!last || !isRotationToken(last)) return alg;
+  return tokens.slice(0, -1).join(' ');
+}
+
 // After x2 in experimentalSetupAlg, the cube is visually flipped:
 //   Visual TOP  (yellow face) = D-layer pieces: CORNERS/EDGES indices 4-7, CENTER 5
 //   Visual BOT  (white face)  = U-layer pieces: CORNERS/EDGES indices 0-3, CENTER 0

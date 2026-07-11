@@ -5,7 +5,7 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, invertAlg, simplifyAlg,
+  RotatingCaseDiagram, invertAlg, simplifyAlg, stripLeadingRotation, stripTrailingRotation,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
 import { Icon } from '../../components/Icon';
@@ -609,12 +609,13 @@ function parseMoves(alg: string): string[] {
 }
 
 // True if the algorithm's first or last move is a bare whole-cube rotation
-// (y/y'/y2/x/.../z2). A rotation there can't be dropped or simplified away —
-// unlike a face turn, it isn't optional notation, it's load-bearing for the
-// rest of the algorithm to solve the intended case — but when an alternate
-// with this shape gets picked for the scramble and a random AUF happens to
-// land right next to it, the result reads as an odd, unexplained rotation
-// sitting in what's supposed to look like an ordinary scramble.
+// (y/y'/y2/x/.../z2). Used to prefer alternates without this shape when an
+// equally-valid one exists. A leading rotation isn't necessarily a problem
+// on its own — stripLeadingRotation removes it outright when that's proven
+// safe (y-axis, or no AUF) — but an x/z-axis leading rotation combined with
+// a non-empty AUF, or ANY trailing rotation, can't be stripped safely (see
+// those functions' doc comments), so for those shapes avoiding the alternate
+// entirely (when a clean one is available) is the only fix.
 function startsOrEndsWithRotation(alg: string): boolean {
   const tokens = alg.trim().split(/\s+/).filter(Boolean);
   const isRotation = (t: string) => /^[xyz]['2]?$/.test(t);
@@ -703,12 +704,22 @@ function TrainingSession({
   // simplifyAlg collapses a prepended AUF into whatever move the algorithm
   // itself already starts with (e.g. auf "U'" + alg starting "U ..." would
   // otherwise render as a literal, redundant "U' U ..." — mathematically a
-  // no-op but visibly confusing).
-  const solvingAlg = simplifyAlg(auf ? `${auf} ${randomAlg}` : randomAlg);
+  // no-op but visibly confusing). stripLeadingRotation removes a leading
+  // rotation from randomAlg first when that's provably safe (see its doc
+  // comment) — this is what eliminates the reported "y U" pattern: the
+  // scramble's own trailing "y' U'" collapses to just "U'" once the
+  // now-redundant rotation is gone before the AUF is even attached.
+  const solvingAlg = simplifyAlg(
+    auf ? `${auf} ${stripLeadingRotation(randomAlg, auf)}` : stripLeadingRotation(randomAlg, auf),
+  );
   const scramble = useMemo(() => invertAlg(solvingAlg), [solvingAlg]);
+  // stripTrailingRotation removes a trailing rotation from the solution
+  // algorithm — always safe (it's the literal last move of the sequence),
+  // unlike a leading one, so no AUF-dependent condition is needed here.
+  const strippedPreferredAlg = stripTrailingRotation(preferredAlg);
   const moves = useMemo(
-    () => parseMoves(simplifyAlg(auf ? `${auf} ${preferredAlg}` : preferredAlg)),
-    [preferredAlg, auf],
+    () => parseMoves(simplifyAlg(auf ? `${auf} ${strippedPreferredAlg}` : strippedPreferredAlg)),
+    [strippedPreferredAlg, auf],
   );
 
   const [revealed, setRevealed] = useState(0);
