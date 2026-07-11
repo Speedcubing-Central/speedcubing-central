@@ -19,6 +19,7 @@ import { copyText } from '../../lib/clipboard';
 import { IS_2x2, rotatingStickering } from './algDiagram';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
 import { useAlgTrainerData } from './useAlgTrainerData';
+import { useTimerEngine, type TimerPhase } from '../timer/useTimerEngine';
 import { guestAlgSelectionStore } from './algLocalStore';
 import { TrainerSettings } from './TrainerSettings';
 import { AlgSolveDetail } from './AlgSolveDetail';
@@ -179,34 +180,10 @@ const SET_CARDS_2x2 = [
     preview: <TwoByTwoDiagram alg="F R2 U R' U2 R U R2 U F'" size={80} /> },
 ];
 
-// `multiSelect` (Trainer only — Library keeps the old single-click-to-browse
-// behavior) lets the user toggle several sets on before continuing, so one
-// Trainer session can mix cases from more than one algorithm set.
-function SetPicker({
-  puzzle, onSelect, onSelectMultiple, onBack, multiSelect,
-}: {
-  puzzle: string;
-  onSelect?: (id: string) => void;
-  onSelectMultiple?: (ids: string[]) => void;
-  onBack: () => void;
-  multiSelect?: boolean;
-}) {
+function SetPicker({ puzzle, onSelect, onBack }: { puzzle: string; onSelect: (id: string) => void; onBack: () => void }) {
   const is3x3 = puzzle === '3x3';
   const label = is3x3 ? '3×3' : '2×2';
   const cards = is3x3 ? SET_CARDS_3x3 : SET_CARDS_2x2;
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-
-  const handleClick = (id: string) => {
-    if (multiSelect) {
-      setPicked((prev) => {
-        const next = new Set(prev);
-        next.has(id) ? next.delete(id) : next.add(id);
-        return next;
-      });
-    } else {
-      onSelect?.(id);
-    }
-  };
 
   return (
     <div>
@@ -217,28 +194,11 @@ function SetPicker({
         <span className="text-muted">/</span>
         <span className="font-semibold">{label}</span>
       </div>
-      <PageHeader
-        title={`${label} Algorithm Sets`}
-        subtitle={multiSelect ? 'Choose one or more sets to train together.' : 'Choose a set to browse and learn.'}
-      />
+      <PageHeader title={`${label} Algorithm Sets`} subtitle="Choose a set to browse and learn." />
       <div className={clsx('grid gap-4', is3x3 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3')}>
         {cards.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => handleClick(s.id)}
-            className={clsx(
-              'card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center relative',
-              multiSelect && picked.has(s.id) && 'border-accent/60 bg-accent/5 ring-1 ring-accent',
-            )}
-          >
-            {multiSelect && (
-              <div className={clsx(
-                'absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center border',
-                picked.has(s.id) ? 'bg-accent border-accent text-white' : 'border-gray-300 dark:border-border',
-              )}>
-                {picked.has(s.id) && <Icon name="check" size={12} />}
-              </div>
-            )}
+          <button key={s.id} onClick={() => onSelect(s.id)}
+            className="card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center">
             <div className="w-20 h-20 flex items-center justify-center">{s.preview}</div>
             <div>
               <div className="font-bold text-lg">{s.label}</div>
@@ -248,17 +208,6 @@ function SetPicker({
           </button>
         ))}
       </div>
-      {multiSelect && (
-        <div className="flex justify-end mt-6">
-          <button
-            onClick={() => picked.size > 0 && onSelectMultiple?.(Array.from(picked))}
-            disabled={picked.size === 0}
-            className="btn-primary px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Select Cases ({picked.size} set{picked.size !== 1 ? 's' : ''})
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -540,56 +489,40 @@ function CaseBrowser({
 // Trainer tab
 // ---------------------------------------------------------------------------
 
-// Case selection screen. Takes one or more algorithm sets (a Trainer session
-// can mix cases from several — see TrainerTab/SetPicker's multiSelect mode)
-// and combines their cases into one pool. Group and status filters are
+// Case selection screen (single set). Group and status filters are
 // multi-select (toggle any combination on) rather than pick-one, so e.g.
 // "Learning" + "Done" or several OLL subgroups at once can be filtered
 // together.
 function CaseSelector({
-  setIds, prefs, onStart, onBack, initialSelectedIds,
+  setId, prefs, onStart, onBack, initialSelectedIds,
 }: {
-  setIds: string[];
+  setId: string;
   prefs: PrefsMap;
-  onStart: (cases: AlgCase[], caseSetId: Record<string, string>) => void;
+  onStart: (cases: AlgCase[]) => void;
   onBack: () => void;
   // Pre-check the last-saved selection (see TrainerTab) instead of
   // defaulting to every case, so revisiting this screen to tweak a
   // selection starts from what was actually last drilled.
   initialSelectedIds?: string[] | null;
 }) {
-  const sets = useMemo(
-    () => setIds.map((id) => getSet(id)).filter((s): s is AlgSet => Boolean(s)),
-    [setIds],
-  );
-  // Case ids are unique across sets (each is prefixed by its own set), so a
-  // flat id -> owning-set-id map is enough to resolve any case back to its
-  // set without needing to carry the set alongside every case everywhere.
-  const caseSetId = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const s of sets) for (const c of s.cases) map[c.id] = s.id;
-    return map;
-  }, [sets]);
-  const allCases = useMemo(() => sets.flatMap((s) => s.cases), [sets]);
-  const multiSet = sets.length > 1;
-
-  const hasGroups = useMemo(() => allCases.some((c) => c.group), [allCases]);
-  const groups = useMemo(() => Array.from(new Set(allCases.map((c) => c.group).filter(Boolean))), [allCases]);
+  const set = getSet(setId)!;
+  const hasGroups = useMemo(() => set.cases.some((c) => c.group), [set]);
+  const groups = useMemo(() => Array.from(new Set(set.cases.map((c) => c.group).filter(Boolean))), [set]);
   const [statusFilter, setStatusFilter] = useState<Set<AlgStatus>>(new Set());
   const [groupFilter, setGroupFilter] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(initialSelectedIds && initialSelectedIds.length > 0 ? initialSelectedIds : allCases.map((c) => c.id)),
+    () => new Set(initialSelectedIds && initialSelectedIds.length > 0 ? initialSelectedIds : set.cases.map((c) => c.id)),
   );
 
   const visible = useMemo(() => {
-    let list = allCases;
+    let list = set.cases;
     if (groupFilter.size > 0) list = list.filter((c) => groupFilter.has(c.group));
     if (statusFilter.size > 0) list = list.filter((c) => statusFilter.has(prefs[c.id]?.status ?? 'NEW'));
     return list;
-  }, [allCases, groupFilter, statusFilter, prefs]);
+  }, [set, groupFilter, statusFilter, prefs]);
 
-  const toggleInSet = <T,>(set: Set<T>, id: T) => {
-    const next = new Set(set);
+  const toggleInSet = <T,>(s: Set<T>, id: T) => {
+    const next = new Set(s);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   };
@@ -608,8 +541,7 @@ function CaseSelector({
     });
   };
 
-  const selectedCases = allCases.filter((c) => selected.has(c.id));
-  const title = sets.map((s) => s.name).join(' + ') || 'Select Cases';
+  const selectedCases = set.cases.filter((c) => selected.has(c.id));
 
   return (
     <div>
@@ -618,7 +550,7 @@ function CaseSelector({
           <Icon name="arrowLeft" size={14} /> Sets
         </button>
         <span className="text-muted">/</span>
-        <span className="font-semibold">{title}</span>
+        <span className="font-semibold">{set.name}</span>
         <span className="text-muted">/</span>
         <span className="font-semibold">Select Cases</span>
       </div>
@@ -657,7 +589,6 @@ function CaseSelector({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 mb-6">
         {visible.map((c) => {
           const on = selected.has(c.id);
-          const cSet = getSet(caseSetId[c.id])!;
           return (
             <button
               key={c.id}
@@ -667,9 +598,8 @@ function CaseSelector({
                 on ? 'border-accent/60 bg-accent/5' : 'opacity-50',
               )}
             >
-              <div className="pointer-events-none"><CaseImage c={c} set={cSet} size={64} pref={prefs[c.id]} /></div>
+              <div className="pointer-events-none"><CaseImage c={c} set={set} size={64} pref={prefs[c.id]} /></div>
               <div className="font-semibold leading-tight">{c.name}</div>
-              {multiSet && <div className="text-muted text-[10px] leading-tight">{cSet.name}</div>}
               {prefs[c.id]?.status && prefs[c.id].status !== 'NEW' && (
                 <StatusBadge status={prefs[c.id].status} />
               )}
@@ -680,7 +610,7 @@ function CaseSelector({
 
       <div className="flex justify-end">
         <button
-          onClick={() => selectedCases.length > 0 && onStart(selectedCases, caseSetId)}
+          onClick={() => selectedCases.length > 0 && onStart(selectedCases)}
           disabled={selectedCases.length === 0}
           className="btn-primary px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -724,23 +654,17 @@ function runningDisplay(ms: number, timerUpdate: string): string {
 }
 
 function TrainingSession({
-  cases, caseSetId, puzzle, prefs, onBack,
+  cases, setId, puzzle, prefs, onBack,
 }: {
   cases: AlgCase[];
-  // Maps each case's id to the real set it came from — a session can
-  // combine cases from several sets (see CaseSelector's multi-set support).
-  caseSetId: Record<string, string>;
+  setId: string;
   puzzle: string;
   prefs: PrefsMap;
   onBack: () => void;
 }) {
-  const setIds = useMemo(() => Array.from(new Set(Object.values(caseSetId))), [caseSetId]);
-  const setNames = useMemo(
-    () => setIds.map((id) => getSet(id)?.name).filter(Boolean).join(' + '),
-    [setIds],
-  );
+  const set = getSet(setId)!;
   const s = useSettings();
-  const data = useAlgTrainerData(setIds);
+  const data = useAlgTrainerData(useMemo(() => [setId], [setId]));
   const navigate = useNavigate();
 
   const [showSettings, setShowSettings] = useState(false);
@@ -778,8 +702,6 @@ function TrainingSession({
 
   const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
   const currentCase = cases[caseIndex];
-  const currentSetId = caseSetId[currentCase.id];
-  const currentSet = getSet(currentSetId)!;
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
 
   // Pick an alternate (never the preferred alg, so it's not given away) plus
@@ -821,9 +743,9 @@ function TrainingSession({
   // which is only true once the scramble is fully built.
   const scramble = useMemo(() => {
     const raw = invertAlg(solvingAlg);
-    if (IS_2x2(currentSet.kind)) return restrictToFaces(raw, RUF_FACES);
+    if (IS_2x2(set.kind)) return restrictToFaces(raw, RUF_FACES);
     return eliminateWideMoves(raw);
-  }, [solvingAlg, currentSet.kind]);
+  }, [solvingAlg, set.kind]);
   // stripTrailingRotation removes a trailing rotation from the solution
   // algorithm — always safe (it's the literal last move of the sequence),
   // unlike a leading one, so no AUF-dependent condition is needed here.
@@ -834,12 +756,19 @@ function TrainingSession({
   );
 
   const [revealed, setRevealed] = useState(0);
-  const [timerState, setTimerState] = useState<'idle' | 'running' | 'stopped'>('idle');
-  const [elapsed, setElapsed] = useState(0);
-  const [penalty, setPenalty] = useState<Penalty>('NONE');
   const [manualInput, setManualInput] = useState('');
-  const startTime = useRef<number>(0);
-  const rafId = useRef<number | null>(null);
+  // The case just solved, kept around briefly for the name-reveal card below
+  // — since stopping now advances immediately, `currentCase` has already
+  // moved on to the next case by the time anything re-renders, so the
+  // reveal can't just read it off `currentCase` the way it used to.
+  const [justSolved, setJustSolved] = useState<AlgCase | null>(null);
+  const justSolvedTimeout = useRef<number | null>(null);
+  const flashSolved = useCallback((c: AlgCase) => {
+    if (justSolvedTimeout.current) clearTimeout(justSolvedTimeout.current);
+    setJustSolved(c);
+    justSolvedTimeout.current = window.setTimeout(() => setJustSolved(null), 2000);
+  }, []);
+  useEffect(() => () => { if (justSolvedTimeout.current) clearTimeout(justSolvedTimeout.current); }, []);
 
   const nextCase = useCallback(() => {
     setCaseIndex((prev) => {
@@ -849,84 +778,63 @@ function TrainingSession({
       return next;
     });
     setRevealed(0);
-    setTimerState('idle');
-    setElapsed(0);
-    setPenalty('NONE');
     setManualInput('');
   }, [cases]);
 
-  // Timer loop
-  useEffect(() => {
-    if (timerState === 'running') {
-      const tick = () => {
-        setElapsed(Date.now() - startTime.current);
-        rafId.current = requestAnimationFrame(tick);
-      };
-      rafId.current = requestAnimationFrame(tick);
-      return () => { if (rafId.current) cancelAnimationFrame(rafId.current); };
-    }
-  }, [timerState]);
+  // Hold-to-start (shared with Timer/Battle's own engine, including the
+  // user's holdToStart/holdDuration setting) — Space no longer starts a
+  // solve instantly on press; the timer only arms once held for the
+  // configured duration, so a stray tap can't start one by accident.
+  // Stopping (any key while running) records the solve and immediately
+  // advances to the next case — no separate "press again" step.
+  const engine = useTimerEngine({
+    inspection: false,
+    inspectionDirection: 'down',
+    inspectionVoice: false,
+    holdToStart: s.holdToStart,
+    holdDuration: s.holdDuration,
+    enabled: s.entryMode === 'keyboard' && !anyModalOpen,
+    onComplete: (timeMs, penalty) => {
+      flashSolved(currentCase);
+      data.addSolve(setId, currentCase.id, timeMs, penalty, scramble);
+      nextCase();
+    },
+  });
 
-  // Keyboard handler: Left/Right arrows step the move reveal; Space or
-  // Enter start the timer (keyboard entry mode) or advance to the next case
-  // once stopped (either mode — in manual mode the typed-time input has its
-  // own Enter-to-submit handler and is excluded here). Once the timer is
-  // running, any key stops it (arrows included — by then hands are on the
-  // cube, not reveal duty), matching Timer/Battle's own engine.
+  // Reset the engine's own phase/display whenever the case changes
+  // (including right after nextCase() advances one automatically) so the
+  // next case starts from a clean idle state instead of the previous
+  // solve's leftover "stopped" display lingering for a moment.
+  useEffect(() => {
+    engine.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseIndex]);
+
+  // Left/Right arrows step the move reveal — disabled while actually
+  // running (hands are on the cube by then, matching Timer/Battle, where
+  // any key press while running stops the solve instead).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isTextTarget = e.target instanceof HTMLInputElement;
-      if (anyModalOpen || isTextTarget) return;
-
-      if (s.entryMode === 'keyboard' && timerState === 'running') {
-        if (e.repeat) return;
-        e.preventDefault();
-        const finalMs = Math.round(Date.now() - startTime.current);
-        setElapsed(finalMs);
-        setTimerState('stopped');
-        data.addSolve(currentSetId, currentCase.id, finalMs, 'NONE', scramble);
-        return;
-      }
-
+      if (anyModalOpen || isTextTarget || engine.phase === 'running') return;
       if (e.code === 'ArrowRight') {
         e.preventDefault();
         setRevealed((r) => Math.min(r + 1, moves.length));
-        return;
-      }
-      if (e.code === 'ArrowLeft') {
+      } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
         setRevealed((r) => Math.max(r - 1, 0));
-        return;
-      }
-      if (e.repeat || (e.code !== 'Space' && e.key !== 'Enter')) return;
-
-      if (s.entryMode !== 'keyboard') {
-        if (timerState === 'stopped') {
-          e.preventDefault();
-          nextCase();
-        }
-        return;
-      }
-      e.preventDefault();
-      if (timerState === 'idle') {
-        startTime.current = Date.now();
-        setTimerState('running');
-      } else {
-        nextCase();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timerState, nextCase, moves.length, s.entryMode, anyModalOpen, currentCase, currentSetId, scramble, data]);
+  }, [anyModalOpen, engine.phase, moves.length]);
 
   const submitManual = () => {
     const parsed = parseTimeInput(manualInput, s.solvePrecision);
     if (!parsed) return;
-    setElapsed(parsed.time);
-    setPenalty(parsed.penalty);
-    setTimerState('stopped');
-    setManualInput('');
-    data.addSolve(currentSetId, currentCase.id, parsed.time, parsed.penalty, scramble);
+    flashSolved(currentCase);
+    data.addSolve(setId, currentCase.id, parsed.time, parsed.penalty, scramble);
+    nextCase();
   };
 
   return (
@@ -938,13 +846,12 @@ function TrainingSession({
             <Icon name="arrowLeft" size={14} /> Cases
           </button>
           <span className="text-muted">/</span>
-          <span className="font-semibold">{setNames} Trainer</span>
+          <span className="font-semibold">{set.name} Trainer</span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[currentSetId] ?? currentSetId.toLowerCase()}/stats`)}
+            onClick={() => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[setId] ?? setId.toLowerCase()}/stats`)}
             className="btn-ghost flex items-center gap-1.5 text-sm"
-            title={setIds.length > 1 ? `Stats for ${currentSet.name} (the current case's set)` : undefined}
           >
             <Icon name="target" size={15} /> Stats
           </button>
@@ -971,30 +878,27 @@ function TrainingSession({
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* Left: diagram + scramble + move reveal + case-name reveal */}
         <TrainingLeftColumn
-          set={currentSet}
+          set={set}
           currentCase={currentCase}
           solvingAlg={solvingAlg}
           scramble={scramble}
           moves={moves}
           revealed={revealed}
-          timerState={timerState}
-          showCaseName={s.trainerShowCaseName}
+          justSolved={s.trainerShowCaseName ? justSolved : null}
           availableHeight={rowHeight}
           resetSignal={diagramResetSignal}
         />
 
         {/* Right: timer tile (grows to fill) + solves tile (fills remaining space, scrolls internally) */}
         <TrainingRightColumn
-          timerState={timerState}
-          elapsed={elapsed}
-          penalty={penalty}
+          phase={engine.phase}
+          elapsed={engine.elapsed}
           entryMode={s.entryMode}
           timerUpdate={s.timerUpdate}
           solvePrecision={s.solvePrecision}
           manualInput={manualInput}
           setManualInput={setManualInput}
           submitManual={submitManual}
-          nextCase={nextCase}
           solves={data.solves}
           onOpenSolve={(i) => setDetailIndex(i)}
           availableHeight={rowHeight}
@@ -1028,7 +932,7 @@ function TrainingSession({
 // directly, since its own height genuinely doesn't depend on anything sized
 // from `availableHeight` — no settling cascade there.
 function TrainingLeftColumn({
-  set, currentCase, solvingAlg, scramble, moves, revealed, timerState, showCaseName, availableHeight, resetSignal,
+  set, currentCase, solvingAlg, scramble, moves, revealed, justSolved, availableHeight, resetSignal,
 }: {
   set: AlgSet;
   currentCase: AlgCase;
@@ -1036,8 +940,10 @@ function TrainingLeftColumn({
   scramble: string;
   moves: string[];
   revealed: number;
-  timerState: 'idle' | 'running' | 'stopped';
-  showCaseName: boolean;
+  // The just-completed case (already null'd out by the caller if the
+  // "show case name" setting is off), briefly flashed below the move
+  // reveal — see TrainingSession's flashSolved.
+  justSolved: AlgCase | null;
   availableHeight: number | undefined;
   resetSignal?: number;
 }) {
@@ -1054,8 +960,6 @@ function TrainingLeftColumn({
     const timeout = setTimeout(() => setDiagramMaxHeight(budget), 150);
     return () => clearTimeout(timeout);
   }, [availableHeight, belowHeight]);
-
-  const revealShown = timerState === 'stopped' && showCaseName;
 
   return (
     <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
@@ -1087,10 +991,10 @@ function TrainingLeftColumn({
             separate bordered tile, so it reads as part of the flow instead
             of popping in as its own disconnected block. */}
         <div className="h-5 shrink-0 flex items-center justify-center">
-          {revealShown && (
+          {justSolved && (
             <div className="case-reveal-enter flex items-center gap-2 text-sm">
-              <span className="font-bold text-accent">{currentCase.name}</span>
-              {currentCase.group && <span className="text-muted">{currentCase.group}</span>}
+              <span className="font-bold text-accent">{justSolved.name}</span>
+              {justSolved.group && <span className="text-muted">{justSolved.group}</span>}
             </div>
           )}
         </div>
@@ -1112,19 +1016,17 @@ const TRAINER_SOLVE_GRID = 'grid grid-cols-[1.8rem_1fr_4.5rem_1.25rem] gap-2 ite
 // this same explicit height, only using a live ResizeObserver for width
 // (which doesn't have that staleness problem).
 function TrainingRightColumn({
-  timerState, elapsed, penalty, entryMode, timerUpdate, solvePrecision,
-  manualInput, setManualInput, submitManual, nextCase, solves, onOpenSolve, availableHeight,
+  phase, elapsed, entryMode, timerUpdate, solvePrecision,
+  manualInput, setManualInput, submitManual, solves, onOpenSolve, availableHeight,
 }: {
-  timerState: 'idle' | 'running' | 'stopped';
+  phase: TimerPhase;
   elapsed: number;
-  penalty: Penalty;
   entryMode: 'keyboard' | 'typing';
   timerUpdate: string;
   solvePrecision: 2 | 3;
   manualInput: string;
   setManualInput: (v: string) => void;
   submitManual: () => void;
-  nextCase: () => void;
   solves: AlgSolveDTO[];
   onOpenSolve: (index: number) => void;
   availableHeight: number | undefined;
@@ -1151,10 +1053,22 @@ function TrainingRightColumn({
     return () => ro.disconnect();
   }, [timerCardHeight, entryMode]);
 
-  const display = timerState === 'running'
+  const display = phase === 'running'
     ? runningDisplay(elapsed, timerUpdate)
-    : fmtTime(elapsed, penalty, solvePrecision);
-  const colorClass = timerState === 'running' ? 'text-accent' : 'text-primary';
+    : phase === 'stopped'
+      ? fmtTime(Math.round(elapsed), 'NONE', solvePrecision)
+      : fmtTime(0, 'NONE', solvePrecision);
+  const colorClass = phase === 'ready' ? 'text-green-500'
+    : phase === 'holding' ? 'text-red-500'
+    : phase === 'running' ? 'text-accent'
+    : 'text-primary';
+
+  const hint = (() => {
+    if (phase === 'holding') return 'Keep holding…';
+    if (phase === 'ready') return 'Release to start!';
+    if (phase === 'running') return 'Press any key to stop';
+    return <>Hold <kbd className="kbd">Space</kbd> to start</>;
+  })();
 
   return (
     <div className="flex flex-col gap-3 md:flex-[2] min-h-0">
@@ -1172,37 +1086,21 @@ function TrainingRightColumn({
 
         {entryMode === 'keyboard' ? (
           <div className="flex flex-col items-center gap-2 text-sm text-muted shrink-0">
-            {timerState === 'idle' && <span>Press <kbd className="kbd">Space</kbd> to start</span>}
-            {timerState === 'running' && <span>Press <kbd className="kbd">Space</kbd> to stop</span>}
-            {timerState === 'stopped' && <span>Press <kbd className="kbd">Space</kbd> or <kbd className="kbd">Enter</kbd> for next case</span>}
+            <span>{hint}</span>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-3 shrink-0">
-            {timerState !== 'stopped' ? (
-              <div className="flex gap-2">
-                <input
-                  autoFocus={timerState === 'idle'}
-                  type="text"
-                  placeholder="e.g. 1234 or 12.34"
-                  value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && submitManual()}
-                  className="input w-40 text-center font-mono text-lg"
-                />
-                <button onClick={submitManual} className="btn-primary px-4 py-2">Set</button>
-              </div>
-            ) : (
-              <button onClick={nextCase} className="btn-primary px-6 py-2.5">
-                Next case
-              </button>
-            )}
+          <div className="flex gap-2 shrink-0">
+            <input
+              autoFocus
+              type="text"
+              placeholder="e.g. 1234 or 12.34"
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitManual()}
+              className="input w-40 text-center font-mono text-lg"
+            />
+            <button onClick={submitManual} className="btn-primary px-4 py-2">Set</button>
           </div>
-        )}
-
-        {entryMode === 'keyboard' && timerState === 'stopped' && (
-          <button onClick={nextCase} className="btn-primary px-6 py-2.5 shrink-0">
-            Next case
-          </button>
         )}
       </div>
 
@@ -1248,8 +1146,8 @@ function TrainerSolveRow({
   precision: number;
   onOpen: () => void;
 }) {
-  // Each solve carries its own setId — a session can mix cases from several
-  // sets (see CaseSelector's multi-set support), so this resolves per-solve.
+  // Each solve already carries its own setId, so this resolves the case
+  // straight off the solve rather than needing a set passed down as a prop.
   const c = getSet(solve.setId)?.cases.find((cc) => cc.id === solve.caseId);
   return (
     <div className={`${TRAINER_SOLVE_GRID} px-1 py-2 text-sm`}>
@@ -1279,95 +1177,69 @@ function TrainerSolveRow({
 // ---------------------------------------------------------------------------
 
 function TrainerTab({
-  puzzle, setIds, isAuthed,
+  puzzle, setId, isAuthed,
 }: {
   puzzle: string | null;
-  setIds: string[];
+  setId: string | null;
   isAuthed: boolean;
 }) {
   const navigate = useNavigate();
   const [sessionCases, setSessionCases] = useState<AlgCase[] | null>(null);
-  // Which real set each in-session case came from — a session can combine
-  // cases from several sets (see CaseSelector), so this is what lets
-  // TrainingSession resolve the right set (diagram kind, solve history,
-  // stats link, ...) per case instead of assuming just one.
-  const [caseSetId, setCaseSetId] = useState<Record<string, string>>({});
   const [prefs, setPrefs] = useState<PrefsMap>({});
   // Gates rendering CaseSelector until we know whether a saved selection
-  // exists for these sets — otherwise it'd flash empty/all-selected for a
+  // exists for this set — otherwise it'd flash empty/all-selected for a
   // moment before the pre-check lands.
   const [selectionChecked, setSelectionChecked] = useState(false);
   // Kept separately from sessionCases so CaseSelector can still pre-check
   // the last-saved selection when the user goes back to "Cases" to tweak
   // it, even though sessionCases itself gets cleared to show that screen.
-  // Selections are still saved per-individual-set (unchanged persistence
-  // shape) — this just tracks each involved set's own saved ids.
-  const [savedCaseIds, setSavedCaseIds] = useState<Record<string, string[]>>({});
-
-  const setsKey = useMemo(() => setIds.slice().sort().join(','), [setIds]);
+  const [savedCaseIds, setSavedCaseIds] = useState<string[] | null>(null);
 
   useEffect(() => {
-    if (setIds.length === 0 || !isAuthed) return;
-    let cancelled = false;
-    Promise.all(setIds.map((id) => api.get<AlgPref[]>(`/alg/prefs/${id}`).then((r) => r.data).catch(() => [] as AlgPref[])))
-      .then((lists) => {
-        if (cancelled) return;
+    if (!setId || !isAuthed) return;
+    api.get<AlgPref[]>(`/alg/prefs/${setId}`)
+      .then((r) => {
         const map: PrefsMap = {};
-        for (const list of lists) for (const p of list) map[p.caseId] = p;
+        for (const p of r.data) map[p.caseId] = p;
         setPrefs(map);
-      });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setsKey, isAuthed]);
+      })
+      .catch(() => {});
+  }, [setId, isAuthed]);
 
-  // Fetch the case selection the user last drilled in each set (if any) so
+  // Fetch the case selection the user last drilled in this set (if any) so
   // CaseSelector can pre-check it — the user still lands on CaseSelector
   // every visit and picks "Start Training" themselves; this only saves them
   // from having to re-check the same boxes again. See CaseSelector's "Start
   // Training" handler below, which is what saves the selection in the first place.
   useEffect(() => {
     setSessionCases(null);
-    setCaseSetId({});
-    setSavedCaseIds({});
+    setSavedCaseIds(null);
     setSelectionChecked(false);
-    if (setIds.length === 0) {
+    if (!setId) {
       setSelectionChecked(true);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      const entries = await Promise.all(setIds.map(async (id): Promise<[string, string[] | undefined]> => {
-        if (isAuthed) {
-          const caseIds = await api.get<{ caseIds: string[] } | null>(`/alg/selection/${id}`)
-            .then((r) => r.data?.caseIds)
-            .catch(() => undefined);
-          return [id, caseIds];
-        }
-        return [id, guestAlgSelectionStore.get(id) ?? undefined];
-      }));
-      if (cancelled) return;
-      const map: Record<string, string[]> = {};
-      for (const [id, caseIds] of entries) if (caseIds && caseIds.length > 0) map[id] = caseIds;
-      setSavedCaseIds(map);
+    const applySavedIds = (caseIds: string[] | null | undefined) => {
+      if (caseIds && caseIds.length > 0) setSavedCaseIds(caseIds);
       setSelectionChecked(true);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setsKey, isAuthed]);
-
-  // Persist per-set, same shape as before — split the combined selection
-  // back out by each case's own originating set.
-  function saveSelection(cases: AlgCase[], resolvedCaseSetId: Record<string, string>) {
-    const bySet: Record<string, string[]> = {};
-    for (const c of cases) {
-      const sid = resolvedCaseSetId[c.id];
-      if (!sid) continue;
-      (bySet[sid] ??= []).push(c.id);
+    };
+    if (isAuthed) {
+      api.get<{ caseIds: string[] } | null>(`/alg/selection/${setId}`)
+        .then((r) => applySavedIds(r.data?.caseIds))
+        .catch(() => setSelectionChecked(true));
+    } else {
+      applySavedIds(guestAlgSelectionStore.get(setId));
     }
-    setSavedCaseIds(bySet);
-    for (const [sid, caseIds] of Object.entries(bySet)) {
-      if (isAuthed) api.put('/alg/selection', { setId: sid, caseIds }).catch(() => {});
-      else guestAlgSelectionStore.set(sid, caseIds);
+  }, [setId, isAuthed]);
+
+  function saveSelection(cases: AlgCase[]) {
+    if (!setId) return;
+    const caseIds = cases.map((c) => c.id);
+    setSavedCaseIds(caseIds);
+    if (isAuthed) {
+      api.put('/alg/selection', { setId, caseIds }).catch(() => {});
+    } else {
+      guestAlgSelectionStore.set(setId, caseIds);
     }
   }
 
@@ -1379,16 +1251,12 @@ function TrainerTab({
       />
     );
   }
-  if (setIds.length === 0) {
+  if (!setId) {
     return (
       <SetPicker
         puzzle={puzzle}
-        multiSelect
         onBack={() => navigate('/algorithms/trainer')}
-        onSelectMultiple={(ids) => {
-          const slug = ids.map((sid) => SET_TO_URL[sid] ?? sid.toLowerCase()).join('+');
-          navigate(`/algorithms/trainer/${puzzle}/${slug}`);
-        }}
+        onSelect={(sid) => navigate(`/algorithms/trainer/${puzzle}/${SET_TO_URL[sid] ?? sid.toLowerCase()}`)}
       />
     );
   }
@@ -1399,25 +1267,21 @@ function TrainerTab({
     return (
       <TrainingSession
         cases={sessionCases}
-        caseSetId={caseSetId}
+        setId={setId}
         puzzle={puzzle}
         prefs={prefs}
         onBack={() => setSessionCases(null)}
       />
     );
   }
-  // Case ids are unique across sets, so the per-set saved selections can be
-  // flattened into one combined pre-check list for CaseSelector.
-  const combinedSavedIds = Object.values(savedCaseIds).flat();
   return (
     <CaseSelector
-      setIds={setIds}
+      setId={setId}
       prefs={prefs}
-      initialSelectedIds={combinedSavedIds}
+      initialSelectedIds={savedCaseIds}
       onBack={() => navigate(`/algorithms/trainer/${puzzle}`)}
-      onStart={(cases, resolvedCaseSetId) => {
-        saveSelection(cases, resolvedCaseSetId);
-        setCaseSetId(resolvedCaseSetId);
+      onStart={(cases) => {
+        saveSelection(cases);
         setSessionCases(cases);
       }}
     />
@@ -1487,13 +1351,6 @@ export default function AlgTrainerPage() {
   const tab: 'library' | 'trainer' = tabParam === 'trainer' ? 'trainer' : 'library';
   const puzzle = puzzleParam ?? null;
   const setId = setSlug ? (URL_TO_SET[setSlug] ?? null) : null;
-  // Trainer sessions can combine several sets — the URL joins their slugs
-  // with "+" (e.g. /algorithms/trainer/3x3/oll+pll). Library stays
-  // single-set (`setId` above), unaffected.
-  const setIds = useMemo(
-    () => (setSlug ? setSlug.split('+').map((s) => URL_TO_SET[s]).filter((s): s is string => Boolean(s)) : []),
-    [setSlug],
-  );
 
   return (
     <div>
@@ -1513,7 +1370,7 @@ export default function AlgTrainerPage() {
       </div>
       {tab === 'library'
         ? <LibraryTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
-        : <TrainerTab puzzle={puzzle} setIds={setIds} isAuthed={isAuthed} />
+        : <TrainerTab puzzle={puzzle} setId={setId} isAuthed={isAuthed} />
       }
     </div>
   );

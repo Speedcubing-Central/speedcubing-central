@@ -32,9 +32,8 @@ export function AlgSolveDetail({
   const [editValue, setEditValue] = useState('');
 
   const solve = solves[index];
-  // Each solve carries its own setId (a session can mix cases from several
-  // sets — see CaseSelector's multi-set support), so this resolves per-solve
-  // rather than trusting a single set passed down from a parent.
+  // Each solve already carries its own setId, so this resolves straight off
+  // the solve rather than needing a set passed down as a prop.
   const set = solve ? getSet(solve.setId) : undefined;
   if (!solve || !set) return null;
   const c = set.cases.find((cc) => cc.id === solve.caseId);

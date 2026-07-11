@@ -9,12 +9,12 @@ import { guestAlgStore } from './algLocalStore';
 // useTimerData.ts, but scoped to (user, setId) instead of a session, since
 // per-case PBs need the full history for a set rather than one practice run.
 //
-// Accepts multiple setIds so a Trainer session that combines cases from
-// several algorithm sets (see CaseSelector) can show one merged solve list.
-// Each AlgSolveDTO already carries its own `setId`, so only addSolve (which
-// creates a brand new solve) needs the caller to say which set it belongs
-// to — updatePenalty/updateTime/deleteSolve look it up from the existing
-// solve instead, so their call sites don't need to change for multi-set use.
+// Takes an array of setIds (callers currently only ever pass one) so the
+// same hook covers both the Trainer session and the Stats page without a
+// separate code path for each. Each AlgSolveDTO already carries its own
+// `setId`, so only addSolve (which creates a brand new solve) needs the
+// caller to say which set it belongs to — updatePenalty/updateTime/
+// deleteSolve look it up from the existing solve instead.
 export function useAlgTrainerData(setIds: string[]) {
   const { user } = useAuth();
   const isGuest = !user;
