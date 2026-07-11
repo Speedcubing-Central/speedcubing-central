@@ -11,7 +11,7 @@ export const EG1_SET: AlgSet = {
     { id: 'EG1-AS-2', name: 'EG1 AS 2', group: 'Anti-Sune', moves: "U R U' R' F' U' F2 R U' R'", alts: ["U2 L' U' L F2 U' F' L' U' L", "R U' F2 R U2 R U' F", "F R U' R' U R' F' R U F' R U R' U", "U F' L F L' F' L' U L U' L F L'", "R U' F2 R U2 R U' B"] },
     { id: 'EG1-AS-3', name: 'EG1 AS 3', group: 'Anti-Sune', moves: "F' R U R' U' R U R2 F' R", alts: ["U' R U' R' U2 R' F R2 U2 R' F", "F' L F L' U' L F L2 U' L", "F' L F L' U' R U R' L' U' L"] },
     { id: 'EG1-AS-4', name: 'EG1 AS 4', group: 'Anti-Sune', moves: "R U' R' F' U' R U R' U' F", alts: ["U F R U' R2 F' R U F' R U R'", "U' R' F R F' U R U' R2 F' R F", "U2 F U' L' U L U' F' L' U' L", "U F L F' L2 U' L U F' L F L'", "U' R U R' U2 R' F' R F R' F R"] },
-    { id: 'EG1-AS-5', name: 'EG1 AS 5', group: 'Anti-Sune', moves: "y' R U R' F' U' R U R' U' R U R'", alts: ["d U2 L' U L U' L' U L U L F L' F'", "y' U2 L' U L U' L' U L U L F L' F'", "y' U2 R' F R U' R' F R U R U R' F'", "y' U' R U F' R U R2 U' R U R'", "y' U2 F' R' F R U R U R' U' R U R'"] },
+    { id: 'EG1-AS-5', name: 'EG1 AS 5', group: 'Anti-Sune', moves: "y' R U R' F' U' R U R' U' R U R'", alts: ["y' U2 L' U L U' L' U L U L F L' F'", "y' U2 R' F R U' R' F R U R U R' F'", "y' U' R U F' R U R2 U' R U R'", "y' U2 F' R' F R U R U R' U' R U R'"] },
     { id: 'EG1-AS-6', name: 'EG1 AS 6', group: 'Anti-Sune', moves: "y2 R U' R2 F R U' R' F R F'", alts: ["y2 L F' L2 U L U' L' U L F'"] },
     // H
     { id: 'EG1-H-1', name: 'EG1 H 1', group: 'H', moves: "U' R' F R2 U' R' F R U R' F'", alts: ["U' R' F R2 U' R2 U' F U R", "F' R' F R F R' F' R2 U R'", "U R U' R2 F R F' R' F' R F", "F' R2 F' R F R' U R' U", "U' R' F R' F U F' R2 F'", "U R' F R2 U' R2 U' F U R"] },
