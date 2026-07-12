@@ -188,7 +188,7 @@ export default function TimerPage() {
     else document.documentElement.requestFullscreen().catch(() => undefined);
   }
 
-  function addTyped() {
+  const addTyped = useCallback(() => {
     if (!typed.trim()) {
       scr.advance();
       return;
@@ -197,25 +197,36 @@ export default function TimerPage() {
     if (!parsed) return;
     onComplete(parsed.time, parsed.penalty);
     setTyped('');
-  }
+  }, [typed, solvePrecision, onComplete, scr.advance]);
 
-  // In keyboard mode, Enter advances to the next scramble when the timer is
-  // idle or stopped and no modal is open.
+  // Enter advances/submits without needing focus anywhere in particular —
+  // in keyboard mode that means advancing to the next scramble (when idle
+  // or stopped); in typing mode it means submitting the typed time (or,
+  // same as the input's own Enter handler, advancing if nothing's been
+  // typed). Excluding INPUT/TEXTAREA/SELECT/BUTTON targets here isn't about
+  // *not* handling Enter while the manual-entry input is focused — it's to
+  // avoid double-firing addTyped(), since the input has its own onKeyDown
+  // for that case.
   useEffect(() => {
-    if (entryMode !== 'keyboard') return;
+    if (entryMode !== 'keyboard' && entryMode !== 'typing') return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
-      if (anyModalOpen) return;
+      if (anyModalOpen || inputBlocked) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-      if ((engine.phase === 'idle' || engine.phase === 'stopped') && !scr.loading) {
+      if (entryMode === 'keyboard') {
+        if (engine.phase === 'idle' || engine.phase === 'stopped') {
+          e.preventDefault();
+          scr.advance();
+        }
+      } else {
         e.preventDefault();
-        scr.advance();
+        addTyped();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [entryMode, anyModalOpen, engine.phase, scr.loading, scr.advance]);
+  }, [entryMode, anyModalOpen, inputBlocked, engine.phase, scr.loading, scr.advance, addTyped]);
 
   const openAverage = useCallback(
     (size: AvgSize, startIndex: number) => {
