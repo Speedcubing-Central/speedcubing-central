@@ -27,7 +27,7 @@ This is an **npm workspaces monorepo** with three packages: `shared`, `server`, 
 ├── client/                 # React + Vite SPA
 │   └── src/
 │       ├── components/      # Layout, nav, toasts, CubeDiagram, ScramblePanel, Modal, shared settings UI
-│       ├── data/           # Hardcoded alg sets (OLL/PLL/F2L/COLL/ZBLL + 2×2 OrtegaOLL/PBL/CLL/EG-1/EG-2)
+│       ├── data/           # Hardcoded alg sets (OLL/PLL/F2L/COLL + 2×2 OrtegaOLL/PBL/CLL/EG-1/EG-2)
 │       ├── features/       # One folder per feature (see Routes below)
 │       ├── lib/            # axios api client, scramble helper, cstimer import, time-input parsing, move metrics
 │       ├── store/          # Zustand stores: auth, settings, toast, ui
@@ -113,10 +113,10 @@ There is no admin account or admin role — see Roles below.
 | `/`                                                         | Landing (logged out) / Dashboard (logged in)                     |
 | `/timer`                                                    | Timer — spacebar/touch or manual entry, inspection, live Ao5/12/50/100, sessions, cstimer import, bulk delete |
 | `/calculator`                                                | Average / mean calculator (Ao5…Ao100, Mo3, MoX) + target-time solver |
-| `/algorithms`, `/algorithms/:tab`, `/algorithms/:tab/:puzzle`, `/algorithms/:tab/:puzzle/:setId` | Algorithm Trainer — puzzle picker (3×3 + 2×2); Library (browse/study) and Trainer (drill with timing, spaced repetition, per-case stats) tabs; 3×3: OLL/PLL/F2L/COLL/ZBLL; 2×2: OrtegaOLL/PBL/CLL/EG-1/EG-2 |
+| `/algorithms`, `/algorithms/:tab`, `/algorithms/:tab/:puzzle`, `/algorithms/:tab/:puzzle/:setId` | Algorithm Trainer — puzzle picker (3×3 + 2×2); Library (browse/study) and Trainer (drill with timing, spaced repetition, per-case stats) tabs; 3×3: OLL/PLL/F2L/COLL; 2×2: OrtegaOLL/PBL/CLL/EG-1/EG-2 |
 | `/algorithms/trainer/:puzzle/:setId/stats`                   | Per-case stats/PB view for one algorithm set                     |
 | `/alg-trainer`                                               | Redirects to `/algorithms` (legacy path)                          |
-| `/battle`, `/battle/:code`                                   | Real-time head-to-head Battle Mode (Socket.io)                    |
+| `/battle`, `/battle/:code`                                   | Real-time multiplayer Battle Mode, up to 10 players per room (Socket.io) |
 | `/reconstruction`, `/reconstruction/:id`                     | 3D scramble+solution playback (cubing.js), shareable by id        |
 | `/results`, `/results/:wcaId`                                | WCA competitor lookup + results history + official/unofficial (CubingContests) results |
 | `/settings`                                                  | Appearance (light/dark, color themes, accent), Account, password change, session |
@@ -153,8 +153,8 @@ There is no admin account or admin role — see Roles below.
   Square-1 scrambles legitimately end with a trailing `/` on some (not all) generations —
   `sq1Pairs` in `client/src/lib/scramble.ts` preserves that per-scramble rather than
   assuming it's always present or always absent.
-- **Alg data** is hardcoded in `client/src/data/` (full OLL 57, PLL 21, F2L 41, COLL 40,
-  ZBLL subset; 2×2: OrtegaOLL 7, PBL 6, CLL 42, EG-1 42, EG-2 42). Spaced repetition uses
+- **Alg data** is hardcoded in `client/src/data/` (full OLL 57, PLL 21, F2L 41, COLL 40;
+  2×2: OrtegaOLL 7, PBL 6, CLL 42, EG-1 42, EG-2 42). Spaced repetition uses
   SM-2, persisted per user at `/api/alg/review`. Per-case attempt history/PBs persist via
   `/api/alg-solves` (or localStorage for guests).
 - **Alg diagrams** use `cubing.js` `<twisty-player>` with `experimentalSetupAlg = 'x2 ' + invertAlg(moves)`

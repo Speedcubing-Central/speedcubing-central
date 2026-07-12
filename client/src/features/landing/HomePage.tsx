@@ -15,11 +15,18 @@ import { Icon, type IconName } from '../../components/Icon';
 // by auth state (marketing hero + sign-in CTA for guests, a plain welcome
 // line for logged-in users) — that's inherently tied to `user` and isn't
 // the kind of content that can drift the way duplicated feature copy did.
+// Descriptions are deliberately general rather than enumerating exact
+// mechanics (specific average sizes, algorithm-set names, player counts,
+// ...) — those are the parts most likely to change as the app grows, and a
+// stale enumeration here is exactly what previously made the page actively
+// wrong (e.g. advertising a ZBLL set that doesn't exist, or "head-to-head"
+// Battle after it grew past 2 players). Prefer describing what a feature is
+// for over what it currently supports down to the last detail.
 const TILES: { to: string; icon: IconName; label: string; description: string }[] = [
-  { to: '/timer', icon: 'timer', label: 'Timer', description: 'Spacebar & touch timing, inspection, live Ao5/Ao12/Ao100, multi-session.' },
-  { to: '/calculator', icon: 'calculator', label: 'Calculator', description: 'Calculate Ao5 and Mo3 averages and find your target time.' },
-  { to: '/algorithms', icon: 'cube', label: 'Algorithms', description: 'Browse and drill OLL, PLL, F2L, COLL & ZBLL with spaced-repetition drills.' },
-  { to: '/battle', icon: 'swords', label: 'Battle', description: 'Race a friend head-to-head on identical scrambles in real time.' },
+  { to: '/timer', icon: 'timer', label: 'Timer', description: 'Spacebar & touch timing, inspection, and live rolling averages across as many sessions as you need.' },
+  { to: '/calculator', icon: 'calculator', label: 'Calculator', description: 'Calculate your averages and means, and find the time you need for a new PB.' },
+  { to: '/algorithms', icon: 'cube', label: 'Algorithms', description: 'Browse and drill algorithms for multiple puzzles, with spaced-repetition training to help them stick.' },
+  { to: '/battle', icon: 'swords', label: 'Battle', description: 'Compete against others on identical scrambles in real time.' },
   { to: '/reconstruction', icon: 'film', label: 'Reconstruction', description: '3D playback of any scramble + solution, move by move.' },
   { to: '/results', icon: 'trophy', label: 'Results', description: 'Look up any competitor and browse their full result history.' },
 ];
