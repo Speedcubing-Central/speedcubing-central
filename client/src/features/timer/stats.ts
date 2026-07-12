@@ -271,6 +271,34 @@ export function makeAverageView(solves: SolveDTO[], startIndex: number, size: Av
   return { size, value: r.isDNF ? Infinity : r.value, ...toChronological(size, window, r.droppedIndices) };
 }
 
+export type SolveSortBy = 'date' | 'single' | 'ao5' | 'ao12';
+
+// Indices into `solves` (which stays newest-first and is never itself
+// reordered — ao5/ao12 windows are computed from chronological adjacency,
+// so the array order is load-bearing, not just a display choice), in the
+// order they should be *displayed* for the given sort criterion. 'date' is
+// the identity order (already newest-first). For 'single'/'ao5'/'ao12', a
+// solve with no penalty-adjusted time (DNF) or without enough preceding
+// history for the requested average sorts last (Infinity), matching the
+// DNF-sorts-last convention used throughout this file.
+export function sortedSolveIndices(solves: SolveDTO[], sortBy: SolveSortBy): number[] {
+  const indices = solves.map((_, i) => i);
+  if (sortBy === 'date') return indices;
+  const valueAt = (i: number): number => {
+    if (sortBy === 'single') {
+      const t = effectiveTime(solves[i].time, solves[i].penalty);
+      return isFinite(t) ? t : Infinity;
+    }
+    const view = makeAverageView(solves, i, sortBy === 'ao5' ? 5 : 12);
+    if (!view || view.value === null) return Infinity;
+    return view.value;
+  };
+  return indices
+    .map((i) => ({ i, v: valueAt(i) }))
+    .sort((a, b) => a.v - b.v)
+    .map(({ i }) => i);
+}
+
 // Averages (mo3/ao5/ao12/…) that were current at the moment the given solve completed.
 export function averagesForSolve(solves: SolveDTO[], index: number): SolveAverage[] {
   const out: SolveAverage[] = [];

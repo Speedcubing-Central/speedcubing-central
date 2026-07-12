@@ -14,7 +14,8 @@ import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
-import { singleStats, makeAverageView, type AvgSize, type SolveAverage } from './stats';
+import { singleStats, makeAverageView, type AvgSize, type SolveAverage, type SolveSortBy } from './stats';
+import { Segmented } from '../../components/settingsUi';
 import { StatsTable } from './StatsTable';
 import { PenaltyButtons } from './PenaltyButtons';
 import { TimerSettings } from './TimerSettings';
@@ -48,6 +49,7 @@ export default function TimerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [solveSortBy, setSolveSortBy] = useState<SolveSortBy>('date');
 
   // Leaving the select set stale across a session switch would let you
   // "delete" solves that are no longer even visible.
@@ -415,9 +417,21 @@ export default function TimerPage() {
                     </button>
                   </div>
                 ) : (
-                  <button className="btn-ghost text-xs px-2 py-1" onClick={() => setSelectMode(true)}>
-                    Select
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <Segmented
+                      value={solveSortBy}
+                      onChange={setSolveSortBy}
+                      options={[
+                        { value: 'date', label: 'Date' },
+                        { value: 'single', label: 'Single' },
+                        { value: 'ao5', label: 'Ao5' },
+                        { value: 'ao12', label: 'Ao12' },
+                      ]}
+                    />
+                    <button className="btn-ghost text-xs px-2 py-1" onClick={() => setSelectMode(true)}>
+                      Select
+                    </button>
+                  </div>
                 )
               )}
             </div>
@@ -426,6 +440,7 @@ export default function TimerPage() {
             ) : (
               <SolvesList
                 solves={data.solves}
+                sortBy={solveSortBy}
                 event={event}
                 precision={solvePrecision}
                 onOpenSolve={(i) => setDetailIndex(i)}

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { formatTime, type SolveDTO } from '@scc/shared';
 import { Icon } from '../../components/Icon';
-import { makeAverageView, type AvgSize } from './stats';
+import { makeAverageView, sortedSolveIndices, type AvgSize, type SolveSortBy } from './stats';
 import { copyText, formatSolveCopy } from './copy';
 
 export const SOLVE_GRID = 'grid grid-cols-[1.8rem_5rem_3.6rem_3.6rem_1fr] gap-2 items-center';
@@ -21,6 +21,7 @@ const OVERSCAN = 10;
 // the scroll range stays accurate rather than guessed.
 export function SolvesList({
   solves,
+  sortBy,
   event,
   precision,
   onOpenSolve,
@@ -30,6 +31,7 @@ export function SolvesList({
   onToggleSelect,
 }: {
   solves: SolveDTO[];
+  sortBy: SolveSortBy;
   event: string;
   precision: number;
   onOpenSolve: (index: number) => void;
@@ -69,11 +71,17 @@ export function SolvesList({
     }
   });
 
-  const total = solves.length;
+  // `order` holds indices *into* `solves` — the array itself is never
+  // reordered (ao5/ao12 windows are computed from chronological adjacency
+  // in the original newest-first list, so that order is load-bearing) —
+  // just the order rows are displayed/virtualized in.
+  const order = useMemo(() => sortedSolveIndices(solves, sortBy), [solves, sortBy]);
+
+  const total = order.length;
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + OVERSCAN * 2;
   const end = Math.min(total, start + Math.max(visibleCount, 1));
-  const visible = solves.slice(start, end);
+  const visibleIndices = order.slice(start, end);
 
   return (
     <>
@@ -88,8 +96,8 @@ export function SolvesList({
       <div ref={scrollRef} className="overflow-y-auto flex-1 min-h-0">
         <div style={{ height: start * rowHeight }} />
         <div ref={rowsWrapRef} className="divide-y divide-border/60">
-          {visible.map((s, i) => {
-            const index = start + i;
+          {visibleIndices.map((index) => {
+            const s = solves[index];
             return (
               <SolveRow
                 key={s.id}
