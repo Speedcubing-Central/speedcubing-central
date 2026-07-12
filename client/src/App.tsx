@@ -5,8 +5,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { useAuth } from './store/auth';
 import { useSettings, applyTheme, applyAccentColor, applyThemePalette } from './store/settings';
 
-import Landing from './features/landing/Landing';
-import Dashboard from './features/landing/Dashboard';
+import HomePage from './features/landing/HomePage';
 import TimerPage from './features/timer/TimerPage';
 import CalculatorPage from './features/calculator/CalculatorPage';
 import AlgTrainerPage from './features/alg-trainer/AlgTrainerPage';
@@ -27,9 +26,9 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 function HomeRoute() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   if (loading) return <div className="p-8 text-muted">Loading…</div>;
-  return user ? <Dashboard /> : <Landing />;
+  return <HomePage />;
 }
 
 export default function App() {
