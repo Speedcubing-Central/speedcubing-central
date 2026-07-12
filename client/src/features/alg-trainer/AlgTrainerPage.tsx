@@ -983,7 +983,15 @@ function TrainingLeftColumn({
 
   return (
     <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
-      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} setup={resolveCaseSetup(currentCase)} />
+      {/* setup={scramble}, not resolveCaseSetup(currentCase): this diagram is
+          depicting *this round's* actual scramble (whichever alt + AUF got
+          picked above), not the case's default orientation — using the
+          case-default setup here showed a case that didn't match the
+          scramble text whenever a non-default alt or a non-empty AUF was
+          picked, since resolveCaseSetup only ever looks at c.moves. scramble
+          is already the exact, terminal text shown below the diagram, so
+          reusing it directly guarantees the two can never disagree. */}
+      <CaseDiagramPanel set={set} c={currentCase} alg={solvingAlg} scrambleText={scramble} maxHeight={diagramMaxHeight} resetSignal={resetSignal} setup={scramble} />
 
       <div ref={belowRef} className="flex flex-col gap-3 shrink-0">
         {/* Move reveal */}
