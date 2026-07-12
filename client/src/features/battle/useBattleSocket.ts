@@ -37,7 +37,15 @@ export function useBattleSocket() {
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    // Clearing `room` (not just flipping `connected`) matters: BattleRoom
+    // only special-cases a fully-null room ("Joining room…"), so without
+    // this a brief window between reconnecting and the fresh room_state
+    // arriving would render the *previous* (now possibly-stale) snapshot
+    // rather than a loading state.
+    socket.on('disconnect', () => {
+      setConnected(false);
+      setRoom(null);
+    });
 
     socket.on('room_state', (r) => {
       setRoom(r);

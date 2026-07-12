@@ -222,9 +222,24 @@ export default function BattleRoom() {
     setTypingInput('');
   }
 
-  // Join the room on mount
+  // Join the room on mount, and re-join on every reconnect. `joined` used to
+  // be a one-shot flag that was never cleared, so it only ever sent
+  // join_room once per page load: after any socket drop (backgrounded tab,
+  // network blip, dev-server restart) socket.io reconnects the transport
+  // but the server sees a brand-new connection with no room membership —
+  // this client kept rendering whatever `room` snapshot it had before the
+  // drop, forever, since it never re-sent join_room to get a fresh one.
+  // That's what a report of "only I can see myself, and nobody can start
+  // the next round" turned out to be: the OTHER player's client was
+  // correctly synced (their socket never dropped), while this one was
+  // silently stuck, and the server was also silently dropping this
+  // player's solve submissions (myParticipantId is null on that stale
+  // socket), which blocked round completion for both sides. Resetting the
+  // guard whenever `connected` goes false ensures the effect fires again —
+  // and re-sends join_room — the moment it comes back true.
   const joined = useRef(false);
   useEffect(() => {
+    if (!connected) { joined.current = false; return; }
     if (!code || namePrompt || joined.current) return;
     joined.current = true;
     const name = displayName || tempName;

@@ -213,7 +213,27 @@ export function attachSocket(server: HttpServer): IOServer {
           safeUserId = exists ? userId : null;
         }
 
-        const existing = safeUserId ? room.participants.find((p) => p.userId === safeUserId) : undefined;
+        // Matches this join against an already-present participant so a
+        // reconnect (see the client's join-on-reconnect fix in
+        // BattleRoom.tsx) reuses the same row instead of creating a new one.
+        // In practice this only fires in the narrow window before the OLD
+        // socket's own 'disconnect' handler has run — disconnect calls
+        // leaveRoomCleanup unconditionally (below), which deletes the
+        // participant row immediately, for logged-in users and guests
+        // alike. So the common case, once disconnect has already been
+        // processed, is a *new* participant either way (losing that
+        // player's points for the room session, since points live on the
+        // row) — this only avoids that in the race where a fast reconnect's
+        // join_room lands before the old connection has timed out
+        // server-side. Guests are matched best-effort by name (no stable
+        // identity otherwise), which two guests could share — a false
+        // match is still strictly better than what existed before (every
+        // reconnect silently orphaning its old, now-unfinished row forever,
+        // which blocked round completion for the whole room, not just the
+        // reconnecting player).
+        const existing = room.participants.find((p) =>
+          (safeUserId && p.userId === safeUserId) || (!safeUserId && !p.userId && p.guestName === name),
+        );
         if (!existing && room.participants.length >= 10) {
           socket.emit('error_msg', { message: 'Room is full (max 10 players)' });
           return;
