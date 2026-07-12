@@ -2,15 +2,19 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../store/auth';
 import { Icon, type IconName } from '../../components/Icon';
 
-// Single source of truth for the site's feature set — used for both logged-
-// out and logged-in visitors (see App.tsx's HomeRoute). This used to be two
-// separate components (Landing/Dashboard) with their own hand-written
-// feature copy, which drifted out of sync with each other and with the
-// sidebar nav (e.g. "Pro Timer"/"Alg Trainer"/"WCA Results"/"Battle Mode"
-// here vs. "Timer"/"Algorithms"/"Results"/"Battle" in Layout.tsx) — exactly
-// the kind of inconsistency that makes the site look unfinished and gives
-// wrong answers to anyone (human or AI) skimming the page for what it does.
-// Labels below match Layout.tsx's NAV_ITEMS verbatim for that reason.
+// Single source of truth for the site's feature set — the tile grid below
+// is shared by both logged-out and logged-in visitors (see App.tsx's
+// HomeRoute). This used to be two separate components (Landing/Dashboard)
+// with their own hand-written feature copy, which drifted out of sync with
+// each other and with the sidebar nav (e.g. "Pro Timer"/"Alg Trainer"/"WCA
+// Results"/"Battle Mode" here vs. "Timer"/"Algorithms"/"Results"/"Battle"
+// in Layout.tsx) — exactly the kind of inconsistency that makes the site
+// look unfinished and gives wrong answers to anyone (human or AI) skimming
+// the page for what it does. Labels below match Layout.tsx's NAV_ITEMS
+// verbatim for that reason. Only the header above the tiles still differs
+// by auth state (marketing hero + sign-in CTA for guests, a plain welcome
+// line for logged-in users) — that's inherently tied to `user` and isn't
+// the kind of content that can drift the way duplicated feature copy did.
 const TILES: { to: string; icon: IconName; label: string; description: string }[] = [
   { to: '/timer', icon: 'timer', label: 'Timer', description: 'Spacebar & touch timing, inspection, live Ao5/Ao12/Ao100, multi-session.' },
   { to: '/calculator', icon: 'calculator', label: 'Calculator', description: 'Calculate Ao5 and Mo3 averages and find your target time.' },
@@ -25,28 +29,33 @@ export default function HomePage() {
 
   return (
     <div>
-      <section className="text-center py-12 md:py-20">
-        <div className="inline-block px-3 py-1 rounded-full bg-accent/20 text-accent text-xs font-semibold mb-4">
-          The all-in-one speedcubing platform
+      {user ? (
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold">Welcome back, {user.displayName}.</h1>
+          <p className="text-muted mt-1">What would you like to do?</p>
         </div>
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight">
-          Train. Compete. <span className="text-accent">Improve.</span>
-        </h1>
-        <p className="text-muted max-w-xl mx-auto mt-4 text-lg">
-          A timer, algorithm trainer, WCA results lookup, and live battles — everything a cuber needs in
-          one place.
-        </p>
-        <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">
-          <Link to="/timer" className="btn-primary px-6 py-3 text-base">
-            Start Timing <Icon name="arrowRight" size={18} />
-          </Link>
-          {!user && (
+      ) : (
+        <section className="text-center py-12 md:py-20">
+          <div className="inline-block px-3 py-1 rounded-full bg-accent/20 text-accent text-xs font-semibold mb-4">
+            The all-in-one speedcubing platform
+          </div>
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight">
+            Train. Compete. <span className="text-accent">Improve.</span>
+          </h1>
+          <p className="text-muted max-w-xl mx-auto mt-4 text-lg">
+            A timer, algorithm trainer, WCA results lookup, and live battles — everything a cuber needs in
+            one place.
+          </p>
+          <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">
+            <Link to="/timer" className="btn-primary px-6 py-3 text-base">
+              Start Timing <Icon name="arrowRight" size={18} />
+            </Link>
             <Link to="/login" className="btn-ghost px-6 py-3 text-base">
               Sign in with WCA
             </Link>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
         {TILES.map((t) => (
