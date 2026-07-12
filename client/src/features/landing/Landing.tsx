@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '../../components/Icon';
 
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [
-  { icon: 'timer', title: 'Pro Timer', desc: 'Spacebar & touch timing, inspection, live Ao5/Ao12/Ao100, multi-session.' },
+  { icon: 'timer', title: 'Timer', desc: 'Spacebar & touch timing, inspection, live Ao5/Ao12/Ao100, multi-session.' },
   { icon: 'cube', title: 'Alg Trainer', desc: 'OLL, PLL, F2L, COLL & ZBLL with spaced-repetition drills.' },
   { icon: 'trophy', title: 'WCA Results', desc: 'Look up any competitor and browse their full result history.' },
   { icon: 'swords', title: 'Battle Mode', desc: 'Race a friend head-to-head on identical scrambles in real time.' },
