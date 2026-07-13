@@ -288,7 +288,16 @@ export default function ReconstructionPage() {
         <div className="grid lg:grid-cols-[1fr_auto] lg:grid-rows-[minmax(0,1fr)] gap-6 flex-1 min-h-0">
           {/* LEFT: inputs — takes up whatever space the visualization doesn't need.
               The solution textarea is the one flexible element, so Move Count & TPS
-              stays pinned in view instead of requiring a scroll to reach. */}
+              stays pinned in view instead of requiring a scroll to reach on a tall
+              enough viewport. Only this outer column carries `min-h-0` (needed so
+              flex-1 can actually shrink it below content size and hand off to
+              overflow-y-auto) — the card and the solution wrapper below deliberately
+              do NOT, so their auto-computed minimum height still accounts for the
+              textarea's own `min-h-[6rem]` floor. Without that, on a short viewport
+              the flex algorithm could size the card smaller than its content needs,
+              and — since overflow defaults to visible — the textarea rendered at its
+              real minimum height anyway, poking out past the card's own border
+              instead of the column scrolling. */}
           <div className="flex flex-col gap-4 min-w-0 min-h-0 overflow-y-auto">
             {loadingShared ? (
               <div className="card p-5 space-y-3">
@@ -297,7 +306,7 @@ export default function ReconstructionPage() {
                 <Skeleton className="h-20" />
               </div>
             ) : (
-              <div className="card p-5 flex flex-col gap-4 flex-1 min-h-0">
+              <div className="card p-5 flex flex-col gap-4 flex-1">
                 <div className="grid sm:grid-cols-2 gap-4 shrink-0">
                   <div>
                     <label className="label">Title (optional)</label>
@@ -351,7 +360,7 @@ export default function ReconstructionPage() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-1 flex-1 min-h-0">
+                <div className="flex flex-col gap-1 flex-1">
                   <label className="label mb-0">Solution</label>
                   <textarea
                     className="input font-mono text-sm flex-1 min-h-[6rem] resize-none"
