@@ -16,6 +16,9 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        // Editorial serif used only for headline flourishes (currently just
+        // the marketing landing page's hero) — everything else stays sans.
+        display: ['Fraunces', 'Georgia', 'serif'],
       },
     },
   },

@@ -53,11 +53,12 @@ export function Layout({ children }: { children: ReactNode }) {
   const visible = NAV.filter((n) => (n.auth ? !!user : true));
 
   if (isGuestLanding) {
-    return (
-      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-bg dark:text-gray-100">
-        <div className="max-w-6xl mx-auto p-4 md:p-8">{children}</div>
-      </div>
-    );
+    // No max-w/padding wrapper here (unlike every in-app page below) — the
+    // landing page is a real marketing page with full-bleed sections
+    // (hero, marquee, CTA band), each centering its own content at
+    // whatever width it wants. Forcing a single outer max-w-6xl would
+    // make that layout impossible.
+    return <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-bg dark:text-gray-100">{children}</div>;
   }
 
   // Focus mode hides app chrome (sidebar + mobile bars) via CSS rather than by
