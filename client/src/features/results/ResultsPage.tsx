@@ -31,19 +31,21 @@ const ROUND_NAMES: Record<string, string> = {
   'd':'Round 1','e':'Round 2','g':'Round 1','c':'Final',
 };
 
-// Cubing Contests unofficial events.
+// Cubing Contests unofficial events — curated list, not CC's full catalog.
+// ids/names verified directly against https://cubingcontests.com/api/events
+// (e.g. "mpyram" is actually Master Pyraminx, not Multi-Pyraminx — the
+// previous label here was wrong).
 // iconPrefix: 'unofficial' for @cubing/icons unofficial-* classes, 'event' for legacy WCA-era events.
 const CC_EVENTS: Array<{ id: string; name: string; iconPrefix: string }> = [
-  { id: 'fto',               name: 'FTO',             iconPrefix: 'unofficial' },
-  { id: 'kilominx',          name: 'Kilominx',        iconPrefix: 'unofficial' },
-  { id: 'redi',              name: 'Redi Cube',       iconPrefix: 'unofficial' },
-  { id: 'mpyram',            name: 'Multi-Pyraminx',  iconPrefix: 'unofficial' },
-  { id: '333_mirror_blocks', name: 'Mirror Blocks',   iconPrefix: 'unofficial' },
-  { id: '333_team_bld',      name: 'Team BLD',        iconPrefix: 'unofficial' },
-  { id: 'magic',             name: 'Magic',           iconPrefix: 'event'      },
-  { id: 'mmagic',            name: 'Master Magic',    iconPrefix: 'event'      },
-  { id: '333_linear_fm',     name: '3×3 Linear FMC', iconPrefix: 'unofficial' },
-  { id: 'minx_oh',           name: 'Megaminx OH',     iconPrefix: 'unofficial' },
+  { id: 'fto',                    name: 'FTO',              iconPrefix: 'unofficial' },
+  { id: '333_team_bld',           name: '3x3 Team BLD',     iconPrefix: 'unofficial' },
+  { id: '333_mirror_blocks',      name: 'Mirror Blocks',    iconPrefix: 'unofficial' },
+  { id: '333_mirror_blocks_bld',  name: 'Mirror Blocks BLD', iconPrefix: 'unofficial' },
+  { id: 'mpyram',                 name: 'Master Pyraminx',  iconPrefix: 'unofficial' },
+  { id: 'kilominx',               name: 'Kilominx',         iconPrefix: 'unofficial' },
+  { id: 'redi',                   name: 'Redi Cube',        iconPrefix: 'unofficial' },
+  { id: 'magic',                  name: 'Magic',            iconPrefix: 'event'      },
+  { id: 'mmagic',                 name: 'Master Magic',     iconPrefix: 'event'      },
 ];
 
 // ── Formatters ────────────────────────────────────────────────────────────────

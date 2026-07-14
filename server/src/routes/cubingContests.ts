@@ -6,17 +6,18 @@ const router = Router();
 const ONE_HOUR = 3600;
 const CC_BASE = 'https://cubingcontests.com/api';
 
+// Keep in sync with client/src/features/results/ResultsPage.tsx's CC_EVENTS
+// (ids/names verified against https://cubingcontests.com/api/events).
 const CC_EVENTS = [
-  { id: 'fto',              name: 'FTO' },
-  { id: 'kilominx',         name: 'Kilominx' },
-  { id: 'redi',             name: 'Redi Cube' },
-  { id: 'mpyram',           name: 'Multi-Pyraminx' },
-  { id: '333_mirror_blocks',name: 'Mirror Blocks' },
-  { id: '333_team_bld',     name: 'Team BLD' },
-  { id: 'magic',            name: 'Magic' },
-  { id: 'mmagic',           name: 'Master Magic' },
-  { id: '333_linear_fm',    name: '3×3 Linear FMC' },
-  { id: 'minx_oh',          name: 'Megaminx OH' },
+  { id: 'fto',                   name: 'FTO' },
+  { id: '333_team_bld',          name: '3x3 Team BLD' },
+  { id: '333_mirror_blocks',     name: 'Mirror Blocks' },
+  { id: '333_mirror_blocks_bld', name: 'Mirror Blocks BLD' },
+  { id: 'mpyram',                name: 'Master Pyraminx' },
+  { id: 'kilominx',              name: 'Kilominx' },
+  { id: 'redi',                  name: 'Redi Cube' },
+  { id: 'magic',                 name: 'Magic' },
+  { id: 'mmagic',                name: 'Master Magic' },
 ];
 
 // Country code → CC continent code, sourced verbatim from RecordRanks/client/helpers/default-regions.ts
