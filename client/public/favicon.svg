@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-  <path d="M100,8 L185,54 L100,100 L15,54 Z" fill="#FFFFFF" stroke="#000" stroke-width="8" stroke-linejoin="round" />
-  <path d="M15,54 L100,100 L100,192 L15,146 Z" fill="#009E60" stroke="#000" stroke-width="8" stroke-linejoin="round" />
-  <path d="M185,54 L100,100 L100,192 L185,146 Z" fill="#A6031C" stroke="#000" stroke-width="8" stroke-linejoin="round" />
+  <style>
+    path { fill: #000000; }
+    @media (prefers-color-scheme: dark) {
+      path { fill: #FFFFFF; }
+    }
+  </style>
+  <path d="M100,31.25 L142.84,74.08 L100,116.92 L57.16,74.08 Z" />
+  <path d="M48.16,83.08 L91,125.92 L48.16,168.75 L5.33,125.92 Z" />
+  <path d="M151.84,83.08 L194.67,125.92 L151.84,168.75 L109,125.92 Z" />
 </svg>
