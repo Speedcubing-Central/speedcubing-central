@@ -148,7 +148,7 @@ export default function LandingPage() {
               <span className="font-display italic font-medium text-accent">Solve faster.</span>
             </h1>
             <p className="text-muted max-w-lg mx-auto lg:mx-0 mt-5 text-lg leading-relaxed">
-              A timer, algorithm trainer, WCA results lookup, and live battles — everything a cuber
+              A timer, algorithm trainer, WCA results lookup, and live battles: everything a cuber
               needs, in one place.
             </p>
             <div className="flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3 mt-8">
