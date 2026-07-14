@@ -12,6 +12,12 @@ import { TILES } from './tiles';
 // than a suspiciously tidy cube.
 const HERO_SCRAMBLE_ALG = "R U R' F R F' U2 R U' R' F R' F' U R U' R2 D2 L' U2 L D' L' U L";
 
+// @cubing/icons only ships glyphs for official WCA events — the site's three
+// unofficial extras (kilominx, fto, redi_cube) have no `event-*` class in
+// the package at all, so those chips would otherwise render with nothing
+// where the icon should be. Falls back to a generic cube glyph for them.
+const NO_CUBING_ICON = new Set(['kilominx', 'fto', 'redi_cube']);
+
 // Puzzle-icon marquee: every event the site generates scrambles for, not
 // just the two most-used ones — this is the landing page's answer to "what
 // does it actually cover," shown rather than enumerated in prose (prose
@@ -21,7 +27,11 @@ const HERO_SCRAMBLE_ALG = "R U R' F R F' U2 R U' R' F R' F' U R U' R2 D2 L' U2 L
 function PuzzleChip({ eventId, name }: { eventId: string; name: string }) {
   return (
     <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-card border border-border shrink-0">
-      <span className={`cubing-icon event-${eventId}`} style={{ fontSize: 22, lineHeight: 1 }} />
+      {NO_CUBING_ICON.has(eventId) ? (
+        <Icon name="cube" size={20} className="text-muted shrink-0" />
+      ) : (
+        <span className={`cubing-icon event-${eventId}`} style={{ fontSize: 22, lineHeight: 1 }} />
+      )}
       <span className="text-sm font-semibold">{name}</span>
     </div>
   );
