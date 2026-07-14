@@ -183,7 +183,13 @@ export default function LandingPage() {
 
           <div className="flex flex-col items-center gap-3">
             <div className="card p-8 md:p-10">
-              <RotatingCaseDiagram alg={HERO_SCRAMBLE} setup={HERO_SCRAMBLE} size={260} defaultLat={20} puzzle="3x3x3" />
+              {/* diagramPrefix="x2" cancels RotatingCaseDiagram's own hardcoded
+                  x2 (a convention for viewing algorithm *cases* from above —
+                  see CubeDiagram.tsx), restoring the puzzle's true default
+                  orientation (white top, green front) before the scramble is
+                  applied. Without it, this scramble would render starting
+                  from yellow top / blue front instead. */}
+              <RotatingCaseDiagram alg={HERO_SCRAMBLE} setup={HERO_SCRAMBLE} diagramPrefix="x2" size={260} defaultLat={20} puzzle="3x3x3" />
             </div>
             <span className="text-xs text-muted">Drag to look around</span>
           </div>
