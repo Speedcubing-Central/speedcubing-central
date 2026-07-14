@@ -147,8 +147,8 @@ function PuzzleLanding({ subtitle, onSelect }: { subtitle: string; onSelect: (id
             key={p.id}
             onClick={() => p.available && onSelect(p.id)}
             className={clsx(
-              'card p-6 flex flex-col items-center gap-4 transition-colors text-center relative',
-              p.available ? 'hover:border-accent/50 cursor-pointer' : 'opacity-60 cursor-not-allowed',
+              'card p-6 flex flex-col items-center gap-4 text-center relative',
+              p.available ? 'card-interactive cursor-pointer' : 'opacity-60 cursor-not-allowed',
             )}
           >
             <CubingIcon event={p.event} className="text-[64px]" />
@@ -232,7 +232,7 @@ function SetPicker({
             key={s.id}
             onClick={() => handleClick(s.id)}
             className={clsx(
-              'card p-6 flex flex-col items-center gap-4 hover:border-accent/50 transition-colors cursor-pointer text-center relative',
+              'card card-interactive p-6 flex flex-col items-center gap-4 cursor-pointer text-center relative',
               multiSelect && picked.has(s.id) && 'border-accent/60 bg-accent/5 ring-1 ring-accent',
             )}
           >
@@ -429,7 +429,7 @@ function CaseCard({
   const status = pref?.status;
   return (
     <div
-      className="card p-4 flex gap-4 items-center text-left hover:border-accent/50 transition-colors cursor-pointer"
+      className="card card-interactive p-4 flex gap-4 items-center text-left cursor-pointer"
       onPointerDown={(e) => { startPos.current = { x: e.clientX, y: e.clientY }; dragged.current = false; }}
       onPointerMove={(e) => {
         const dx = e.clientX - startPos.current.x;

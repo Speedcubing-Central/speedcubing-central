@@ -277,7 +277,7 @@ export default function ReconstructionPage() {
       </div>
 
       {notFound && (
-        <EmptyState title="Reconstruction not found" hint="This link may be invalid, or the reconstruction was deleted." />
+        <EmptyState icon="film" title="Reconstruction not found" hint="This link may be invalid, or the reconstruction was deleted." />
       )}
 
       {!notFound && (

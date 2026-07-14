@@ -82,7 +82,7 @@ export default function AlgStatsPage() {
                 key={statsKey(caseSetId[c.id], c.id)}
                 onClick={() => globalIndex >= 0 && setDetailIndex(globalIndex)}
                 disabled={globalIndex < 0}
-                className="card p-4 flex items-center gap-3 text-left hover:border-accent/50 transition-colors disabled:cursor-default disabled:hover:border-border"
+                className="card card-interactive p-4 flex items-center gap-3 text-left disabled:cursor-default disabled:hover:border-border disabled:hover:shadow-sm disabled:hover:shadow-black/20 disabled:hover:translate-y-0"
               >
                 <div className="shrink-0"><CaseThumb c={c} set={cSet} size={48} /></div>
                 <div className="min-w-0 flex-1">

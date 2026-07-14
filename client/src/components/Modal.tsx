@@ -35,12 +35,12 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-8 backdrop-blur-sm"
+      className="modal-backdrop-enter fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-8 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`card w-full ${maxW} my-auto shadow-2xl`} role="dialog" aria-modal="true">
+      <div className={`modal-panel-enter card w-full ${maxW} my-auto shadow-2xl shadow-black/40`} role="dialog" aria-modal="true">
         {title && (
           <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3">
             <h3 className="font-bold">{title}</h3>

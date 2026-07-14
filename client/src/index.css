@@ -32,16 +32,28 @@ html:not(.dark) body {
 
 @layer components {
   .card {
-    @apply bg-card border border-border rounded-xl;
+    @apply bg-card border border-border rounded-xl shadow-sm shadow-black/20;
   }
   html:not(.dark) .card {
-    @apply bg-white border-gray-200;
+    @apply bg-white border-gray-200 shadow-black/5;
+  }
+  /* Applied alongside .card wherever the whole tile is a click target
+     (nav tiles, list rows, selectable cards) — a resting card stays put,
+     this is what gives clickable ones a tactile lift on hover instead of
+     just a color swap. Kept as an separate, opt-in class rather than
+     folded into .card itself so purely informational cards (stats panels,
+     modals) don't get a pointer-only affordance they don't have. */
+  .card-interactive {
+    @apply transition-all duration-150 hover:border-accent/40 hover:shadow-md hover:shadow-black/25 hover:-translate-y-0.5;
+  }
+  html:not(.dark) .card-interactive {
+    @apply hover:shadow-black/10;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
   .btn-primary {
-    @apply btn bg-accent hover:bg-accent-hover text-white;
+    @apply btn bg-accent hover:bg-accent-hover text-white shadow-md shadow-accent/25 hover:shadow-lg hover:shadow-accent/30;
   }
   .btn-ghost {
     @apply btn bg-card-hover hover:bg-border text-gray-200;
@@ -50,7 +62,7 @@ html:not(.dark) body {
     @apply bg-gray-100 hover:bg-gray-200 text-gray-700;
   }
   .input {
-    @apply w-full rounded-lg bg-bg border border-border px-3 py-2 text-sm outline-none focus:border-accent transition-colors;
+    @apply w-full rounded-lg bg-bg border border-border px-3 py-2 text-sm outline-none transition-all duration-150 focus:border-accent focus:ring-2 focus:ring-accent/20;
   }
   html:not(.dark) .input {
     @apply bg-gray-50 border-gray-300;
@@ -59,10 +71,19 @@ html:not(.dark) body {
     @apply block text-xs font-semibold uppercase tracking-wide text-muted mb-1;
   }
   .skeleton {
-    @apply animate-pulse bg-card-hover rounded;
+    @apply relative overflow-hidden bg-card-hover rounded;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgb(var(--color-border) / 0.6), transparent);
+    animation: shimmer 1.6s ease-in-out infinite;
   }
   html:not(.dark) .skeleton {
     @apply bg-gray-200;
+  }
+  html:not(.dark) .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.8), transparent);
   }
   .kbd {
     @apply inline-block bg-card-hover border border-border rounded px-1.5 py-0.5 text-xs font-mono font-semibold text-muted;
@@ -82,6 +103,32 @@ html:not(.dark) body {
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Skeleton loading shimmer — see .skeleton in @layer components */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Modal entrance — backdrop fades in, panel fades + scales up slightly.
+   Two separate animations (not one on a shared parent) since the backdrop
+   and panel have different transform origins. */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+}
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+}
+.modal-backdrop-enter {
+  animation: modal-backdrop-in 0.15s ease-out;
+}
+.modal-panel-enter {
+  animation: modal-panel-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Toast animations */
@@ -126,4 +173,13 @@ html:not(.dark) body {
 }
 .case-reveal-enter {
   animation: case-reveal-in 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

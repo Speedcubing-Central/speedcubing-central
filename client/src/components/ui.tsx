@@ -1,13 +1,14 @@
 import clsx from 'clsx';
 import { WCA_EVENTS, UNOFFICIAL_EVENTS } from '@scc/shared';
 import type { ReactNode } from 'react';
+import { Icon, type IconName } from './Icon';
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
       <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
-        {subtitle && <p className="text-muted text-sm mt-1">{subtitle}</p>}
+        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        {subtitle && <p className="text-muted text-sm mt-1.5">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -43,11 +44,19 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={clsx('skeleton', className)} />;
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+// Dashed border (vs. a regular .card's solid one) reads as "nothing's here
+// yet," not just another content panel — an empty state is a placeholder,
+// not a result. `icon` is optional so existing call sites are unaffected.
+export function EmptyState({ title, hint, icon }: { title: string; hint?: string; icon?: IconName }) {
   return (
-    <div className="card p-10 text-center">
+    <div className="p-10 text-center rounded-xl border border-dashed border-border">
+      {icon && (
+        <div className="mx-auto mb-3 w-11 h-11 rounded-full bg-card-hover text-muted flex items-center justify-center">
+          <Icon name={icon} size={20} />
+        </div>
+      )}
       <p className="font-semibold text-lg">{title}</p>
-      {hint && <p className="text-muted text-sm mt-2">{hint}</p>}
+      {hint && <p className="text-muted text-sm mt-2 max-w-sm mx-auto">{hint}</p>}
     </div>
   );
 }
