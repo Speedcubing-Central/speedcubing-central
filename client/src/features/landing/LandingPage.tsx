@@ -10,7 +10,14 @@ import { TILES } from './tiles';
 // to any real case (this page has no notion of "solving" anything), just
 // something visually busy enough to look like an actual scramble rather
 // than a suspiciously tidy cube.
-const HERO_SCRAMBLE_ALG = "R U R' F R F' U2 R U' R' F R' F' U R U' R2 D2 L' U2 L D' L' U L";
+//
+// Passed to RotatingCaseDiagram's `setup` prop, not `alg` — without an
+// explicit `setup`, the component treats `alg` as a *solution* and displays
+// its inverse (the standard case-diagram convention elsewhere in the app).
+// `setup` is the authoritative override that's shown exactly as written, so
+// it's the only way to make the cube literally show the state this
+// scramble produces, not the state its inverse would.
+const HERO_SCRAMBLE = "D' L D2 L F2 L2 U' R2 D L2 D' F L R2 U' R' U' L'";
 
 // @cubing/icons prefixes official WCA events with "event-" and everything
 // else with "unofficial-" — and the unofficial class names don't always
@@ -176,7 +183,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col items-center gap-3">
             <div className="card p-8 md:p-10">
-              <RotatingCaseDiagram alg={HERO_SCRAMBLE_ALG} size={260} defaultLat={20} puzzle="3x3x3" />
+              <RotatingCaseDiagram alg={HERO_SCRAMBLE} setup={HERO_SCRAMBLE} size={260} defaultLat={20} puzzle="3x3x3" />
             </div>
             <span className="text-xs text-muted">Drag to look around</span>
           </div>
