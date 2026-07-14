@@ -1,23 +1,38 @@
 import { Link } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
+import { Logo } from '../../components/Logo';
 import { TILES } from './tiles';
 
 // Shown at "/" to a signed-out visitor (see App.tsx's HomeRoute — a signed-in
 // visitor gets HomePage instead). This is the site's actual front door: a
-// marketing pitch plus a way to jump straight into using it, rather than the
-// bare welcome-and-tiles screen a returning signed-in user wants. The tile
-// grid below is the exact same TILES data HomePage uses (see its doc
-// comment) so the feature set is never described two different ways.
+// standalone marketing page, not an in-app screen — Layout.tsx skips the
+// sidebar/nav chrome for it entirely, so this owns its own header (logo +
+// sign-in links) instead of relying on the sidebar for branding.
+//
+// The feature grid intentionally does NOT link into the app (unlike
+// HomePage's identical-looking tiles) — this page is meant to be read as a
+// showcase of what the site offers, with exactly one way in (the "Try the
+// Timer" CTA, or the header's sign-in links), not a grid of shortcuts. It's
+// still the exact same TILES data HomePage uses (see its doc comment) so
+// the feature set is never described two different ways.
 export default function LandingPage() {
   return (
     <div>
-      <div className="flex justify-end gap-3 mb-6">
-        <Link to="/login" className="btn-ghost px-4 py-2 text-sm">
-          Log in
-        </Link>
-        <Link to="/login?mode=register" className="btn-primary px-4 py-2 text-sm">
-          Create account
-        </Link>
+      <div className="flex items-center justify-between mb-10">
+        <div className="flex items-center gap-2">
+          <Logo size={32} className="shrink-0" />
+          <span className="font-extrabold text-lg leading-tight">
+            Speedcubing <span className="text-accent">Central</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link to="/login" className="btn-ghost px-4 py-2 text-sm">
+            Log in
+          </Link>
+          <Link to="/login?mode=register" className="btn-primary px-4 py-2 text-sm">
+            Create account
+          </Link>
+        </div>
       </div>
 
       <section className="text-center py-12 md:py-20">
@@ -39,22 +54,21 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {TILES.map((t) => (
-          <Link
-            key={t.to}
-            to={t.to}
-            className="card p-6 flex flex-col gap-4 hover:border-accent/50 transition-colors group text-left"
-          >
-            <span className="w-11 h-11 rounded-lg bg-accent/15 text-accent grid place-items-center group-hover:bg-accent/25 transition-colors">
-              <Icon name={t.icon} size={24} />
-            </span>
-            <div>
-              <div className="font-bold text-lg">{t.label}</div>
-              <div className="text-muted text-sm mt-1">{t.description}</div>
+      <section>
+        <h2 className="text-center text-2xl font-extrabold mb-8">Everything you need, in one place</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {TILES.map((t) => (
+            <div key={t.label} className="card p-6 flex flex-col gap-4 text-left">
+              <span className="w-11 h-11 rounded-lg bg-accent/15 text-accent grid place-items-center">
+                <Icon name={t.icon} size={24} />
+              </span>
+              <div>
+                <div className="font-bold text-lg">{t.label}</div>
+                <div className="text-muted text-sm mt-1">{t.description}</div>
+              </div>
             </div>
-          </Link>
-        ))}
+          ))}
+        </div>
       </section>
     </div>
   );
