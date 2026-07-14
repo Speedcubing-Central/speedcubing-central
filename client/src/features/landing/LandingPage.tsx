@@ -12,11 +12,17 @@ import { TILES } from './tiles';
 // than a suspiciously tidy cube.
 const HERO_SCRAMBLE_ALG = "R U R' F R F' U2 R U' R' F R' F' U R U' R2 D2 L' U2 L D' L' U L";
 
-// @cubing/icons only ships glyphs for official WCA events — the site's three
-// unofficial extras (kilominx, fto, redi_cube) have no `event-*` class in
-// the package at all, so those chips would otherwise render with nothing
-// where the icon should be. Falls back to a generic cube glyph for them.
-const NO_CUBING_ICON = new Set(['kilominx', 'fto', 'redi_cube']);
+// @cubing/icons prefixes official WCA events with "event-" and everything
+// else with "unofficial-" — and the unofficial class names don't always
+// match our own event ids verbatim (its redi cube glyph is
+// "unofficial-redi", not "unofficial-redi_cube"), so this maps our three
+// unofficial extras to their real class suffix instead of assuming a
+// single "event-" prefix works for every id.
+const UNOFFICIAL_ICON_CLASS: Record<string, string> = {
+  kilominx: 'unofficial-kilominx',
+  fto: 'unofficial-fto',
+  redi_cube: 'unofficial-redi',
+};
 
 // Puzzle-icon marquee: every event the site generates scrambles for, not
 // just the two most-used ones — this is the landing page's answer to "what
@@ -25,13 +31,10 @@ const NO_CUBING_ICON = new Set(['kilominx', 'fto', 'redi_cube']);
 // tiles.ts's doc comment). Content is duplicated once so a -50% translate
 // loops seamlessly (see .animate-marquee in index.css).
 function PuzzleChip({ eventId, name }: { eventId: string; name: string }) {
+  const iconClass = UNOFFICIAL_ICON_CLASS[eventId] ?? `event-${eventId}`;
   return (
     <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-card border border-border shrink-0">
-      {NO_CUBING_ICON.has(eventId) ? (
-        <Icon name="cube" size={20} className="text-muted shrink-0" />
-      ) : (
-        <span className={`cubing-icon event-${eventId}`} style={{ fontSize: 22, lineHeight: 1 }} />
-      )}
+      <span className={`cubing-icon ${iconClass}`} style={{ fontSize: 22, lineHeight: 1 }} />
       <span className="text-sm font-semibold">{name}</span>
     </div>
   );
