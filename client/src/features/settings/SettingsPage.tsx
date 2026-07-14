@@ -107,9 +107,9 @@ export default function SettingsPage() {
               <button
                 key={t}
                 onClick={() => setTheme(t)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                   theme === t
-                    ? 'border-accent bg-accent/10 text-accent shadow-sm shadow-accent/20'
+                    ? 'border-accent bg-accent/10 text-accent'
                     : 'border-gray-200 bg-gray-100 text-gray-600 hover:text-gray-900 dark:border-border dark:bg-card-hover dark:text-muted dark:hover:text-gray-100'
                 }`}
               >
@@ -128,18 +128,13 @@ export default function SettingsPage() {
                 onClick={() => setThemeId(p.id)}
                 title={p.name}
                 className={clsx(
-                  'rounded-lg border-2 p-1.5 flex flex-col items-center gap-1.5 transition-all duration-150 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-                  themeId === p.id ? 'border-accent shadow-sm shadow-accent/20' : 'border-transparent hover:border-gray-300 dark:hover:border-border',
+                  'rounded-lg border-2 p-1.5 flex flex-col items-center gap-1.5 transition-colors',
+                  themeId === p.id ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-border',
                 )}
               >
-                <div className="relative w-full h-8 rounded-md overflow-hidden flex" style={{ background: p.bg }}>
+                <div className="w-full h-8 rounded-md overflow-hidden flex" style={{ background: p.bg }}>
                   <div className="flex-1" style={{ background: p.card }} />
                   <div className="w-2.5 shrink-0" style={{ background: p.accent }} />
-                  {themeId === p.id && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <Icon name="check" size={14} className="text-white" />
-                    </div>
-                  )}
                 </div>
                 <span className="text-xs font-medium">{p.name}</span>
               </button>
@@ -149,9 +144,9 @@ export default function SettingsPage() {
 
         <Field label="Accent color" hint="Primary highlight color used throughout the app.">
           <div className="flex items-center gap-3">
-            <label className="cursor-pointer relative shrink-0 group" title="Pick a color">
+            <label className="cursor-pointer relative shrink-0" title="Pick a color">
               <div
-                className="w-10 h-10 rounded-lg border-2 border-white/20 dark:border-white/10 shadow-sm transition-transform duration-150 group-hover:scale-105"
+                className="w-10 h-10 rounded-lg border-2 border-white/20 dark:border-white/10 shadow-sm"
                 style={{ backgroundColor: accentColor }}
               />
               <input

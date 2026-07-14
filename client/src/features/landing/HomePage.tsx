@@ -13,7 +13,7 @@ export default function HomePage({ user }: { user: PublicUser }) {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">Welcome back, {user.displayName}.</h1>
+        <h1 className="text-3xl font-extrabold">Welcome back, {user.displayName}.</h1>
         <p className="text-muted mt-1">What would you like to do?</p>
       </div>
 
@@ -22,7 +22,7 @@ export default function HomePage({ user }: { user: PublicUser }) {
           <Link
             key={t.to}
             to={t.to}
-            className="card card-interactive p-6 flex flex-col gap-4 group text-left"
+            className="card p-6 flex flex-col gap-4 hover:border-accent/50 transition-colors group text-left"
           >
             <span className="w-11 h-11 rounded-lg bg-accent/15 text-accent grid place-items-center group-hover:bg-accent/25 transition-colors">
               <Icon name={t.icon} size={24} />

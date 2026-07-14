@@ -12,14 +12,14 @@ export function Toggle({ checked, onChange, disabled }: { checked: boolean; onCh
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
-        'relative w-10 h-6 rounded-full transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        'relative w-10 h-6 rounded-full transition-colors shrink-0',
         checked ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover',
         disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
       <span
         className={clsx(
-          'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-150',
+          'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
           checked && 'translate-x-4',
         )}
       />
@@ -47,8 +47,8 @@ export function Segmented<T extends string>({
           disabled={disabled}
           onClick={() => onChange(opt.value)}
           className={clsx(
-            'px-3 py-1 rounded text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-            value === opt.value ? 'bg-accent text-white shadow-sm shadow-accent/30' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200',
+            'px-3 py-1 rounded text-xs font-medium transition-colors',
+            value === opt.value ? 'bg-accent text-white' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200',
           )}
         >
           {opt.label}

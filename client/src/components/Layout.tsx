@@ -108,9 +108,9 @@ export function Layout({ children }: { children: ReactNode }) {
               end={n.to === '/'}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-accent text-white shadow-md shadow-accent/25'
+                    ? 'bg-accent text-white'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-muted dark:hover:bg-card-hover dark:hover:text-gray-100',
                 )
               }
@@ -203,7 +203,7 @@ export function Layout({ children }: { children: ReactNode }) {
               to={to}
               className={({ isActive }) =>
                 clsx(
-                  'flex-1 flex flex-col items-center py-2 text-xs gap-0.5 transition-colors',
+                  'flex-1 flex flex-col items-center py-2 text-xs gap-0.5',
                   isActive ? 'text-accent' : 'text-gray-500 dark:text-muted',
                 )
               }
