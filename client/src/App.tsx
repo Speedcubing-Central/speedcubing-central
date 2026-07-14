@@ -6,6 +6,7 @@ import { useAuth } from './store/auth';
 import { useSettings, applyTheme, applyAccentColor, applyThemePalette } from './store/settings';
 
 import HomePage from './features/landing/HomePage';
+import LandingPage from './features/landing/LandingPage';
 import TimerPage from './features/timer/TimerPage';
 import CalculatorPage from './features/calculator/CalculatorPage';
 import AlgTrainerPage from './features/alg-trainer/AlgTrainerPage';
@@ -26,9 +27,9 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 function HomeRoute() {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return <div className="p-8 text-muted">Loading…</div>;
-  return <HomePage />;
+  return user ? <HomePage user={user} /> : <LandingPage />;
 }
 
 export default function App() {

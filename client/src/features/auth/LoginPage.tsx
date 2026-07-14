@@ -12,7 +12,11 @@ const WCA_ERRORS: Record<string, string> = {
 };
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [params] = useSearchParams();
+  // Lets a "Create account" link (e.g. LandingPage's) deep-link straight
+  // into register mode via /login?mode=register instead of landing on the
+  // login form and making the visitor click "Register" themselves.
+  const [mode, setMode] = useState<'login' | 'register'>(params.get('mode') === 'register' ? 'register' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -20,7 +24,6 @@ export default function LoginPage() {
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [params] = useSearchParams();
 
   const [wcaEnabled, setWcaEnabled] = useState(true);
 
