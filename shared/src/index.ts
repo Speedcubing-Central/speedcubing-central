@@ -15,7 +15,12 @@ export interface WcaEvent {
 export const WCA_EVENTS: WcaEvent[] = [
   { id: '222', name: '2x2', scrambowType: '222' },
   { id: '333', name: '3x3', scrambowType: '333' },
-  { id: '444', name: '4x4', scrambowType: '444' },
+  // scrambowType is deliberately '' (not '444'): scrambow's 4x4 generator is
+  // a random-move picker whose own anti-redundancy filtering is dead code
+  // (see server/src/scramble.ts's SCRAMBOW_PREFERRED comment), so this event
+  // must never be able to reach it — same "always random-state or keep
+  // trying" policy already used for kilominx/fto/redi_cube below.
+  { id: '444', name: '4x4', scrambowType: '' },
   { id: '555', name: '5x5', scrambowType: '555' },
   { id: '666', name: '6x6', scrambowType: '666' },
   { id: '777', name: '7x7', scrambowType: '777' },

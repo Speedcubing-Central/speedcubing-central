@@ -5,28 +5,107 @@ import { getEvent, normalizeScramble } from '@scc/shared';
 // scrambow is CommonJS; grab the Scrambow class via interop default.
 const { Scrambow } = pkg as unknown as { Scrambow: typeof import('scrambow').Scrambow };
 
-// Events where scrambow produces the correct WCA-format output and cubing.js
-// does not: 2x2 WCA scrambles use only R/U/F moves (DLB corner fixed), but
-// cubing.js generates valid random-state scrambles using all 6 faces.
-// Clock scrambles also use scrambow — both produce equivalent output but
-// scrambow is synchronous and avoids WASM overhead for this simple puzzle.
-const SCRAMBOW_PREFERRED = new Set(['222', 'clock']);
+// Events where scrambow is used as the primary generator instead of
+// cubing.js. 2x2: WCA scrambles use only R/U/F moves (DLB corner fixed),
+// but cubing.js generates valid random-state scrambles using all 6 faces.
+// Clock: scrambow is synchronous and avoids WASM overhead for this simple
+// puzzle, and produces equivalent output to cubing.js. 6x6: scrambow is
+// synchronous (avoids cubing.js's WASM cold-start/timeout risk — 666 isn't
+// in WARM_UP_EVENTS below) — see generateScramble's own doc comment for how
+// its one known defect (a redundant wide-move pair) is handled now that
+// this is the primary path rather than a rare fallback.
+const SCRAMBOW_PREFERRED = new Set(['222', 'clock', '666']);
 
-// Synchronous scrambow scramble — random-state for 222, random-move fallback otherwise.
+// Detects the specific defect behind a real user report: scrambow's
+// move-picker for NxN cubes (444/555/666/777) has no live protection
+// against picking two adjacent wide moves on opposite faces of the same
+// axis whose depths together span the *entire* cube — e.g. "3Lw' 3Rw" on a
+// 6-layer cube. That pair is mathematically a pure whole-cube rotation
+// (every layer turns by the same amount in a consistent sense), i.e. a
+// wasted move that changes nothing about the puzzle's actual state. This
+// holds for ANY complementary depth split (not just an exact half-and-half
+// split), as long as the two moves' relative sign is the one that
+// reconstructs a single rigid rotation rather than twisting the two halves
+// apart — verified against the standard SiGN-notation identity where each
+// axis's "positive" reference face (R/U/F, matching x/y/z's own direction)
+// paired with its *opposite* face's prime (L'/D'/B') builds a whole-cube
+// turn; same-sign pairs (e.g. R + L, both unprimed) do NOT reduce to a
+// rotation. Half-turns (the "2" suffix) have no sign distinction, so any
+// complementary-depth half-turn pair on opposite faces is always redundant.
+// scrambow's own source has a guard shaped exactly like a check for this
+// case, but it's gated on a condition that's always false for every
+// 444/555/666/777 registration — dead code, not a working filter.
+const OPPOSITE_FACE: Record<string, string> = { U: 'D', D: 'U', F: 'B', B: 'F', L: 'R', R: 'L' };
+// Each axis's positive/reference face, matching x~R, y~U, z~F in SiGN notation.
+const AXIS_REFERENCE_FACE = new Set(['U', 'F', 'R']);
+const WIDE_MOVE_RE = /^(\d*)([UDFBLR])(w?)(2|')?$/;
+
+interface ParsedWideMove {
+  face: string;
+  depth: number;
+  turns: 1 | 2 | -1; // quarter CW, half, quarter CCW
+}
+
+// A bare face letter with no leading digit and no 'w' is a single-layer
+// (outer-only) turn; 'w' with no digit defaults to depth 2, matching WCA's
+// "Rw" == "2Rw" convention.
+function parseWideMove(token: string): ParsedWideMove | null {
+  const m = WIDE_MOVE_RE.exec(token);
+  if (!m) return null;
+  const [, digits, face, wide, suffix] = m;
+  const depth = digits ? parseInt(digits, 10) : wide ? 2 : 1;
+  const turns = suffix === '2' ? 2 : suffix === "'" ? -1 : 1;
+  return { face, depth, turns };
+}
+
+function isRedundantRotationPair(a: ParsedWideMove, b: ParsedWideMove, layers: number): boolean {
+  if (OPPOSITE_FACE[a.face] !== b.face) return false;
+  if (a.depth + b.depth !== layers) return false;
+  if (a.turns === 2 && b.turns === 2) return true;
+  if (Math.abs(a.turns) !== 1 || Math.abs(b.turns) !== 1) return false;
+  const refTurn = AXIS_REFERENCE_FACE.has(a.face) ? a.turns : b.turns;
+  const oppTurn = AXIS_REFERENCE_FACE.has(a.face) ? b.turns : a.turns;
+  return refTurn !== oppTurn; // opposite sign on the ref/opposite pair => a pure rotation
+}
+
+function hasRedundantWideRotation(scramble: string, layers: number): boolean {
+  const tokens = scramble.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const a = parseWideMove(tokens[i]);
+    const b = parseWideMove(tokens[i + 1]);
+    if (a && b && isRedundantRotationPair(a, b, layers)) return true;
+  }
+  return false;
+}
+
+const NXN_LAYERS: Record<string, number> = { '666': 6 };
+
+// Synchronous scrambow scramble — random-state for 222/333, random-move
+// otherwise. For events in NXN_LAYERS (currently just 666, since that's the
+// only one scrambow is primary for — see SCRAMBOW_PREFERRED), regenerates
+// (cheap: scrambow's own call is synchronous) rather than ever handing back
+// a scramble containing the redundant-rotation pair described above.
 export function generateScramble(eventId: string): string {
   const ev = getEvent(eventId);
   const type = ev?.scrambowType;
   if (!type) return ''; // no scrambow support for this event
-  try {
-    const scrambles = new Scrambow().setType(type).get(1);
-    let s = normalizeScramble(scrambles[0]?.scramble_string ?? '');
-    // WCA no longer requires pre-set pins; strip trailing pin tokens (UR/DR/DL/UL).
-    if (eventId === 'clock') s = s.replace(/(\s+(UR|DR|DL|UL))+$/, '');
-    return s;
-  } catch (e) {
-    console.warn('[scramble] generation failed for', eventId, e);
-    return '';
+  const layers = NXN_LAYERS[eventId];
+  let last = '';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      const scrambles = new Scrambow().setType(type).get(1);
+      let s = normalizeScramble(scrambles[0]?.scramble_string ?? '');
+      // WCA no longer requires pre-set pins; strip trailing pin tokens (UR/DR/DL/UL).
+      if (eventId === 'clock') s = s.replace(/(\s+(UR|DR|DL|UL))+$/, '');
+      last = s;
+      if (!layers || !hasRedundantWideRotation(s, layers)) return s;
+    } catch (e) {
+      console.warn('[scramble] generation failed for', eventId, e);
+      return '';
+    }
   }
+  console.warn('[scramble] could not avoid a redundant wide-rotation pair for', eventId, 'after 20 attempts, returning it anyway');
+  return last;
 }
 
 // A live, reproduced issue: a long-lived server progressively got *slower

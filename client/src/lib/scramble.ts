@@ -3,30 +3,92 @@ import { getEvent, normalizeScramble } from '@scc/shared';
 import { api } from './api';
 
 // Synchronous client-side fallback for when the server API is unreachable —
-// scrambow-quality (i.e. genuinely random-state, same standard as
-// TNoodle/cubing.js) for the events it actually supports. There is
+// scrambow-quality for the events it actually supports. There is
 // deliberately no fallback of any kind for events scrambow doesn't support
-// (kilominx, fto, redi_cube — see shared's WcaEvent.scrambowType, empty for
-// these three): this file used to carry a hand-rolled random-*move*
-// generator for exactly those three as a last resort, which produced
-// materially worse scrambles (verified: adjacent cancelling moves like
-// "R R'", and — because its move lists were also incomplete — some faces
-// never turning at all, "solving" whatever was only reachable through
-// them). Per explicit product decision, a scramble for these events must
-// always be genuinely random-state or the app must keep trying — never
-// something lower-quality, even temporarily. See getScramble below for the
-// retry loop this feeds into.
+// (kilominx, fto, redi_cube, and — as of the fix below — 4x4 too: see
+// shared's WcaEvent.scrambowType, empty for these): this file used to carry
+// a hand-rolled random-*move* generator for kilominx/fto/redi_cube as a last
+// resort, which produced materially worse scrambles (verified: adjacent
+// cancelling moves like "R R'", and — because its move lists were also
+// incomplete — some faces never turning at all, "solving" whatever was only
+// reachable through them). Per explicit product decision, a scramble for
+// these events must always be genuinely random-state or the app must keep
+// trying — never something lower-quality, even temporarily. See getScramble
+// below for the retry loop this feeds into.
+//
+// Note scrambow itself is only genuinely random-state (a real solver) for
+// 222/333 — its 444/555/666/777 generator is a random-*move* picker with a
+// known defect (see hasRedundantWideRotation below), which is exactly why
+// 4x4 no longer has a scrambowType at all. 6x6 is the one NxN event that
+// still routes through scrambow (server-side it's scrambow-primary; here
+// it's the same last-resort-when-server-unreachable fallback as everything
+// else), so it gets the same regenerate-on-detection treatment as the
+// server's copy of this logic (server/src/scramble.ts) rather than being
+// exempted.
+const OPPOSITE_FACE: Record<string, string> = { U: 'D', D: 'U', F: 'B', B: 'F', L: 'R', R: 'L' };
+const AXIS_REFERENCE_FACE = new Set(['U', 'F', 'R']);
+const WIDE_MOVE_RE = /^(\d*)([UDFBLR])(w?)(2|')?$/;
+
+interface ParsedWideMove {
+  face: string;
+  depth: number;
+  turns: 1 | 2 | -1;
+}
+
+function parseWideMove(token: string): ParsedWideMove | null {
+  const m = WIDE_MOVE_RE.exec(token);
+  if (!m) return null;
+  const [, digits, face, wide, suffix] = m;
+  const depth = digits ? parseInt(digits, 10) : wide ? 2 : 1;
+  const turns = suffix === '2' ? 2 : suffix === "'" ? -1 : 1;
+  return { face, depth, turns };
+}
+
+// See server/src/scramble.ts's fuller doc comment on the identical function
+// for the derivation: two adjacent wide moves on opposite faces whose
+// depths together span the whole cube collapse to a pure whole-cube
+// rotation (a wasted, non-scrambling move) whenever they're both half-turns,
+// or both quarter-turns with opposite sign on the axis's reference/opposite
+// face pair.
+function isRedundantRotationPair(a: ParsedWideMove, b: ParsedWideMove, layers: number): boolean {
+  if (OPPOSITE_FACE[a.face] !== b.face) return false;
+  if (a.depth + b.depth !== layers) return false;
+  if (a.turns === 2 && b.turns === 2) return true;
+  if (Math.abs(a.turns) !== 1 || Math.abs(b.turns) !== 1) return false;
+  const refTurn = AXIS_REFERENCE_FACE.has(a.face) ? a.turns : b.turns;
+  const oppTurn = AXIS_REFERENCE_FACE.has(a.face) ? b.turns : a.turns;
+  return refTurn !== oppTurn;
+}
+
+function hasRedundantWideRotation(scramble: string, layers: number): boolean {
+  const tokens = scramble.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const a = parseWideMove(tokens[i]);
+    const b = parseWideMove(tokens[i + 1]);
+    if (a && b && isRedundantRotationPair(a, b, layers)) return true;
+  }
+  return false;
+}
+
+const NXN_LAYERS: Record<string, number> = { '666': 6 };
+
 export function generateScramble(eventId: string): string {
   const type = getEvent(eventId)?.scrambowType;
   if (!type) return '';
-  try {
-    const s = new Scrambow().setType(type).get(1);
-    let scramble = normalizeScramble(s[0]?.scramble_string ?? '');
-    if (eventId === 'clock') scramble = scramble.replace(/(\s+(UR|DR|DL|UL))+$/, '');
-    return scramble;
-  } catch {
-    return '';
+  const layers = NXN_LAYERS[eventId];
+  let last = '';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      const s = new Scrambow().setType(type).get(1);
+      let scramble = normalizeScramble(s[0]?.scramble_string ?? '');
+      if (eventId === 'clock') scramble = scramble.replace(/(\s+(UR|DR|DL|UL))+$/, '');
+      last = scramble;
+      if (!layers || !hasRedundantWideRotation(scramble, layers)) return scramble;
+    } catch {
+      return '';
+    }
   }
+  return last;
 }
 
 function sleep(ms: number): Promise<void> {
