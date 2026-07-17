@@ -244,7 +244,7 @@ export default function BattleRoom() {
     if (!code || namePrompt || joined.current) return;
     joined.current = true;
     const name = displayName || tempName;
-    joinRoom({ code: code.toUpperCase(), userId: user?.id, name, password });
+    joinRoom({ code: code.toUpperCase(), name, password });
   }, [code, namePrompt, connected]);
 
   // Watch for our participant id after room_state arrives

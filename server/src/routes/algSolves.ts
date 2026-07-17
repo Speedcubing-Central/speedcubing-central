@@ -3,17 +3,20 @@ import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toAlgSolveDTO } from '../util/dto.js';
+import { getAlgSet } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
 
-const createSchema = z.object({
-  setId: z.string().min(1),
-  caseId: z.string().min(1),
-  time: z.number().int().nonnegative(),
-  penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
-  scramble: z.string().default(''),
-});
+const createSchema = z
+  .object({
+    setId: z.string().min(1),
+    caseId: z.string().min(1),
+    time: z.number().int().nonnegative(),
+    penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
+    scramble: z.string().max(2000).default(''),
+  })
+  .refine((d) => getAlgSet(d.setId)?.caseIds.includes(d.caseId), 'Invalid setId/caseId');
 
 const patchSchema = z.object({
   penalty: z.enum(['NONE', 'PLUS2', 'DNF']).optional(),

@@ -170,7 +170,10 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  join_room: (payload: { code: string; userId?: string; name: string; password?: string }) => void;
+  // userId is intentionally not part of this payload — the server derives
+  // identity from the caller's verified access_token cookie (see
+  // server/src/socket.ts), never from a client-supplied field.
+  join_room: (payload: { code: string; name: string; password?: string }) => void;
   solve_complete: (payload: { code: string; time: number; penalty: Penalty }) => void;
   leave_room: (payload: { code: string }) => void;
 }

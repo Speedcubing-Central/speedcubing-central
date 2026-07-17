@@ -10,6 +10,11 @@ dotenv.config(); // also pick up a local .env if present
 function required(name: string, fallback?: string): string {
   const v = process.env[name] ?? fallback;
   if (v === undefined) {
+    if (process.env.NODE_ENV === 'production') {
+      // A missing secret in production must never silently fall back to a
+      // guessable default — that would let anyone forge valid auth tokens.
+      throw new Error(`[env] Missing required env var ${name} in production`);
+    }
     // Don't crash hard for optional dev secrets — warn and use a dev default.
     console.warn(`[env] Missing ${name}; using insecure development default.`);
     return `dev-${name.toLowerCase()}`;

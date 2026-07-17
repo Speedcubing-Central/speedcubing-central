@@ -35,6 +35,10 @@ model User {
   avatarUrl    String?
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
+  // Bumped on logout/password change to revoke all outstanding refresh
+  // tokens for this user — a refresh token's embedded tokenVersion must
+  // match this value or it's rejected. See server/src/routes/auth.ts.
+  tokenVersion Int      @default(0)
 
   sessions      Session[]
   solves        Solve[]

@@ -18,7 +18,7 @@ const renameSchema = z.object({ name: z.string().min(1).max(60) });
 const solveSchema = z.object({
   time: z.number().int().nonnegative(),
   penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
-  scramble: z.string().default(''),
+  scramble: z.string().max(2000).default(''),
 });
 
 // Bulk import (e.g. from an external timer export) — allows a custom

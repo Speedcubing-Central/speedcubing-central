@@ -93,7 +93,7 @@ export function useBattleSocket() {
   }, []);
 
   const joinRoom = useCallback(
-    (payload: { code: string; userId?: string; name: string; password?: string }, participantId?: string) => {
+    (payload: { code: string; name: string; password?: string }, participantId?: string) => {
       myParticipantIdRef.current = participantId ?? null;
       socketRef.current?.emit('join_room', payload);
     },

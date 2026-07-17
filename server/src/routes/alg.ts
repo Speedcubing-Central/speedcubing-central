@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
+import { getAlgSet } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -42,11 +43,13 @@ router.get('/progress/:setId', async (req, res, next) => {
   }
 });
 
-const reviewSchema = z.object({
-  setId: z.string(),
-  caseId: z.string(),
-  quality: z.number().int().min(0).max(5),
-});
+const reviewSchema = z
+  .object({
+    setId: z.string(),
+    caseId: z.string(),
+    quality: z.number().int().min(0).max(5),
+  })
+  .refine((d) => getAlgSet(d.setId)?.caseIds.includes(d.caseId), 'Invalid setId/caseId');
 
 // POST /api/alg/review — record a drill result and update SM-2 schedule
 router.post('/review', async (req, res, next) => {
@@ -89,12 +92,14 @@ router.get('/prefs/:setId', async (req, res, next) => {
   }
 });
 
-const prefSchema = z.object({
-  setId: z.string(),
-  caseId: z.string(),
-  status: z.enum(['NEW', 'LEARNING', 'LEARNED']).optional(),
-  preferredAlg: z.string().nullable().optional(),
-});
+const prefSchema = z
+  .object({
+    setId: z.string(),
+    caseId: z.string(),
+    status: z.enum(['NEW', 'LEARNING', 'LEARNED']).optional(),
+    preferredAlg: z.string().max(500).nullable().optional(),
+  })
+  .refine((d) => getAlgSet(d.setId)?.caseIds.includes(d.caseId), 'Invalid setId/caseId');
 
 // PUT /api/alg/pref — upsert a single case preference
 router.put('/pref', async (req, res, next) => {
@@ -127,10 +132,15 @@ router.get('/selection/:setId', async (req, res, next) => {
   }
 });
 
-const selectionSchema = z.object({
-  setId: z.string(),
-  caseIds: z.array(z.string()).min(1),
-});
+const selectionSchema = z
+  .object({
+    setId: z.string(),
+    caseIds: z.array(z.string()).min(1).max(300),
+  })
+  .refine((d) => {
+    const set = getAlgSet(d.setId);
+    return set !== undefined && d.caseIds.every((id) => set.caseIds.includes(id));
+  }, 'Invalid setId/caseIds');
 
 // PUT /api/alg/selection — upsert the case selection for a set
 router.put('/selection', async (req, res, next) => {

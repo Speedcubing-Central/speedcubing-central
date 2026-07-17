@@ -1,9 +1,12 @@
 import { Server as IOServer } from 'socket.io';
 import type { Server as HttpServer } from 'node:http';
+import type { DefaultEventsMap } from 'socket.io';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { env } from './env.js';
 import { getRoundScramble } from './scramble.js';
+import { verifyAccessToken } from './auth/jwt.js';
 import {
   effectiveTime,
   type ClientToServerEvents,
@@ -11,6 +14,26 @@ import {
   type BattleRoomDTO,
   type BattleRoundResultEntry,
 } from '@scc/shared';
+
+interface SocketData {
+  // Set from the verified access_token cookie at handshake time (see the
+  // io.use() middleware below) — never from client-supplied event payloads.
+  // Undefined means "not logged in" (a guest), which is a legitimate,
+  // allowed state, not an auth failure.
+  userId?: string;
+}
+
+// Tiny manual parse instead of pulling in a cookie-parsing dependency just
+// for this one read — Socket.io's handshake only exposes the raw header.
+function readCookie(header: string | undefined, name: string): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return undefined;
+}
 
 const POINTS_BY_RANK = [5, 3, 2];
 const POINTS_DEFAULT = 1;
@@ -78,16 +101,54 @@ const PING_INTERVAL_MS = 25_000;
 const PING_TIMEOUT_MS = 90_000;
 
 export function attachSocket(server: HttpServer): IOServer {
-  const io = new IOServer<ClientToServerEvents, ServerToClientEvents>(server, {
+  const io = new IOServer<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>(server, {
     cors: { origin: env.FRONTEND_URL, credentials: true },
     pingInterval: PING_INTERVAL_MS,
     pingTimeout: PING_TIMEOUT_MS,
+  });
+
+  // Derives identity from the same httpOnly access_token cookie requireAuth
+  // verifies for REST requests — never trust a client-supplied userId in an
+  // event payload (that was the original bug this closes: anyone could claim
+  // to be any user id and get treated as them). Cookies already flow on this
+  // same-origin connection with no client-side change needed (dev via the
+  // Vite proxy, prod via the single server). An invalid/missing/expired
+  // token just means "not logged in" — guests must still be allowed to
+  // connect and join rooms, so this never blocks the handshake.
+  io.use((socket, next) => {
+    const token = readCookie(socket.request.headers.cookie, 'access_token');
+    if (token) {
+      try {
+        socket.data.userId = verifyAccessToken(token).sub;
+      } catch {
+        /* invalid/expired token — treat as guest */
+      }
+    }
+    next();
   });
 
   // participantId -> the timer that will actually remove them once the
   // reconnect grace period elapses. join_room cancels this when the same
   // participant (by userId, or by name for guests) rejoins in time.
   const pendingCleanup = new Map<string, ReturnType<typeof setTimeout>>();
+
+  // socket.id -> number of incorrect room-password attempts this connection
+  // has made, so a raw socket client can't brute-force a private room's
+  // password by just retrying join_room. Cleared on disconnect.
+  const failedPasswordAttempts = new Map<string, number>();
+  const MAX_PASSWORD_ATTEMPTS = 5;
+
+  const joinRoomSchema = z.object({
+    code: z.string().min(1).max(20),
+    name: z.string().min(1).max(40),
+    password: z.string().max(64).optional(),
+  });
+  const solveCompleteSchema = z.object({
+    code: z.string().min(1).max(20),
+    time: z.number().int().nonnegative().max(24 * 60 * 60 * 1000),
+    penalty: z.enum(['NONE', 'PLUS2', 'DNF']),
+  });
+  const leaveRoomSchema = z.object({ code: z.string().min(1).max(20) });
 
   async function emitRoomState(code: string) {
     const dto = await buildRoomDTO(code);
@@ -212,8 +273,14 @@ export function attachSocket(server: HttpServer): IOServer {
 
     socket.on(
       'join_room',
-      safe(async ({ code, userId, name, password }) => {
-        code = code.toUpperCase();
+      safe(async (raw) => {
+        const parsed = joinRoomSchema.safeParse(raw);
+        if (!parsed.success) {
+          socket.emit('error_msg', { message: 'Invalid request' });
+          return;
+        }
+        const { name, password } = parsed.data;
+        const code = parsed.data.code.toUpperCase();
         const room = await prisma.battleRoom.findUnique({
           where: { code },
           include: { participants: true },
@@ -224,22 +291,26 @@ export function attachSocket(server: HttpServer): IOServer {
         }
 
         if (room.password) {
+          const attempts = failedPasswordAttempts.get(socket.id) ?? 0;
+          if (attempts >= MAX_PASSWORD_ATTEMPTS) {
+            socket.emit('error_msg', { message: 'Too many incorrect password attempts' });
+            return;
+          }
           if (!password) {
             socket.emit('error_msg', { message: 'This room requires a password' });
             return;
           }
           const valid = await bcrypt.compare(password, room.password);
           if (!valid) {
+            failedPasswordAttempts.set(socket.id, attempts + 1);
             socket.emit('error_msg', { message: 'Incorrect password' });
             return;
           }
         }
 
-        let safeUserId: string | null = null;
-        if (userId) {
-          const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-          safeUserId = exists ? userId : null;
-        }
+        // Identity comes only from the verified access_token cookie (see the
+        // io.use() middleware above) — never from the client payload.
+        const safeUserId: string | null = socket.data.userId ?? null;
 
         // Matches this join against an already-present participant so a
         // reconnect (see the client's join-on-reconnect fix in
@@ -324,8 +395,11 @@ export function attachSocket(server: HttpServer): IOServer {
 
     socket.on(
       'solve_complete',
-      safe(async ({ code, time, penalty }) => {
-        code = code.toUpperCase();
+      safe(async (raw) => {
+        const parsed = solveCompleteSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const { time, penalty } = parsed.data;
+        const code = parsed.data.code.toUpperCase();
         if (!myParticipantId) return;
         const room = await prisma.battleRoom.findUnique({
           where: { code },
@@ -355,8 +429,10 @@ export function attachSocket(server: HttpServer): IOServer {
 
     socket.on(
       'leave_room',
-      safe(async ({ code }) => {
-        code = code.toUpperCase();
+      safe(async (raw) => {
+        const parsed = leaveRoomSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const code = parsed.data.code.toUpperCase();
         if (!myParticipantId) return;
         await leaveRoomCleanup(myParticipantId, code);
         socket.leave(code);
@@ -366,6 +442,7 @@ export function attachSocket(server: HttpServer): IOServer {
     );
 
     socket.on('disconnect', () => {
+      failedPasswordAttempts.delete(socket.id);
       if (!myParticipantId || !myCode) return;
       const participantId = myParticipantId;
       const code = myCode;

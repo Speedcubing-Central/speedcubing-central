@@ -5,25 +5,31 @@ import { env, isProd } from '../env.js';
 export interface JwtPayload {
   sub: string; // user id
   role: 'GUEST' | 'USER';
+  // Must match the user's current User.tokenVersion — bumped on logout/
+  // password change to revoke every outstanding refresh token at once.
+  // Only checked on refresh (see routes/auth.ts), not on every access-token
+  // verification, so authenticated requests stay a stateless, no-DB-hit check.
+  tokenVersion: number;
 }
 
 const ACCESS_TTL = '15m';
 const REFRESH_TTL = '7d';
+const ALGORITHM = 'HS256';
 
 export function signAccessToken(payload: JwtPayload): string {
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: ACCESS_TTL });
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: ACCESS_TTL, algorithm: ALGORITHM });
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_TTL, algorithm: ALGORITHM });
 }
 
 export function verifyAccessToken(token: string): JwtPayload {
-  return jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+  return jwt.verify(token, env.JWT_SECRET, { algorithms: [ALGORITHM] }) as JwtPayload;
 }
 
 export function verifyRefreshToken(token: string): JwtPayload {
-  return jwt.verify(token, env.JWT_REFRESH_SECRET) as JwtPayload;
+  return jwt.verify(token, env.JWT_REFRESH_SECRET, { algorithms: [ALGORITHM] }) as JwtPayload;
 }
 
 const cookieBase = {
