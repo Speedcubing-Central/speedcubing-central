@@ -52,6 +52,14 @@ export default function TimerPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [solveSortBy, setSolveSortBy] = useState<SolveSortBy>('date');
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
+  // True for the entire span of recording a solve — from the moment
+  // submission starts, not just once scr.advance() gets around to setting
+  // its own loading flag partway through. Without this, the button/input
+  // stayed clickable for the whole addSolve() network round-trip, which
+  // under real latency was long enough to double-submit the same typed
+  // time (or double-fire the timer stop) before anything visibly changed,
+  // recording two solves against the same not-yet-advanced scramble.
+  const [submitting, setSubmitting] = useState(false);
 
   // Leaving the select set stale across a session switch would let you
   // "delete" solves that are no longer even visible.
@@ -97,17 +105,22 @@ export default function TimerPage() {
 
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty) => {
-      let sessionId = data.currentId;
-      if (!sessionId) {
-        const created = await data.createSession(`${getEvent(event)?.name ?? event} Session`);
-        sessionId = created.id;
-      }
-      const prevSolves = data.solves;
-      const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId);
-      scr.advance();
-      if (solve && celebratePBs) {
-        const hits = detectNewPBs(prevSolves, solve);
-        if (hits.length > 0) setPbHits(hits);
+      setSubmitting(true);
+      try {
+        let sessionId = data.currentId;
+        if (!sessionId) {
+          const created = await data.createSession(`${getEvent(event)?.name ?? event} Session`);
+          sessionId = created.id;
+        }
+        const prevSolves = data.solves;
+        const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId);
+        scr.advance();
+        if (solve && celebratePBs) {
+          const hits = detectNewPBs(prevSolves, solve);
+          if (hits.length > 0) setPbHits(hits);
+        }
+      } finally {
+        setSubmitting(false);
       }
     },
     [data, scr, event, celebratePBs],
@@ -122,7 +135,7 @@ export default function TimerPage() {
   // This matters most for slower-to-generate events (e.g. square-1, whose
   // random-state search can take up to ~2s) where the window would
   // otherwise be wide enough to hit during ordinary, non-rushed solving.
-  const inputBlocked = data.solvesLoading || scr.loading;
+  const inputBlocked = data.solvesLoading || scr.loading || submitting;
 
   const engine = useTimerEngine({
     inspection,

@@ -5,6 +5,22 @@ import { getScramble } from '../../lib/scramble';
 // fire concurrently, so on a fast event they all resolve nearly simultaneously.
 const QUEUE_SIZE = 3;
 
+// Never hand back a scramble identical to the one it's about to replace —
+// a hard guarantee against ever seeing the same scramble twice in a row,
+// regardless of cause (a queued/fetched value can, rarely, coincide with
+// the current one — e.g. a lower-entropy event like 2x2, or a race
+// elsewhere). Reuses the already-queued/fetched value in the overwhelming
+// common case; only pays for an extra network round-trip on an actual
+// collision. Bounded so a pathological event (or a bug) can't spin forever.
+const MAX_DEDUP_ATTEMPTS = 5;
+async function ensureDifferent(candidate: Promise<string>, exclude: string, eventId: string): Promise<string> {
+  let s = await candidate;
+  for (let i = 0; exclude && s === exclude && i < MAX_DEDUP_ATTEMPTS; i++) {
+    s = await getScramble(eventId);
+  }
+  return s;
+}
+
 // Manages the current scramble and keeps a queue of pre-fetched next ones so
 // the wait for slow random-state events (4x4+) is hidden while the user is
 // solving. Rapid skips stay instant as long as the queue hasn't been drained.
@@ -54,13 +70,13 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     const pending = queueRef.current.shift()!;
     fillQueue();
     setLoading(true);
-    const s = await pending;
+    const s = await ensureDifferent(pending, scrambleRef.current, eventId);
     if (id === reqId.current) {
       setPrevious(scrambleRef.current);
       setScramble(s);
       setLoading(false);
     }
-  }, [enqueue, fillQueue]);
+  }, [enqueue, fillQueue, eventId]);
 
   // Fetch a fresh scramble bypassing the queue and repopulate it — shared by
   // refresh() (the button's action) and the eventId-change effect below,
@@ -69,7 +85,7 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     const id = ++reqId.current;
     queueRef.current = [];
     setLoading(true);
-    const s = await getScramble(eventId);
+    const s = await ensureDifferent(getScramble(eventId), scrambleRef.current, eventId);
     if (id === reqId.current) {
       setScramble(s);
       setLoading(false);
