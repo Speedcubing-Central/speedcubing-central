@@ -3,7 +3,7 @@ import type { Server as HttpServer } from 'node:http';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma.js';
 import { env } from './env.js';
-import { getScramble } from './scramble.js';
+import { getRoundScramble } from './scramble.js';
 import {
   effectiveTime,
   type ClientToServerEvents,
@@ -30,6 +30,7 @@ async function buildRoomDTO(code: string): Promise<BattleRoomDTO | null> {
     code: room.code,
     name: room.name,
     eventId: room.eventId,
+    algSetId: room.algSetId,
     isPublic: room.isPublic,
     scramble: room.scramble,
     roundNumber: room.roundNumber,
@@ -93,8 +94,8 @@ export function attachSocket(server: HttpServer): IOServer {
     if (dto) io.to(code).emit('room_state', dto);
   }
 
-  async function startRound(roomId: string, code: string, eventId: string, currentRoundNumber: number) {
-    const scramble = await getScramble(eventId);
+  async function startRound(roomId: string, code: string, eventId: string, algSetId: string | null, currentRoundNumber: number) {
+    const scramble = await getRoundScramble(eventId, algSetId);
     const roundNumber = currentRoundNumber + 1;
     await prisma.battleRoom.update({
       where: { id: roomId },
@@ -164,7 +165,7 @@ export function attachSocket(server: HttpServer): IOServer {
             include: { participants: { select: { id: true } } },
           });
           if (!fresh || fresh.participants.length < 2) return;
-          await startRound(fresh.id, code, fresh.eventId, fresh.roundNumber);
+          await startRound(fresh.id, code, fresh.eventId, fresh.algSetId, fresh.roundNumber);
         } catch {
           /* room may be gone */
         }
@@ -314,7 +315,7 @@ export function attachSocket(server: HttpServer): IOServer {
           include: { participants: { select: { id: true } } },
         });
         if (afterJoin && afterJoin.status === 'WAITING' && afterJoin.participants.length >= 2) {
-          await startRound(room.id, code, room.eventId, afterJoin.roundNumber);
+          await startRound(room.id, code, room.eventId, room.algSetId, afterJoin.roundNumber);
         } else {
           await emitRoomState(code);
         }

@@ -102,6 +102,12 @@ model BattleRoom {
   name        String       @default("")
   code        String       @unique
   eventId     String       @default("333")
+  // Non-null for an algorithm-set battle (e.g. "PLL") — each round then
+  // draws a random case+AUF from that set instead of a full scramble.
+  // eventId is still always set to the puzzle the set belongs to
+  // ('333'/'222'), derived server-side, purely so existing scramble
+  // rendering keeps working unmodified. See shared/src/algScramble.ts.
+  algSetId    String?
   isPublic    Boolean      @default(true)
   password    String?
   scramble    String       @default("")

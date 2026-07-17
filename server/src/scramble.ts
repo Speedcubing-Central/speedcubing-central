@@ -1,6 +1,6 @@
 import pkg from 'scrambow';
 import { Worker } from 'node:worker_threads';
-import { getEvent, normalizeScramble } from '@scc/shared';
+import { getEvent, normalizeScramble, generateAlgSetScramble } from '@scc/shared';
 
 // scrambow is CommonJS; grab the Scrambow class via interop default.
 const { Scrambow } = pkg as unknown as { Scrambow: typeof import('scrambow').Scrambow };
@@ -299,4 +299,21 @@ export async function getScramble(eventId: string): Promise<string> {
     console.warn('[scramble] cubing.js failed, falling back:', e instanceof Error ? e.message : e);
   }
   return generateScramble(eventId);
+}
+
+// Battle Mode's per-round scramble: an algorithm-set battle (algSetId set)
+// draws a random case+alt+AUF from that set instead of a full scramble for
+// eventId — see shared/src/algScramble.ts, the same pure logic the solo Alg
+// Trainer uses to build its own rounds. Both Battle call sites (room
+// creation and startRound) go through this one function so the branch only
+// exists once. Falls back to a normal full scramble if algSetId is present
+// but somehow unrecognized (stale data, a set removed after a room was
+// created, etc.) rather than ever returning nothing.
+export async function getRoundScramble(eventId: string, algSetId: string | null): Promise<string> {
+  if (algSetId) {
+    const result = generateAlgSetScramble(algSetId);
+    if (result) return result.scramble;
+    console.warn('[scramble] algSetId scramble generation failed for', algSetId, '— falling back to full scramble for', eventId);
+  }
+  return getScramble(eventId);
 }

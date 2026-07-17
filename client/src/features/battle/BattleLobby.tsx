@@ -8,6 +8,7 @@ import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { toast } from '../../store/toast';
 import { WCA_EVENTS, UNOFFICIAL_EVENTS, type BattlePublicRoomDTO } from '@scc/shared';
+import { BATTLE_ALG_SETS, battleAlgSetLabel } from './algSetOptions';
 
 const WCA_EVENT_OPTIONS = WCA_EVENTS.filter((e) =>
   ['333', '222', '444', '555', '666', '777', '333oh', '333bf', '444bf', '555bf', 'minx', 'pyram', 'clock', 'skewb', 'sq1'].includes(e.id),
@@ -36,9 +37,17 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const [name, setName] = useState('');
   const [guestName, setGuestName] = useState('');
   const [eventId, setEventId] = useState('333');
+  const [algSetId, setAlgSetId] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  function handleEventChange(next: string) {
+    setEventId(next);
+    setAlgSetId(null);
+  }
+
+  const algSetChoices = BATTLE_ALG_SETS.filter((s) => s.puzzle === eventId);
 
   async function handleCreate() {
     const displayName = user?.displayName ?? guestName.trim();
@@ -50,6 +59,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
       const { data } = await api.post<{ code: string }>('/battle', {
         name: name.trim(),
         eventId,
+        algSetId: algSetId ?? undefined,
         isPublic,
         password: isPublic ? undefined : password,
       });
@@ -61,7 +71,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   }
 
   function handleClose() {
-    setName(''); setGuestName(''); setEventId('333'); setIsPublic(true); setPassword('');
+    setName(''); setGuestName(''); setEventId('333'); setAlgSetId(null); setIsPublic(true); setPassword('');
     onClose();
   }
 
@@ -80,7 +90,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
         </div>
         <div>
           <label className="label mb-1 block">Event</label>
-          <select className="input w-full" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <select className="input w-full" value={eventId} onChange={(e) => handleEventChange(e.target.value)}>
             <optgroup label="WCA Events">
               {WCA_EVENT_OPTIONS.map((ev) => (
                 <option key={ev.id} value={ev.id}>{ev.name}</option>
@@ -93,6 +103,17 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
             </optgroup>
           </select>
         </div>
+        {algSetChoices.length > 0 && (
+          <div>
+            <label className="label mb-1 block">Scramble Type</label>
+            <select className="input w-full" value={algSetId ?? ''} onChange={(e) => setAlgSetId(e.target.value || null)}>
+              <option value="">Standard (full scramble)</option>
+              {algSetChoices.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">Public room</div>
@@ -237,7 +258,9 @@ export default function BattleLobby() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{room.name}</div>
                     <div className="text-xs text-muted mt-0.5">
-                      {[...WCA_EVENTS, ...UNOFFICIAL_EVENTS].find((e) => e.id === room.eventId)?.name ?? room.eventId}
+                      {battleAlgSetLabel(room.algSetId)
+                        ? `${battleAlgSetLabel(room.algSetId)} Battle`
+                        : [...WCA_EVENTS, ...UNOFFICIAL_EVENTS].find((e) => e.id === room.eventId)?.name ?? room.eventId}
                       {' · '}
                       {room.participantCount} / 10 player{room.participantCount !== 1 ? 's' : ''}
                     </div>

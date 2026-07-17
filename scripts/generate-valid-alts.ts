@@ -1,5 +1,8 @@
-// Regenerate client/src/data/validAlts.generated.ts after editing any alg
-// data file (client/src/data/*.ts) by running, from the repo root:
+// Regenerate client/src/data/validAlts.generated.ts AND
+// shared/src/algData.generated.ts (a minimal server-safe mirror of the same
+// case data, used by Battle Mode's algorithm-set rounds — see
+// shared/src/algScramble.ts) after editing any alg data file
+// (client/src/data/*.ts) by running, from the repo root:
 //
 //   node_modules/.bin/esbuild client/src/data/algSets.ts --bundle --format=esm --platform=node --outfile=scripts/_algSets_bundle.generated.mjs
 //   node --experimental-strip-types scripts/generate-valid-alts.ts
@@ -7,6 +10,12 @@
 // (The bundle step exists because Node's native TS loader needs fully
 // resolved imports and there's no reason to add a runtime dependency on
 // esbuild just for that — it's a one-line dev-time step instead.)
+//
+// Both files are written from this one run rather than two separate
+// scripts: by the end of main() below, every case's id/moves/kind and the
+// validated-alts map are already computed in memory, so there's exactly one
+// source of truth per generation run instead of two independently-invoked
+// scripts that could drift from each other.
 import { cube2x2x2, cube3x3x3 } from 'cubing/puzzles';
 import { Alg } from 'cubing/alg';
 import { ALG_SETS } from './_algSets_bundle.generated.mjs';
@@ -330,6 +339,38 @@ async function main() {
   const fs = await import('fs');
   fs.writeFileSync(new URL('../client/src/data/validAlts.generated.ts', import.meta.url), header);
   console.error('Wrote client/src/data/validAlts.generated.ts');
+
+  // Minimal, server-safe mirror of the same case data — used by Battle
+  // Mode's algorithm-set rounds (see shared/src/algScramble.ts). Only what
+  // a server needs to pick a random case + build its scramble: no
+  // diagram-only fields (name/group/oll/pll/slotAlts). Written from this
+  // same run (not a separate script) so there's one source of truth per
+  // generation rather than two independently-invoked bundle+validate passes
+  // that could drift from each other.
+  const setIndex = ALG_SETS.map((set: any) => ({
+    id: set.id,
+    puzzle: IS_2x2(set.kind) ? '222' : '333',
+    caseIds: set.cases.map((c: any) => c.id),
+  }));
+  const caseMoves: Record<string, string> = {};
+  for (const set of ALG_SETS as any[]) for (const c of set.cases) caseMoves[c.id] = c.moves;
+
+  const sharedHeader = [
+    '// GENERATED FILE — do not edit by hand.',
+    '// Regenerate together with client/src/data/validAlts.generated.ts — see',
+    '// the comment atop scripts/generate-valid-alts.ts for the exact command.',
+    '//',
+    '// Minimal, server-safe mirror of client/src/data/algSets.ts: just enough',
+    "// (id/puzzle/caseIds, case moves, and the same validated alts as the",
+    '// client Trainer uses) for the server to build an algorithm-set Battle',
+    '// round scramble without depending on client-only code.',
+  ].join('\n') + '\n\n'
+    + `export const ALG_SET_INDEX = ${JSON.stringify(setIndex, null, 2)} as const;\n\n`
+    + `export const ALG_CASE_MOVES: Record<string, string> = ${JSON.stringify(caseMoves, null, 2)};\n\n`
+    + `export const ALG_VALID_ALTS: Record<string, string[]> = ${JSON.stringify(flat, null, 2)};\n`;
+
+  fs.writeFileSync(new URL('../shared/src/algData.generated.ts', import.meta.url), sharedHeader);
+  console.error('Wrote shared/src/algData.generated.ts');
 }
 
 main();

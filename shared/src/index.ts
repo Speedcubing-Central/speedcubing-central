@@ -1,6 +1,7 @@
 // Shared types and constants used by both the client and the server.
 
 export * from './averaging.js';
+export * from './algScramble.js';
 
 export type Role = 'GUEST' | 'USER';
 export type Penalty = 'NONE' | 'PLUS2' | 'DNF';
@@ -126,6 +127,12 @@ export interface BattleRoomDTO {
   code: string;
   name: string;
   eventId: string;
+  // Non-null only for an algorithm-set battle (e.g. "PLL") — each round then
+  // draws a random case+AUF from that set instead of a full scramble for
+  // eventId. eventId is still always a valid puzzle id ('333'/'222') in this
+  // case too, derived server-side from the set, purely so scramble
+  // rendering keeps working unmodified. See shared/src/algScramble.ts.
+  algSetId: string | null;
   isPublic: boolean;
   scramble: string;
   roundNumber: number;
@@ -137,6 +144,7 @@ export interface BattlePublicRoomDTO {
   code: string;
   name: string;
   eventId: string;
+  algSetId: string | null;
   participantCount: number;
   status: BattleStatus;
 }

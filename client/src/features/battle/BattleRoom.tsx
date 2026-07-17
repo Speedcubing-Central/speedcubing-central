@@ -11,6 +11,7 @@ import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
 import { useTimerEngine, formatInspectionDisplay } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
+import { battleAlgSetLabel } from './algSetOptions';
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -360,7 +361,8 @@ export default function BattleRoom() {
   }
 
   const event = room?.eventId ?? '333';
-  const eventName = getEvent(event)?.name ?? event;
+  const algSetLabel = battleAlgSetLabel(room?.algSetId);
+  const eventName = algSetLabel ? `${algSetLabel} Battle` : getEvent(event)?.name ?? event;
   const leaderboard = room ? [...room.participants].sort((a, b) => b.points - a.points) : [];
 
   // ── Name prompt (guest opened link directly) ─────────────────────────────
