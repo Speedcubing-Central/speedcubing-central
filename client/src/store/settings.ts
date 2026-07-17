@@ -48,6 +48,7 @@ interface SettingsState {
   holdToStart: boolean;
   holdDuration: number; // ms the spacebar must be held before the timer is armed
   startSound: boolean;
+  celebratePBs: boolean; // confetti + animated text on a new PB single/average
 
   // Stats table column toggles
   showBPA: boolean;
@@ -84,6 +85,7 @@ export const useSettings = create<SettingsState>()(
       holdToStart: true,
       holdDuration: 550,
       startSound: false,
+      celebratePBs: true,
 
       showBPA: true,
       showWPA: true,

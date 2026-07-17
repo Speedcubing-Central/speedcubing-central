@@ -299,6 +299,42 @@ export function sortedSolveIndices(solves: SolveDTO[], sortBy: SolveSortBy): num
     .map(({ i }) => i);
 }
 
+export interface PbHit {
+  label: string; // 'single' | 'mo3' | 'ao5' | 'ao12' | …
+  value: number; // ms
+}
+
+// Which single/average PBs (if any) the most recently completed solve just
+// set, session-scoped (same "best" the Best column already means — see
+// StatsTable). `prevSolves` is the session's solves *before* this one;
+// `newSolve` is the one that was just added. Adding one solve to the front
+// of a newest-first list can only ever improve the session's overall best
+// for a given average size if the new size-window that includes it (i.e.
+// the one starting at index 0) is the new minimum — every other window is
+// just a shifted copy of one that already existed in `prevSolves` — so a
+// strict improvement here always corresponds to a genuine new PB set by
+// this solve, not a coincidental tie carried over from before.
+export function detectNewPBs(prevSolves: SolveDTO[], newSolve: SolveDTO): PbHit[] {
+  const newSolves = [newSolve, ...prevSolves];
+  const hits: PbHit[] = [];
+
+  const prevSingleBest = singleStats(prevSolves).best;
+  const newSingleBest = singleStats(newSolves).best;
+  if (newSingleBest !== null && (prevSingleBest === null || newSingleBest < prevSingleBest)) {
+    hits.push({ label: 'single', value: newSingleBest });
+  }
+
+  for (const size of AVERAGE_SIZES) {
+    const prevBest = bestAverage(prevSolves, size);
+    const newBest = bestAverage(newSolves, size);
+    if (newBest !== null && isFinite(newBest) && (prevBest === null || newBest < prevBest)) {
+      hits.push({ label: size === 3 ? 'mo3' : `ao${size}`, value: newBest });
+    }
+  }
+
+  return hits;
+}
+
 // Averages (mo3/ao5/ao12/…) that were current at the moment the given solve completed.
 export function averagesForSolve(solves: SolveDTO[], index: number): SolveAverage[] {
   const out: SolveAverage[] = [];

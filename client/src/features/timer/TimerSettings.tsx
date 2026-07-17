@@ -77,6 +77,10 @@ export function TimerSettings({ open, onClose }: { open: boolean; onClose: () =>
           <Toggle checked={s.startSound} onChange={(v) => s.set({ startSound: v })} />
         </Row>
 
+        <Row label="PB celebration" hint="Confetti + animated text when you set a new personal best">
+          <Toggle checked={s.celebratePBs} onChange={(v) => s.set({ celebratePBs: v })} />
+        </Row>
+
         <div className="pt-3 mt-1">
           <div className="label">Stats table columns</div>
           <Row label="Show BPA" hint="Best possible average of the current in-progress average">

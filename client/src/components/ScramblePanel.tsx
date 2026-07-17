@@ -46,6 +46,8 @@ export function ScramblePanel({
   scramble,
   loading = false,
   onRefresh,
+  onGoBack,
+  canGoBack = false,
   maxHeight,
   className,
 }: {
@@ -53,11 +55,16 @@ export function ScramblePanel({
   scramble: string;
   loading?: boolean;
   onRefresh?: () => void;
+  // Both optional and independent of onRefresh — a caller with no back
+  // history to offer (Battle Mode, which doesn't pass onRefresh either)
+  // simply omits them and only the "new scramble" button renders.
+  onGoBack?: () => void;
+  canGoBack?: boolean;
   maxHeight?: number;
   className?: string;
 }) {
   const textRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const btnRef = useRef<HTMLDivElement>(null);
   const preferredDiagram = DIAGRAM_SIZE[eventId] ?? DEFAULT_DIAGRAM_SIZE;
   const font = textSize(scramble, eventId);
   const extraGap = EXTRA_GAP[eventId] ?? 0;
@@ -75,9 +82,21 @@ export function ScramblePanel({
         {loading ? <span className="text-muted text-base">Scrambling…</span> : <ScrambleText scramble={scramble} eventId={eventId} />}
       </div>
       {onRefresh && (
-        <button ref={btnRef} className="text-xs text-accent inline-flex items-center gap-1" onClick={onRefresh}>
-          <Icon name="refresh" size={13} /> new scramble
-        </button>
+        <div ref={btnRef} className="flex items-center gap-3">
+          {onGoBack && (
+            <button
+              className="text-xs text-accent inline-flex items-center gap-1 disabled:text-muted disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={onGoBack}
+              disabled={!canGoBack}
+              title="Previous scramble"
+            >
+              <Icon name="arrowLeft" size={13} /> previous
+            </button>
+          )}
+          <button className="text-xs text-accent inline-flex items-center gap-1" onClick={onRefresh}>
+            <Icon name="refresh" size={13} /> new scramble
+          </button>
+        </div>
       )}
     </div>
   );

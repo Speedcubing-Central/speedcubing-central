@@ -126,6 +126,7 @@ export function useTimerData(eventId: string) {
       setSessions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, solveCount: (s.solveCount ?? 0) + 1 } : s)),
       );
+      return solve;
     },
     [currentId, isGuest],
   );

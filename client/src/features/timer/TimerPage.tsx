@@ -14,7 +14,8 @@ import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
-import { singleStats, makeAverageView, type AvgSize, type SolveAverage, type SolveSortBy } from './stats';
+import { singleStats, makeAverageView, detectNewPBs, type AvgSize, type PbHit, type SolveAverage, type SolveSortBy } from './stats';
+import { PbCelebration } from './PbCelebration';
 import { Segmented } from '../../components/settingsUi';
 import { StatsTable } from './StatsTable';
 import { PenaltyButtons } from './PenaltyButtons';
@@ -33,12 +34,12 @@ const COLUMN_GAP = 12; // gap-3
 
 export default function TimerPage() {
   const settings = useSettings();
-  const { inspection, inspectionDirection, inspectionVoice, holdToStart, holdDuration, entryMode, timerUpdate, solvePrecision, startSound } = settings;
+  const { inspection, inspectionDirection, inspectionVoice, holdToStart, holdDuration, entryMode, timerUpdate, solvePrecision, startSound, celebratePBs } = settings;
   const { user } = useAuth();
   const { focusMode } = useUi();
   const event = settings.currentEvent;
   const data = useTimerData(event);
-  const scr = useScrambler(event);
+  const scr = useScrambler(event, data.currentId);
 
   const [typed, setTyped] = useState('');
   const [showSessions, setShowSessions] = useState(false);
@@ -50,6 +51,7 @@ export default function TimerPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [solveSortBy, setSolveSortBy] = useState<SolveSortBy>('date');
+  const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
 
   // Leaving the select set stale across a session switch would let you
   // "delete" solves that are no longer even visible.
@@ -100,10 +102,15 @@ export default function TimerPage() {
         const created = await data.createSession(`${getEvent(event)?.name ?? event} Session`);
         sessionId = created.id;
       }
-      await data.addSolve(timeMs, penalty, scr.scramble, sessionId);
+      const prevSolves = data.solves;
+      const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId);
       scr.advance();
+      if (solve && celebratePBs) {
+        const hits = detectNewPBs(prevSolves, solve);
+        if (hits.length > 0) setPbHits(hits);
+      }
     },
-    [data, scr, event],
+    [data, scr, event, celebratePBs],
   );
 
   // While a scramble fetch is in flight, `scr.scramble` still holds the
@@ -127,6 +134,12 @@ export default function TimerPage() {
     enabled: entryMode === 'keyboard' && !anyModalOpen && !inputBlocked,
     onComplete,
   });
+
+  // Same idle/stopped-only gating the Enter-hotkey already uses for
+  // scr.advance() (see the keydown handler below) — going back to a
+  // previous scramble while a solve is armed/running would swap out the
+  // scramble out from under it.
+  const canGoBack = scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped');
 
   const stats = useMemo(() => singleStats(data.solves), [data.solves]);
   const newest = data.solves[0];
@@ -318,6 +331,8 @@ export default function TimerPage() {
             scramble={scr.scramble}
             loading={scr.loading}
             onRefresh={() => scr.refresh()}
+            onGoBack={scr.goBack}
+            canGoBack={canGoBack}
             maxHeight={scrambleMaxHeight}
             className="overflow-hidden"
           />
@@ -482,6 +497,7 @@ export default function TimerPage() {
         />
       )}
       {avgView && <AverageDetail view={avgView} event={event} onClose={() => setAvgView(null)} />}
+      {pbHits && <PbCelebration hits={pbHits} precision={solvePrecision} onDone={() => setPbHits(null)} />}
     </div>
   );
 }
