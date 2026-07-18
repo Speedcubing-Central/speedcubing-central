@@ -1,5 +1,6 @@
 import clsx from 'clsx';
-import { formatScramble, sq1Pairs } from '../lib/scramble';
+import { formatScramble, carrotScramble, sq1Pairs } from '../lib/scramble';
+import { useSettings } from '../store/settings';
 
 // Renders a scramble for display. For sq1, each "(a,b)" pair (plus its
 // trailing " /", except the last) is its own non-wrapping flex item inside a
@@ -16,6 +17,8 @@ export function ScrambleText({
   eventId: string;
   className?: string;
 }) {
+  const carrotNotation = useSettings((s) => s.carrotNotation);
+
   if (!scramble) return <div className={className}>—</div>;
 
   if (eventId === 'sq1') {
@@ -30,5 +33,8 @@ export function ScrambleText({
     );
   }
 
-  return <div className={clsx(className, 'whitespace-pre-wrap')}>{formatScramble(scramble, eventId)}</div>;
+  const formatted = formatScramble(scramble, eventId);
+  const display = eventId === 'minx' && carrotNotation ? carrotScramble(formatted) : formatted;
+
+  return <div className={clsx(className, 'whitespace-pre-wrap')}>{display}</div>;
 }

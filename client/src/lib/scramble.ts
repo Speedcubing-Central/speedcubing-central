@@ -113,6 +113,32 @@ export function formatScramble(scramble: string, eventId: string): string {
   return scramble;
 }
 
+// Each megaminx row (as split out by formatScramble above) is a sequence of
+// R++/R--/D++/D-- pairs followed by a trailing U/U' row-turn. Carrot
+// notation collapses every pair down to just its two signs — e.g.
+// "R++ D-- R-- D++" -> "+- -+" — since a megaminx move only ever needs its
+// direction (+ or -), not which of R/D it was; that's implied by position.
+// The trailing U/U' is kept as-is.
+function carrotSign(move: string): '+' | '-' {
+  return move.endsWith('+') ? '+' : '-';
+}
+
+function carrotLine(line: string): string {
+  const moves = line.split(' ');
+  const pairs: string[] = [];
+  for (let i = 0; i < moves.length - 1; i += 2) {
+    pairs.push(carrotSign(moves[i]) + carrotSign(moves[i + 1]));
+  }
+  const turn = moves[moves.length - 1];
+  return pairs.length ? `${pairs.join(' ')} ${turn}` : turn;
+}
+
+// Converts an already row-broken megaminx scramble (formatScramble's
+// output — one row per line) to carrot notation, a line at a time.
+export function carrotScramble(formatted: string): string {
+  return formatted.split('\n').map(carrotLine).join('\n');
+}
+
 // Formats a scramble for copying to the clipboard: single-line (no
 // newlines, unlike formatScramble), but with a comma inserted after each
 // megaminx row-ending move so rows are still visually separated once pasted

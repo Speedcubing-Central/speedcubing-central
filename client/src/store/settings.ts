@@ -37,6 +37,12 @@ interface SettingsState {
   themeId: string;
   defaultEvent: string;
   currentEvent: string;
+  // eventId -> id of the session most recently solved in for that event, so
+  // the Timer can reopen to wherever the user was actually practicing
+  // instead of whichever session happens to be newest (see useTimerData's
+  // session-selection effect). Keyed by event since each event tracks its
+  // own session list independently.
+  lastSessionByEvent: Record<string, string>;
 
   // Timer settings
   inspection: boolean;
@@ -49,6 +55,7 @@ interface SettingsState {
   holdDuration: number; // ms the spacebar must be held before the timer is armed
   startSound: boolean;
   celebratePBs: boolean; // confetti + animated text on a new PB single/average
+  carrotNotation: boolean; // display megaminx scrambles as carrot notation instead of WCA moves
 
   // Stats table column toggles
   showBPA: boolean;
@@ -64,6 +71,7 @@ interface SettingsState {
   setThemeId: (id: string) => void;
   setDefaultEvent: (e: string) => void;
   setCurrentEvent: (e: string) => void;
+  setLastSessionForEvent: (eventId: string, sessionId: string) => void;
   set: (patch: Partial<SettingsState>) => void;
 }
 
@@ -75,6 +83,7 @@ export const useSettings = create<SettingsState>()(
       themeId: 'default',
       defaultEvent: '333',
       currentEvent: '333',
+      lastSessionByEvent: {},
 
       inspection: false,
       inspectionDirection: 'down',
@@ -86,6 +95,7 @@ export const useSettings = create<SettingsState>()(
       holdDuration: 550,
       startSound: false,
       celebratePBs: true,
+      carrotNotation: false,
 
       showBPA: true,
       showWPA: true,
@@ -102,6 +112,8 @@ export const useSettings = create<SettingsState>()(
       },
       setDefaultEvent: (defaultEvent) => set({ defaultEvent }),
       setCurrentEvent: (currentEvent) => set({ currentEvent }),
+      setLastSessionForEvent: (eventId, sessionId) =>
+        set((s) => ({ lastSessionByEvent: { ...s.lastSessionByEvent, [eventId]: sessionId } })),
       set: (patch) => set(patch),
     }),
     { name: 'scc-settings' },

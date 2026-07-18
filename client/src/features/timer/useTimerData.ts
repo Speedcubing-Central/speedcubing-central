@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SessionDTO, SolveDTO, Penalty } from '@scc/shared';
 import { useAuth } from '../../store/auth';
+import { useSettings } from '../../store/settings';
 import { api } from '../../lib/api';
 import { guestStore } from './localStore';
 
@@ -9,6 +10,8 @@ import { guestStore } from './localStore';
 export function useTimerData(eventId: string) {
   const { user } = useAuth();
   const isGuest = !user;
+  const lastSessionByEvent = useSettings((s) => s.lastSessionByEvent);
+  const setLastSessionForEvent = useSettings((s) => s.setLastSessionForEvent);
 
   const [sessions, setSessions] = useState<SessionDTO[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -33,7 +36,11 @@ export function useTimerData(eventId: string) {
     loadSessions();
   }, [loadSessions]);
 
-  // Keep a valid current session for the selected event.
+  // Keep a valid current session for the selected event. Prefers whichever
+  // session the user most recently solved in for this event (see addSolve
+  // below) over forEvent[0] (newest-created) — opening the timer should land
+  // wherever practice actually happened last, not just the newest session,
+  // which might be an empty/unused one created after the fact.
   useEffect(() => {
     const forEvent = sessions.filter((s) => s.eventId === eventId);
     if (forEvent.length === 0) {
@@ -41,9 +48,11 @@ export function useTimerData(eventId: string) {
       return;
     }
     if (!currentId || !forEvent.some((s) => s.id === currentId)) {
-      setCurrentId(forEvent[0].id);
+      const preferred = lastSessionByEvent[eventId];
+      const target = preferred && forEvent.some((s) => s.id === preferred) ? preferred : forEvent[0].id;
+      setCurrentId(target);
     }
-  }, [sessions, eventId, currentId]);
+  }, [sessions, eventId, currentId, lastSessionByEvent]);
 
   // Load solves whenever the current session changes. Tracked separately
   // from `loading` (which only covers the session list) so the timer can
@@ -126,9 +135,10 @@ export function useTimerData(eventId: string) {
       setSessions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, solveCount: (s.solveCount ?? 0) + 1 } : s)),
       );
+      setLastSessionForEvent(eventId, id);
       return solve;
     },
-    [currentId, isGuest],
+    [currentId, isGuest, eventId, setLastSessionForEvent],
   );
 
   const updatePenalty = useCallback(

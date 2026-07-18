@@ -81,6 +81,10 @@ export function TimerSettings({ open, onClose }: { open: boolean; onClose: () =>
           <Toggle checked={s.celebratePBs} onChange={(v) => s.set({ celebratePBs: v })} />
         </Row>
 
+        <Row label="Megaminx carrot notation" hint="Show megaminx scrambles as carrot notation (+/-) instead of WCA moves">
+          <Toggle checked={s.carrotNotation} onChange={(v) => s.set({ carrotNotation: v })} />
+        </Row>
+
         <div className="pt-3 mt-1">
           <div className="label">Stats table columns</div>
           <Row label="Show BPA" hint="Best possible average of the current in-progress average">
