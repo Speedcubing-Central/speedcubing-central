@@ -9,6 +9,9 @@ import { getRoundScramble } from './scramble.js';
 import { verifyAccessToken } from './auth/jwt.js';
 import {
   effectiveTime,
+  EVENT_IDS,
+  ALG_SET_IDS,
+  getAlgSet,
   type ClientToServerEvents,
   type ServerToClientEvents,
   type BattleRoomDTO,
@@ -66,6 +69,7 @@ async function buildRoomDTO(code: string): Promise<BattleRoomDTO | null> {
       time: p.time,
       penalty: p.penalty,
       finishedAt: p.finishedAt?.toISOString() ?? null,
+      isHost: p.id === room.hostParticipantId,
     })),
   };
 }
@@ -149,6 +153,11 @@ export function attachSocket(server: HttpServer): IOServer {
     penalty: z.enum(['NONE', 'PLUS2', 'DNF']),
   });
   const leaveRoomSchema = z.object({ code: z.string().min(1).max(20) });
+  const changeEventSchema = z.object({
+    code: z.string().min(1).max(20),
+    eventId: z.string().refine((id) => EVENT_IDS.includes(id), 'Invalid event'),
+    algSetId: z.string().refine((id) => ALG_SET_IDS.includes(id), 'Invalid algorithm set').optional(),
+  });
 
   async function emitRoomState(code: string) {
     const dto = await buildRoomDTO(code);
@@ -251,8 +260,36 @@ export function attachSocket(server: HttpServer): IOServer {
       }
     }
     await prisma.battleParticipant.deleteMany({ where: { id: participantId } });
+    // If the host just left, hand the room to whoever's been in it longest
+    // among the remaining participants — ids are cuids, which are
+    // time-ordered, so ascending id is "who joined earliest" (same
+    // assumption buildRoomDTO/checkRoundCompletion already sort by).
+    if (room && room.hostParticipantId === participantId) {
+      const remaining = room.participants
+        .filter((p) => p.id !== participantId)
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      await prisma.battleRoom.update({
+        where: { id: room.id },
+        data: { hostParticipantId: remaining[0]?.id ?? null },
+      });
+    }
     if (room?.status === 'ACTIVE') {
-      await checkRoundCompletion(code);
+      // A round can never complete with fewer than 2 players — left as-is,
+      // checkRoundCompletion's own `< 2` guard would just bail every time
+      // without ever resetting status, leaving the room stuck ACTIVE forever
+      // (no new round auto-starts, and the remaining player's timer would
+      // stay live against a round that can't finish). Reset to WAITING and
+      // clear whatever in-round submission state is left over instead, so a
+      // fresh round starts cleanly once someone else joins.
+      if (room.participants.length - 1 < 2) {
+        await prisma.battleRoom.update({ where: { id: room.id }, data: { status: 'WAITING' } });
+        await prisma.battleParticipant.updateMany({
+          where: { roomId: room.id },
+          data: { time: null, penalty: null, finishedAt: null },
+        });
+      } else {
+        await checkRoundCompletion(code);
+      }
     }
     await deleteRoomIfEmpty(code);
     await emitRoomState(code);
@@ -375,6 +412,13 @@ export function attachSocket(server: HttpServer): IOServer {
           participant = await prisma.battleParticipant.create({
             data: { roomId: room.id, userId: safeUserId, guestName: name },
           });
+          // The very first participant a room ever gets becomes its host.
+          // room.hostParticipantId is only null before that first join — it's
+          // kept populated afterward by leaveRoomCleanup's reassignment below,
+          // so this never re-fires for a room that's already had a host.
+          if (!room.hostParticipantId) {
+            await prisma.battleRoom.update({ where: { id: room.id }, data: { hostParticipantId: participant.id } });
+          }
         }
         myParticipantId = participant.id;
         myCode = code;
@@ -438,6 +482,61 @@ export function attachSocket(server: HttpServer): IOServer {
         socket.leave(code);
         myParticipantId = null;
         myCode = null;
+      }),
+    );
+
+    socket.on(
+      'change_event',
+      safe(async (raw) => {
+        const parsed = changeEventSchema.safeParse(raw);
+        if (!parsed.success) {
+          socket.emit('error_msg', { message: 'Invalid request' });
+          return;
+        }
+        if (!myParticipantId) return;
+        const code = parsed.data.code.toUpperCase();
+        const room = await prisma.battleRoom.findUnique({
+          where: { code },
+          include: { participants: { select: { id: true } } },
+        });
+        if (!room) {
+          socket.emit('error_msg', { message: 'Room not found' });
+          return;
+        }
+        if (room.hostParticipantId !== myParticipantId) {
+          socket.emit('error_msg', { message: 'Only the host can change the event' });
+          return;
+        }
+        if (room.status === 'ACTIVE') {
+          socket.emit('error_msg', { message: "Can't change the event mid-round" });
+          return;
+        }
+
+        // Same server-side derivation battle.ts's room-creation route uses —
+        // eventId is never trusted from the client when an alg set is chosen.
+        const algSet = parsed.data.algSetId ? getAlgSet(parsed.data.algSetId) : undefined;
+        const eventId = algSet ? algSet.puzzle : parsed.data.eventId;
+        const algSetId = parsed.data.algSetId ?? null;
+
+        // A new event means the old round history no longer makes sense —
+        // reset the room to a fresh WAITING state and clear every
+        // participant's points/round state along with it.
+        await prisma.battleRoom.update({
+          where: { id: room.id },
+          data: { eventId, algSetId, roundNumber: 0, status: 'WAITING', scramble: '' },
+        });
+        await prisma.battleParticipant.updateMany({
+          where: { roomId: room.id },
+          data: { points: 0, time: null, penalty: null, finishedAt: null },
+        });
+
+        // Mirrors join_room's own auto-start: if ≥2 players are already
+        // here, nothing else would ever kick off round 1 for the new event.
+        if (room.participants.length >= 2) {
+          await startRound(room.id, code, eventId, algSetId, 0);
+        } else {
+          await emitRoomState(code);
+        }
       }),
     );
 

@@ -12,6 +12,7 @@ import { ScramblePanel } from '../../components/ScramblePanel';
 import { useTimerEngine, formatInspectionDisplay } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
 import { battleAlgSetLabel } from './algSetOptions';
+import { EventAndAlgSetSelect } from './EventPicker';
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -96,7 +97,62 @@ function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
+// Host-only: switch the room to a different event/algorithm set. Local
+// state starts from the room's current event so opening the modal shows
+// what's already selected rather than resetting to a default.
+function ChangeEventModal({
+  open,
+  onClose,
+  currentEventId,
+  currentAlgSetId,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentEventId: string;
+  currentAlgSetId: string | null;
+  onSave: (eventId: string, algSetId: string | null) => void;
+}) {
+  const [eventId, setEventId] = useState(currentEventId);
+  const [algSetId, setAlgSetId] = useState<string | null>(currentAlgSetId);
+
+  useEffect(() => {
+    if (open) {
+      setEventId(currentEventId);
+      setAlgSetId(currentAlgSetId);
+    }
+  }, [open, currentEventId, currentAlgSetId]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Change Event" size="sm">
+      <div className="space-y-4">
+        <p className="text-xs text-muted">
+          Changing the event resets the room's round and points for everyone.
+        </p>
+        <EventAndAlgSetSelect eventId={eventId} algSetId={algSetId} onEventChange={setEventId} onAlgSetChange={setAlgSetId} />
+        <button
+          className="btn-primary w-full"
+          onClick={() => {
+            onSave(eventId, algSetId);
+            onClose();
+          }}
+        >
+          Change Event
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Small helpers ────────────────────────────────────────────────────────────
+
+function HostBadge() {
+  return (
+    <span className="text-[10px] leading-none px-1.5 py-0.5 rounded bg-accent/20 text-accent font-semibold shrink-0">
+      HOST
+    </span>
+  );
+}
 
 function dot(color: 'grey' | 'yellow' | 'green' | 'red') {
   const cls = {
@@ -164,11 +220,12 @@ export default function BattleRoom() {
     error,
     setError,
     myHistory,
-    myParticipantId: myParticipantIdRef,
+    myParticipantId,
     setMyParticipantId,
     joinRoom,
     solveComplete,
     leaveRoom,
+    changeEvent,
   } = useBattleSocket();
 
   // Timer state
@@ -178,6 +235,7 @@ export default function BattleRoom() {
   const [awaitingSubmit, setAwaitingSubmit] = useState(false);
   const [typingInput, setTypingInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangeEvent, setShowChangeEvent] = useState(false);
 
   const timerActive = room?.status === 'ACTIVE' && !submitted;
 
@@ -317,7 +375,8 @@ export default function BattleRoom() {
   };
 
   // ── Participant list helpers ───────────────────────────────────────────────
-  const myId = myParticipantIdRef.current;
+  const myId = myParticipantId;
+  const isHost = room?.participants.find((p) => p.id === myId)?.isHost ?? false;
 
   function participantStatus(p: NonNullable<typeof room>['participants'][number]) {
     if (room?.status === 'WAITING') {
@@ -413,6 +472,15 @@ export default function BattleRoom() {
             </div>
           </div>
           {!connected && <span className="text-xs text-red-400">Disconnected</span>}
+          {isHost && (
+            <button
+              className="text-muted hover:text-gray-700 dark:hover:text-gray-200 transition-colors p-1"
+              title="Change event (host only)"
+              onClick={() => setShowChangeEvent(true)}
+            >
+              <Icon name="pencil" size={18} />
+            </button>
+          )}
           <button
             className="text-muted hover:text-gray-700 dark:hover:text-gray-200 transition-colors p-1"
             title="Settings"
@@ -549,6 +617,7 @@ export default function BattleRoom() {
               <div key={p.id} className={clsx('flex items-center gap-2 text-sm', isMe && 'font-semibold')}>
                 {dot(st.color)}
                 <span className="flex-1 truncate">{p.name}{isMe && ' (you)'}</span>
+                {p.isHost && <HostBadge />}
                 <span className={clsx('text-xs', st.color === 'green' ? 'text-green-400' : 'text-muted')}>
                   {st.label}
                 </span>
@@ -607,6 +676,7 @@ export default function BattleRoom() {
                   >
                     <span className="w-5 text-center text-sm">{MEDALS[i] ?? `${i + 1}.`}</span>
                     <span className="flex-1 font-medium truncate">{p.name}{isMe && ' ★'}</span>
+                    {p.isHost && <HostBadge />}
                     <span className="font-mono text-accent font-semibold">{p.points}</span>
                     <span className="text-xs text-muted">pts</span>
                   </div>
@@ -642,6 +712,15 @@ export default function BattleRoom() {
       )}
 
       <BattleSettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      {isHost && code && (
+        <ChangeEventModal
+          open={showChangeEvent}
+          onClose={() => setShowChangeEvent(false)}
+          currentEventId={room.eventId}
+          currentAlgSetId={room.algSetId}
+          onSave={(newEventId, newAlgSetId) => changeEvent(code.toUpperCase(), newEventId, newAlgSetId ?? undefined)}
+        />
+      )}
     </div>
   );
 }

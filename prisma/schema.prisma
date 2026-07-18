@@ -112,6 +112,14 @@ model BattleRoom {
   // ('333'/'222'), derived server-side, purely so existing scramble
   // rendering keeps working unmodified. See shared/src/algScramble.ts.
   algSetId    String?
+  // Participant.id of the current room host (whoever created the room, or
+  // whoever's been in it longest among current participants if the original
+  // host left) — see server/src/socket.ts's join_room/leaveRoomCleanup for
+  // how this is maintained. Not a Prisma relation on purpose:
+  // BattleParticipant rows are deleted directly rather than cascaded from
+  // BattleRoom, so this is managed entirely in application code rather than
+  // via FK constraints.
+  hostParticipantId String?
   isPublic    Boolean      @default(true)
   password    String?
   scramble    String       @default("")

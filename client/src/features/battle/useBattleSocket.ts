@@ -30,7 +30,19 @@ export function useBattleSocket() {
   const [error, setError] = useState<string | null>(null);
   // Per-session personal history (accumulated across rounds while this tab is open).
   const [myHistory, setMyHistory] = useState<PersonalSolve[]>([]);
+  // Real state (not just a ref) so components re-render when it changes —
+  // e.g. BattleRoom's host-only controls need to know "is this me" reactively,
+  // and a ref alone wouldn't trigger a re-render until some *other* room_state
+  // update happened to land afterward. The ref alongside it exists purely for
+  // the round_result handler below, registered once in the effect with no
+  // deps — a stale closure over state there would never see updates after
+  // the first render, so it needs the always-current ref instead.
+  const [myParticipantId, setMyParticipantIdState] = useState<string | null>(null);
   const myParticipantIdRef = useRef<string | null>(null);
+  // Tracks the room's (eventId, algSetId) so a host-triggered event change —
+  // which resets round history server-side — also clears this tab's own
+  // local history, instead of it carrying over from the old event.
+  const prevEventKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] }) as BattleSocket;
@@ -48,6 +60,11 @@ export function useBattleSocket() {
     });
 
     socket.on('room_state', (r) => {
+      const key = `${r.eventId}:${r.algSetId ?? ''}`;
+      if (prevEventKeyRef.current !== null && prevEventKeyRef.current !== key) {
+        setMyHistory([]);
+      }
+      prevEventKeyRef.current = key;
       setRoom(r);
     });
 
@@ -94,7 +111,9 @@ export function useBattleSocket() {
 
   const joinRoom = useCallback(
     (payload: { code: string; name: string; password?: string }, participantId?: string) => {
-      myParticipantIdRef.current = participantId ?? null;
+      const id = participantId ?? null;
+      myParticipantIdRef.current = id;
+      setMyParticipantIdState(id);
       socketRef.current?.emit('join_room', payload);
     },
     [],
@@ -103,6 +122,7 @@ export function useBattleSocket() {
   // Called after join_room is acknowledged via room_state so we can grab our participant id.
   const setMyParticipantId = useCallback((id: string) => {
     myParticipantIdRef.current = id;
+    setMyParticipantIdState(id);
   }, []);
 
   const solveComplete = useCallback((code: string, time: number, penalty: Penalty) => {
@@ -113,6 +133,12 @@ export function useBattleSocket() {
     socketRef.current?.emit('leave_room', { code });
   }, []);
 
+  // Host-only — the server rejects this if the caller isn't the room's
+  // current host, or if a round is in progress.
+  const changeEvent = useCallback((code: string, eventId: string, algSetId?: string) => {
+    socketRef.current?.emit('change_event', { code, eventId, algSetId });
+  }, []);
+
   return {
     connected,
     room,
@@ -121,10 +147,11 @@ export function useBattleSocket() {
     error,
     setError,
     myHistory,
-    myParticipantId: myParticipantIdRef,
+    myParticipantId,
     setMyParticipantId,
     joinRoom,
     solveComplete,
     leaveRoom,
+    changeEvent,
   };
 }

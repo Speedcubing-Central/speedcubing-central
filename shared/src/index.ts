@@ -120,6 +120,10 @@ export interface BattleParticipantDTO {
   time?: number | null;
   penalty?: Penalty | null;
   finishedAt?: string | null;
+  // Whether this participant is the current room host — see BattleRoom's
+  // hostParticipantId. Whoever created the room starts as host; if they
+  // leave, it passes to whoever's been in the room longest.
+  isHost: boolean;
 }
 
 export interface BattleRoomDTO {
@@ -176,6 +180,10 @@ export interface ClientToServerEvents {
   join_room: (payload: { code: string; name: string; password?: string }) => void;
   solve_complete: (payload: { code: string; time: number; penalty: Penalty }) => void;
   leave_room: (payload: { code: string }) => void;
+  // Host-only: switch the room to a different event/algorithm set. The
+  // server rejects this if the caller isn't the current host, or if a round
+  // is in progress — see server/src/socket.ts.
+  change_event: (payload: { code: string; eventId: string; algSetId?: string }) => void;
 }
 
 // Effective solve time given a penalty. DNF returns Infinity.

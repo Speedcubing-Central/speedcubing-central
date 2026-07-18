@@ -8,12 +8,8 @@ import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { toast } from '../../store/toast';
 import { WCA_EVENTS, UNOFFICIAL_EVENTS, type BattlePublicRoomDTO } from '@scc/shared';
-import { BATTLE_ALG_SETS, battleAlgSetLabel } from './algSetOptions';
-
-const WCA_EVENT_OPTIONS = WCA_EVENTS.filter((e) =>
-  ['333', '222', '444', '555', '666', '777', '333oh', '333bf', '444bf', '555bf', 'minx', 'pyram', 'clock', 'skewb', 'sq1'].includes(e.id),
-);
-const UNOFFICIAL_EVENT_OPTIONS = UNOFFICIAL_EVENTS;
+import { battleAlgSetLabel } from './algSetOptions';
+import { EventAndAlgSetSelect } from './EventPicker';
 
 function StatusBadge({ status }: { status: string }) {
   return (
@@ -41,13 +37,6 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
-  function handleEventChange(next: string) {
-    setEventId(next);
-    setAlgSetId(null);
-  }
-
-  const algSetChoices = BATTLE_ALG_SETS.filter((s) => s.puzzle === eventId);
 
   async function handleCreate() {
     const displayName = user?.displayName ?? guestName.trim();
@@ -88,32 +77,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
           <label className="label mb-1 block">Room name</label>
           <input className="input w-full" placeholder="e.g. Friday night 3x3" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div>
-          <label className="label mb-1 block">Event</label>
-          <select className="input w-full" value={eventId} onChange={(e) => handleEventChange(e.target.value)}>
-            <optgroup label="WCA Events">
-              {WCA_EVENT_OPTIONS.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Unofficial Events">
-              {UNOFFICIAL_EVENT_OPTIONS.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name}</option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-        {algSetChoices.length > 0 && (
-          <div>
-            <label className="label mb-1 block">Scramble Type</label>
-            <select className="input w-full" value={algSetId ?? ''} onChange={(e) => setAlgSetId(e.target.value || null)}>
-              <option value="">Standard (full scramble)</option>
-              {algSetChoices.map((s) => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <EventAndAlgSetSelect eventId={eventId} algSetId={algSetId} onEventChange={setEventId} onAlgSetChange={setAlgSetId} />
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">Public room</div>
