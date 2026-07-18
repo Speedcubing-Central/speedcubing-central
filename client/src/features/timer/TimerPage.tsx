@@ -96,6 +96,7 @@ export default function TimerPage() {
   // manual mode also needs the input + button row, so it gets less headroom.
   const timerCardRef = useRef<HTMLDivElement>(null);
   const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
+  const typedInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -136,6 +137,18 @@ export default function TimerPage() {
   // random-state search can take up to ~2s) where the window would
   // otherwise be wide enough to hit during ordinary, non-rushed solving.
   const inputBlocked = data.solvesLoading || scr.loading || submitting;
+
+  // Keeps the manual-entry input focused across everything that would
+  // otherwise silently steal it: clicking "new scramble"/"previous
+  // scramble" (scr.scramble changes) and submitting a time (inputBlocked
+  // flips true then back false while the solve/next-scramble round-trip is
+  // in flight, and a *disabled* input can't hold focus, so it's lost the
+  // moment that starts) — so typing the next time never needs a re-click.
+  useEffect(() => {
+    if (entryMode === 'typing' && !inputBlocked && !anyModalOpen) {
+      typedInputRef.current?.focus();
+    }
+  }, [entryMode, inputBlocked, anyModalOpen, scr.scramble]);
 
   const engine = useTimerEngine({
     inspection,
@@ -391,6 +404,7 @@ export default function TimerPage() {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <input
+                  ref={typedInputRef}
                   className="input font-mono text-center text-xl w-40"
                   placeholder="10.00"
                   value={typed}
