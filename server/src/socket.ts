@@ -451,8 +451,15 @@ export function attachSocket(server: HttpServer): IOServer {
         });
         if (!room || room.status !== 'ACTIVE') return;
 
+        // Deliberately allows re-submitting (editing) an already-finished
+        // solve for as long as the round stays ACTIVE — i.e. until
+        // checkRoundCompletion below actually scores it and flips the room
+        // to WAITING, which is the same request that makes this now-stale
+        // check moot anyway (a same-tick edit that loses the race just finds
+        // room.status !== 'ACTIVE' above and is silently ignored, same as
+        // any post-round submission always was).
         const me = room.participants.find((p) => p.id === myParticipantId);
-        if (!me || me.finishedAt) return;
+        if (!me) return;
 
         await prisma.battleParticipant.update({
           where: { id: myParticipantId },
@@ -507,10 +514,15 @@ export function attachSocket(server: HttpServer): IOServer {
           socket.emit('error_msg', { message: 'Only the host can change the event' });
           return;
         }
-        if (room.status === 'ACTIVE') {
-          socket.emit('error_msg', { message: "Can't change the event mid-round" });
-          return;
-        }
+        // Allowed even mid-round (room.status === 'ACTIVE') — the host can
+        // always switch events immediately. The reset below (roundNumber 0,
+        // status WAITING, every participant's in-round state cleared)
+        // effectively cancels whatever round was in progress; if ≥2
+        // participants are still here, the auto-start further down
+        // immediately kicks off round 1 of the new event, and each client's
+        // own roundNumber-keyed reset effect (BattleRoom.tsx) clears any
+        // stale local timer/submission state for the round that just got
+        // cancelled out from under it.
 
         // Same server-side derivation battle.ts's room-creation route uses —
         // eventId is never trusted from the client when an alg set is chosen.

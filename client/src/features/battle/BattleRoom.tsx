@@ -234,6 +234,11 @@ export default function BattleRoom() {
   const [pendingTime, setPendingTime] = useState<number>(0);
   const [awaitingSubmit, setAwaitingSubmit] = useState(false);
   const [typingInput, setTypingInput] = useState('');
+  // Editing an already-submitted time/penalty — allowed for as long as the
+  // round stays ACTIVE (the server accepts a resubmission right up until it
+  // actually scores the round; see socket.ts's solve_complete comment).
+  const [editing, setEditing] = useState(false);
+  const [editInput, setEditInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showChangeEvent, setShowChangeEvent] = useState(false);
 
@@ -281,6 +286,18 @@ export default function BattleRoom() {
     setTypingInput('');
   }
 
+  function openEdit() {
+    setEditInput(formatTime(pendingTime, 'NONE', settings.solvePrecision));
+    setEditing(true);
+  }
+
+  function handleEditSubmit() {
+    const parsed = parseTimeInput(editInput, settings.solvePrecision);
+    if (!parsed) { toast.error('Invalid time format'); return; }
+    submitSolve(parsed.penalty, parsed.time);
+    setEditing(false);
+  }
+
   // Join the room on mount, and re-join on every reconnect. `joined` used to
   // be a one-shot flag that was never cleared, so it only ever sent
   // join_room once per page load: after any socket drop (backgrounded tab,
@@ -320,6 +337,7 @@ export default function BattleRoom() {
       setSubmitted(false);
       setAwaitingSubmit(false);
       setTypingInput('');
+      setEditing(false);
       engine.cancel();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -528,13 +546,49 @@ export default function BattleRoom() {
                 <div className="text-sm text-muted text-center">Next round starting in a moment…</div>
               )}
             </div>
+          ) : submitted && editing ? (
+            /* Editing an already-submitted time/penalty */
+            <div className="flex flex-col items-center gap-4 w-full">
+              <div className="text-xs text-muted">Edit your time (e.g. 12.58 or 1:02.34, or DNF)</div>
+              <input
+                autoFocus
+                className="input text-center text-2xl font-mono w-56"
+                placeholder="0.00"
+                value={editInput}
+                onChange={(e) => setEditInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleEditSubmit();
+                  if (e.key === 'Escape') setEditing(false);
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
+                  onClick={() => { submitSolve('DNF', 0); setEditing(false); }}
+                >
+                  DNF
+                </button>
+                <button className="btn-primary px-8" onClick={handleEditSubmit}>
+                  Update
+                </button>
+                <button
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors"
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : submitted ? (
-            /* Submitted — waiting for others */
+            /* Submitted — waiting for others, still editable until the round ends */
             <div className="flex flex-col items-center gap-2">
               <div className={clsx('text-5xl font-mono font-bold', timerColor())}>
                 {formatTime(pendingTime, pendingPenalty, settings.solvePrecision)}
               </div>
               <div className="text-sm text-muted">Waiting for others…</div>
+              <button className="text-xs text-accent hover:underline mt-1" onClick={openEdit}>
+                Edit time/penalty
+              </button>
             </div>
           ) : awaitingSubmit ? (
             /* Stopped — choose penalty */
