@@ -3,6 +3,9 @@
 export interface RelayPreset {
   id: string;
   name: string;
+  // One-line description shown under the name on the relay picker.
+  blurb: string;
+  group: 'quick' | 'guildford';
   // Flat ordered event ids — presets are always 1x each event (quantities
   // are a custom-relay-only concept).
   events: string[];
@@ -11,20 +14,54 @@ export interface RelayPreset {
 const MINI_GUILDFORD_EVENTS = ['222', '333', '444', '555', '333oh', 'pyram', 'minx', 'skewb', 'sq1'];
 
 export const RELAY_PRESETS: RelayPreset[] = [
-  { id: '2-4', name: '2-4 Relay', events: ['222', '333', '444'] },
-  { id: '2-5', name: '2-5 Relay', events: ['222', '333', '444', '555'] },
-  { id: '2-6', name: '2-6 Relay', events: ['222', '333', '444', '555', '666'] },
-  { id: '2-7', name: '2-7 Relay', events: ['222', '333', '444', '555', '666', '777'] },
-  { id: 'mini-guildford', name: 'Mini Guildford', events: [...MINI_GUILDFORD_EVENTS, 'clock'] },
+  { id: '2-4', name: '2-4 Relay', blurb: '2×2, 3×3, 4×4 back to back.', group: 'quick', events: ['222', '333', '444'] },
+  {
+    id: '2-5',
+    name: '2-5 Relay',
+    blurb: 'A 2-4 plus the 5×5.',
+    group: 'quick',
+    events: ['222', '333', '444', '555'],
+  },
+  {
+    id: '2-6',
+    name: '2-6 Relay',
+    blurb: 'Six cubes, 2×2 up to 6×6.',
+    group: 'quick',
+    events: ['222', '333', '444', '555', '666'],
+  },
+  {
+    id: '2-7',
+    name: '2-7 Relay',
+    blurb: 'The full NxN ladder, 2×2 to 7×7.',
+    group: 'quick',
+    events: ['222', '333', '444', '555', '666', '777'],
+  },
+  {
+    id: 'mini-guildford',
+    name: 'Mini Guildford',
+    blurb: '10 events, every discipline but the big cubes.',
+    group: 'guildford',
+    events: [...MINI_GUILDFORD_EVENTS, 'clock'],
+  },
   {
     id: 'guildford',
     name: 'Guildford',
+    blurb: 'The full 12-event Guildford classic.',
+    group: 'guildford',
     events: [...MINI_GUILDFORD_EVENTS, '666', '777', 'clock'],
   },
-  { id: 'mini-guildford-ns', name: 'New-Style Mini Guildford', events: [...MINI_GUILDFORD_EVENTS, 'fto'] },
+  {
+    id: 'mini-guildford-ns',
+    name: 'New-Style Mini Guildford',
+    blurb: 'Mini Guildford with FTO swapped in for Clock.',
+    group: 'guildford',
+    events: [...MINI_GUILDFORD_EVENTS, 'fto'],
+  },
   {
     id: 'guildford-ns',
     name: 'New-Style Guildford',
+    blurb: 'Guildford with FTO swapped in for Clock.',
+    group: 'guildford',
     events: [...MINI_GUILDFORD_EVENTS, '666', '777', 'fto'],
   },
 ];
