@@ -165,11 +165,19 @@ export interface BattleRoundResultEntry {
 
 // ---- Socket.io event payloads ----
 
+export interface ChatMessageDTO {
+  participantId: string;
+  name: string;
+  message: string;
+  sentAt: string;
+}
+
 export interface ServerToClientEvents {
   room_state: (room: BattleRoomDTO) => void;
   round_start: (payload: { scramble: string; roundNumber: number }) => void;
   participant_finished: (payload: { participantId: string; name: string; time: number | null; penalty: Penalty | null }) => void;
   round_result: (payload: { results: BattleRoundResultEntry[]; roundNumber: number }) => void;
+  chat_message: (payload: ChatMessageDTO) => void;
   error_msg: (payload: { message: string }) => void;
 }
 
@@ -180,10 +188,10 @@ export interface ClientToServerEvents {
   join_room: (payload: { code: string; name: string; password?: string }) => void;
   solve_complete: (payload: { code: string; time: number; penalty: Penalty }) => void;
   leave_room: (payload: { code: string }) => void;
-  // Host-only: switch the room to a different event/algorithm set. The
-  // server rejects this if the caller isn't the current host, or if a round
-  // is in progress — see server/src/socket.ts.
+  // Host-only: switch the room to a different event/algorithm set. Allowed
+  // even mid-round — see server/src/socket.ts.
   change_event: (payload: { code: string; eventId: string; algSetId?: string }) => void;
+  send_chat_message: (payload: { code: string; message: string }) => void;
 }
 
 // Effective solve time given a penalty. DNF returns Infinity.

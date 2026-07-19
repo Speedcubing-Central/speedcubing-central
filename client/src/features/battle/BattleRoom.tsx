@@ -220,12 +220,14 @@ export default function BattleRoom() {
     error,
     setError,
     myHistory,
+    chatMessages,
     myParticipantId,
     setMyParticipantId,
     joinRoom,
     solveComplete,
     leaveRoom,
     changeEvent,
+    sendChatMessage,
   } = useBattleSocket();
 
   // Timer state
@@ -241,6 +243,8 @@ export default function BattleRoom() {
   const [editInput, setEditInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showChangeEvent, setShowChangeEvent] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const timerActive = room?.status === 'ACTIVE' && !submitted;
 
@@ -382,6 +386,19 @@ export default function BattleRoom() {
       joined.current = false; // re-trigger join effect
     }, 0);
   }
+
+  function handleSendChat() {
+    const message = chatInput.trim();
+    if (!message || !code) return;
+    sendChatMessage(code.toUpperCase(), message);
+    setChatInput('');
+  }
+
+  // Keep the chat log scrolled to the newest message.
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMessages]);
 
   // ── Personal stats derived from history ────────────────────────────────────
   const nonDnfTimes = myHistory.filter((s) => s.penalty !== 'DNF' && s.time !== null).map((s) => s.time!);
@@ -738,6 +755,46 @@ export default function BattleRoom() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Chat */}
+        <div className="card p-4 flex flex-col" style={{ height: 260 }}>
+          <div className="label mb-2">Chat</div>
+          <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
+            {chatMessages.length === 0 ? (
+              <div className="text-xs text-muted">No messages yet — say hi!</div>
+            ) : (
+              chatMessages.map((m, i) => {
+                const isMe = m.participantId === myId;
+                return (
+                  <div key={i} className="text-xs leading-snug break-words">
+                    <span className={clsx('font-semibold', isMe ? 'text-accent' : 'text-gray-900 dark:text-gray-200')}>
+                      {m.name}:{' '}
+                    </span>
+                    <span className="text-muted">{m.message}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-2 shrink-0">
+            <input
+              className="input text-sm py-1.5"
+              placeholder="Say something…"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+              maxLength={500}
+            />
+            <button
+              className="text-muted hover:text-accent transition-colors p-1.5 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Send"
+              onClick={handleSendChat}
+              disabled={!chatInput.trim()}
+            >
+              <Icon name="arrowRight" size={18} />
+            </button>
+          </div>
         </div>
 
         {/* My solve history */}

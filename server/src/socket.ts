@@ -142,6 +142,12 @@ export function attachSocket(server: HttpServer): IOServer {
   const failedPasswordAttempts = new Map<string, number>();
   const MAX_PASSWORD_ATTEMPTS = 5;
 
+  // socket.id -> timestamps (ms) of this connection's recent chat messages,
+  // so a raw socket client can't spam a room. Cleared on disconnect.
+  const chatTimestamps = new Map<string, number[]>();
+  const CHAT_RATE_LIMIT = 5; // messages
+  const CHAT_RATE_WINDOW_MS = 5000;
+
   const joinRoomSchema = z.object({
     code: z.string().min(1).max(20),
     name: z.string().min(1).max(40),
@@ -157,6 +163,10 @@ export function attachSocket(server: HttpServer): IOServer {
     code: z.string().min(1).max(20),
     eventId: z.string().refine((id) => EVENT_IDS.includes(id), 'Invalid event'),
     algSetId: z.string().refine((id) => ALG_SET_IDS.includes(id), 'Invalid algorithm set').optional(),
+  });
+  const sendChatMessageSchema = z.object({
+    code: z.string().min(1).max(20),
+    message: z.string().min(1).max(500),
   });
 
   async function emitRoomState(code: string) {
@@ -298,6 +308,11 @@ export function attachSocket(server: HttpServer): IOServer {
   io.on('connection', (socket) => {
     let myParticipantId: string | null = null;
     let myCode: string | null = null;
+    // The participant's actual stored display name (never the raw join_room
+    // payload, which a reconnect might send stale/different) — set once the
+    // participant row is resolved in join_room, used to label chat messages
+    // without a DB round-trip per message.
+    let myName: string | null = null;
 
     const safe =
       <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
@@ -422,6 +437,7 @@ export function attachSocket(server: HttpServer): IOServer {
         }
         myParticipantId = participant.id;
         myCode = code;
+        myName = participant.guestName ?? 'Player';
         socket.join(code);
 
         // Auto-start round when this join brings us to ≥2 players.
@@ -552,8 +568,39 @@ export function attachSocket(server: HttpServer): IOServer {
       }),
     );
 
+    socket.on(
+      'send_chat_message',
+      safe(async (raw) => {
+        const parsed = sendChatMessageSchema.safeParse(raw);
+        if (!parsed.success) return;
+        if (!myParticipantId || !myCode || !myName) return;
+        const code = parsed.data.code.toUpperCase();
+        if (code !== myCode) return; // only to the room this socket is actually in
+
+        const now = Date.now();
+        const recent = (chatTimestamps.get(socket.id) ?? []).filter((t) => now - t < CHAT_RATE_WINDOW_MS);
+        if (recent.length >= CHAT_RATE_LIMIT) {
+          socket.emit('error_msg', { message: 'Slow down — too many messages' });
+          return;
+        }
+        recent.push(now);
+        chatTimestamps.set(socket.id, recent);
+
+        const message = parsed.data.message.trim();
+        if (!message) return;
+
+        io.to(code).emit('chat_message', {
+          participantId: myParticipantId,
+          name: myName,
+          message,
+          sentAt: new Date().toISOString(),
+        });
+      }),
+    );
+
     socket.on('disconnect', () => {
       failedPasswordAttempts.delete(socket.id);
+      chatTimestamps.delete(socket.id);
       if (!myParticipantId || !myCode) return;
       const participantId = myParticipantId;
       const code = myCode;

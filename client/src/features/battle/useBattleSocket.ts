@@ -5,6 +5,7 @@ import type {
   ClientToServerEvents,
   BattleRoomDTO,
   BattleRoundResultEntry,
+  ChatMessageDTO,
   Penalty,
 } from '@scc/shared';
 
@@ -30,6 +31,10 @@ export function useBattleSocket() {
   const [error, setError] = useState<string | null>(null);
   // Per-session personal history (accumulated across rounds while this tab is open).
   const [myHistory, setMyHistory] = useState<PersonalSolve[]>([]);
+  // Chat is intentionally ephemeral (not persisted server-side, same as
+  // round history) — accumulated only for as long as this tab stays on
+  // this room.
+  const [chatMessages, setChatMessages] = useState<ChatMessageDTO[]>([]);
   // Real state (not just a ref) so components re-render when it changes —
   // e.g. BattleRoom's host-only controls need to know "is this me" reactively,
   // and a ref alone wouldn't trigger a re-render until some *other* room_state
@@ -101,6 +106,10 @@ export function useBattleSocket() {
       }
     });
 
+    socket.on('chat_message', (msg) => {
+      setChatMessages((prev) => [...prev, msg]);
+    });
+
     socket.on('error_msg', ({ message }) => setError(message));
 
     return () => {
@@ -133,10 +142,13 @@ export function useBattleSocket() {
     socketRef.current?.emit('leave_room', { code });
   }, []);
 
-  // Host-only — the server rejects this if the caller isn't the room's
-  // current host, or if a round is in progress.
+  // Host-only — the server rejects this if the caller isn't the room's current host.
   const changeEvent = useCallback((code: string, eventId: string, algSetId?: string) => {
     socketRef.current?.emit('change_event', { code, eventId, algSetId });
+  }, []);
+
+  const sendChatMessage = useCallback((code: string, message: string) => {
+    socketRef.current?.emit('send_chat_message', { code, message });
   }, []);
 
   return {
@@ -147,11 +159,13 @@ export function useBattleSocket() {
     error,
     setError,
     myHistory,
+    chatMessages,
     myParticipantId,
     setMyParticipantId,
     joinRoom,
     solveComplete,
     leaveRoom,
     changeEvent,
+    sendChatMessage,
   };
 }
