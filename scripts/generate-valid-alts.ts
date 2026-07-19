@@ -42,6 +42,45 @@ function moveFromQuarterTurns(face: string, qt: number): string | null {
   if (n === 2) return `${face}2`;
   return `${face}'`;
 }
+function isRotationToken(t: string): boolean { return ['x', 'y', 'z'].includes(faceOf(t)); }
+
+// Verified against cubing.js (see client/src/components/CubeDiagram.tsx's
+// fuller doc comment on this same table) — needed because a run of
+// different-axis rotations like "x2 y z y' x" can compose to a shorter (or
+// empty) net rotation that plain same-letter cancellation never catches.
+const ROTATION_TRANSITIONS: Record<string, Record<string, string>> = {
+  '': { x: 'x', "x'": "x'", x2: 'x2', y: 'y', "y'": "y'", y2: 'y2', z: 'z', "z'": "z'", z2: 'z2' },
+  x: { x: 'x2', "x'": '', x2: "x'", y: 'x y', "y'": "x y'", y2: 'x y2', z: 'x z', "z'": "x z'", z2: 'x z2' },
+  "x'": { x: '', "x'": 'x2', x2: 'x', y: "x' y", "y'": "x' y'", y2: 'x z2', z: "x' z", "z'": "x' z'", z2: 'x y2' },
+  x2: { x: "x'", "x'": 'x', x2: '', y: 'x2 y', "y'": "x2 y'", y2: 'z2', z: 'x2 z', "z'": "x2 z'", z2: 'y2' },
+  y: { x: "x z'", "x'": "x' z", x2: "x2 y'", y: 'y2', "y'": '', y2: "y'", z: 'x y', "z'": "x' y", z2: 'x2 y' },
+  "y'": { x: 'x z', "x'": "x' z'", x2: 'x2 y', y: '', "y'": 'y2', y2: 'y', z: "x' y'", "z'": "x y'", z2: "x2 y'" },
+  y2: { x: 'x z2', "x'": 'x y2', x2: 'z2', y: "y'", "y'": 'y', y2: '', z: "x2 z'", "z'": 'x2 z', z2: 'x2' },
+  z: { x: 'x y', "x'": "x' y'", x2: "x2 z'", y: "x' z", "y'": 'x z', y2: 'x2 z', z: 'z2', "z'": '', z2: "z'" },
+  "z'": { x: "x y'", "x'": "x' y", x2: 'x2 z', y: "x z'", "y'": "x' z'", y2: "x2 z'", z: '', "z'": 'z2', z2: 'z' },
+  z2: { x: 'x y2', "x'": 'x z2', x2: 'y2', y: "x2 y'", "y'": 'x2 y', y2: 'x2', z: "z'", "z'": 'z', z2: '' },
+  'x y': { x: "x2 z'", "x'": 'z', x2: "x' y'", y: 'x y2', "y'": 'x', y2: "x y'", z: 'x2 y', "z'": 'y', z2: "x' y" },
+  "x y'": { x: 'x2 z', "x'": "z'", x2: "x' y", y: 'x', "y'": 'x y2', y2: 'x y', z: "y'", "z'": "x2 y'", z2: "x' y'" },
+  'x y2': { x: 'y2', "x'": 'z2', x2: 'x z2', y: "x y'", "y'": 'x y', y2: 'x', z: "x' z'", "z'": "x' z", z2: "x'" },
+  'x z': { x: 'x2 y', "x'": "y'", x2: "x' z'", y: 'z', "y'": 'x2 z', y2: "x' z", z: 'x z2', "z'": 'x', z2: "x z'" },
+  "x z'": { x: "x2 y'", "x'": 'y', x2: "x' z", y: "x2 z'", "y'": "z'", y2: "x' z'", z: 'x', "z'": 'x z2', z2: 'x z' },
+  'x z2': { x: 'z2', "x'": 'y2', x2: 'x y2', y: "x' y'", "y'": "x' y", y2: "x'", z: "x z'", "z'": 'x z', z2: 'x' },
+  "x' y": { x: "z'", "x'": 'x2 z', x2: "x y'", y: 'x z2', "y'": "x'", y2: "x' y'", z: 'y', "z'": 'x2 y', z2: 'x y' },
+  "x' y'": { x: 'z', "x'": "x2 z'", x2: 'x y', y: "x'", "y'": 'x z2', y2: "x' y", z: "x2 y'", "z'": "y'", z2: "x y'" },
+  "x' z": { x: 'y', "x'": "x2 y'", x2: "x z'", y: 'x2 z', "y'": 'z', y2: 'x z', z: 'x y2', "z'": "x'", z2: "x' z'" },
+  "x' z'": { x: "y'", "x'": 'x2 y', x2: 'x z', y: "z'", "y'": "x2 z'", y2: "x z'", z: "x'", "z'": 'x y2', z2: "x' z" },
+  'x2 y': { x: "x' z'", "x'": 'x z', x2: "y'", y: 'z2', "y'": 'x2', y2: "x2 y'", z: "x' y", "z'": 'x y', z2: 'y' },
+  "x2 y'": { x: "x' z", "x'": "x z'", x2: 'y', y: 'x2', "y'": 'z2', y2: 'x2 y', z: "x y'", "z'": "x' y'", z2: "y'" },
+  'x2 z': { x: "x' y", "x'": "x y'", x2: "z'", y: 'x z', "y'": "x' z", y2: 'z', z: 'y2', "z'": 'x2', z2: 'x2 z\'' },
+  "x2 z'": { x: "x' y'", "x'": 'x y', x2: 'z', y: "x' z'", "y'": "x z'", y2: "z'", z: 'x2', "z'": 'y2', z2: 'x2 z' },
+};
+
+function reduceRotations(tokens: string[]): string[] {
+  let state = '';
+  for (const t of tokens) state = ROTATION_TRANSITIONS[state][t];
+  return state ? state.split(' ') : [];
+}
+
 function simplifyAlg(alg: string): string {
   const stack: string[] = [];
   for (const move of alg.trim().split(/\s+/).filter(Boolean)) {
@@ -55,9 +94,23 @@ function simplifyAlg(alg: string): string {
       stack.push(move);
     }
   }
-  return stack.join(' ');
+
+  const result: string[] = [];
+  let run: string[] = [];
+  const flushRun = () => {
+    if (run.length > 0) result.push(...reduceRotations(run));
+    run = [];
+  };
+  for (const move of stack) {
+    if (isRotationToken(move)) run.push(move);
+    else {
+      flushRun();
+      result.push(move);
+    }
+  }
+  flushRun();
+  return result.join(' ');
 }
-function isRotationToken(t: string): boolean { return ['x', 'y', 'z'].includes(faceOf(t)); }
 const FACE_RELABEL: Record<string, Record<string, string>> = {
   x: { U: 'F', F: 'D', D: 'B', B: 'U', R: 'R', L: 'L' },
   "x'": { U: 'B', B: 'D', D: 'F', F: 'U', R: 'R', L: 'L' },

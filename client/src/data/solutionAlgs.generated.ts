@@ -387,7 +387,7 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "U2 R2 B2 R F R' B2 R F' R"
   },
   "E": {
-    "": "y x' R U' R' D R U R' D' R U R' D R U' R' D' x",
+    "": "x' z R U' R' D R U R' D' R U R' D R U' R' D' x",
     "U": "y U x' R U' R' D R U R' D' R U R' D R U' R' D' x",
     "U'": "y U' x' R U' R' D R U R' D' R U R' D R U' R' D' x",
     "U2": "y U2 x' R U' R' D R U R' D' R U R' D R U' R' D' x"
@@ -405,7 +405,7 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "y U2 R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R"
   },
   "Ja": {
-    "": "y2 x R2 F R F' R U2 r' U r U2 x'",
+    "": "x z2 R2 F R F' R U2 r' U r U2 x'",
     "U": "y2 U x R2 F R F' R U2 r' U r U2 x'",
     "U'": "y2 U' x R2 F R F' R U2 r' U r U2 x'",
     "U2": "y2 U2 x R2 F R F' R U2 r' U r U2 x'"
@@ -1581,10 +1581,10 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "y' U2 R U2 B2 R' U R U' B R'"
   },
   "EG2-L-1": {
-    "": "x2 y z y' x U L2 B2 L U' L' U L F' L F",
-    "U": "x2 y z y' x U2 L2 B2 L U' L' U L F' L F",
-    "U'": "x2 y z y' x L2 B2 L U' L' U L F' L F",
-    "U2": "x2 y z y' x U' L2 B2 L U' L' U L F' L F"
+    "": "U L2 B2 L U' L' U L F' L F",
+    "U": "U2 L2 B2 L U' L' U L F' L F",
+    "U'": "L2 B2 L U' L' U L F' L F",
+    "U2": "U' L2 B2 L U' L' U L F' L F"
   },
   "EG2-L-2": {
     "": "y2 F2 R2 F R U R' U' R' F R",
@@ -1599,16 +1599,16 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "y2 U2 R2 U' R U2 R' U2 R U' F2 R2"
   },
   "EG2-L-4": {
-    "": "z' x z' x2 R' U L' U2 R' F R U' R' U' F' x2",
-    "U": "z' x z' x2 U R' U L' U2 R' F R U' R' U' F' x2",
-    "U'": "z' x z' x2 U' R' U L' U2 R' F R U' R' U' F' x2",
-    "U2": "z' x z' x2 U2 R' U L' U2 R' F R U' R' U' F' x2"
+    "": "y R' U L' U2 R' F R U' R' U' F' x2",
+    "U": "y U R' U L' U2 R' F R U' R' U' F' x2",
+    "U'": "y U' R' U L' U2 R' F R U' R' U' F' x2",
+    "U2": "y U2 R' U L' U2 R' F R U' R' U' F' x2"
   },
   "EG2-L-5": {
-    "": "x2 z2 F R' F' R U R U' R B2 R2",
-    "U": "x2 z2 U F R' F' R U R U' R B2 R2",
-    "U'": "x2 z2 U' F R' F' R U R U' R B2 R2",
-    "U2": "x2 z2 U2 F R' F' R U R U' R B2 R2"
+    "": "y2 F R' F' R U R U' R B2 R2",
+    "U": "y2 U F R' F' R U R U' R B2 R2",
+    "U'": "y2 U' F R' F' R U R U' R B2 R2",
+    "U2": "y2 U2 F R' F' R U R U' R B2 R2"
   },
   "EG2-L-6": {
     "": "F' R U R' U' R' F R' F2 R2",
@@ -1659,10 +1659,10 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "U2 R2 F2 R U R U' R' F R' F' R2 U R' U' R"
   },
   "EG2-S-2": {
-    "": "x2 z2 R U R' U R U2 R B2 R2",
-    "U": "x2 z2 U R U R' U R U2 R B2 R2",
-    "U'": "x2 z2 U' R U R' U R U2 R B2 R2",
-    "U2": "x2 z2 U2 R U R' U R U2 R B2 R2"
+    "": "y2 R U R' U R U2 R B2 R2",
+    "U": "y2 U R U R' U R U2 R B2 R2",
+    "U'": "y2 U' R U R' U R U2 R B2 R2",
+    "U2": "y2 U2 R U R' U R U2 R B2 R2"
   },
   "EG2-S-3": {
     "": "R U' R' F R' F' R' F2 R2",
@@ -1671,10 +1671,10 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "U2 R U' R' F R' F' R' F2 R2"
   },
   "EG2-S-4": {
-    "": "x2 z2 F R' F' R U2 R U2 R B2 R2",
-    "U": "x2 z2 U F R' F' R U2 R U2 R B2 R2",
-    "U'": "x2 z2 U' F R' F' R U2 R U2 R B2 R2",
-    "U2": "x2 z2 U2 F R' F' R U2 R U2 R B2 R2"
+    "": "y2 F R' F' R U2 R U2 R B2 R2",
+    "U": "y2 U F R' F' R U2 R U2 R B2 R2",
+    "U'": "y2 U' F R' F' R U2 R U2 R B2 R2",
+    "U2": "y2 U2 F R' F' R U2 R U2 R B2 R2"
   },
   "EG2-S-5": {
     "": "R' U R' F R2 U' F R' F'",
@@ -1731,10 +1731,10 @@ export const SOLUTION_ALGS: Record<string, Record<string, string>> = {
     "U2": "U2 R2 U2 R U R' U F' R U' R"
   },
   "EG2-U-2": {
-    "": "x y z x2 z2 F R U R' U' F R2 B2",
-    "U": "x y z x2 z2 U F R U R' U' F R2 B2",
-    "U'": "x y z x2 z2 U' F R U R' U' F R2 B2",
-    "U2": "x y z x2 z2 U2 F R U R' U' F R2 B2"
+    "": "x2 y' F R U R' U' F R2 B2",
+    "U": "z2 U F R U R' U' F R2 B2",
+    "U'": "x2 U' F R U R' U' F R2 B2",
+    "U2": "x2 y U2 F R U R' U' F R2 B2"
   },
   "EG2-U-3": {
     "": "R' F' U' R U2 R' U F R",
