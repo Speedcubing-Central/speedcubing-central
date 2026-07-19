@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/ToastContainer';
 import { useAuth } from './store/auth';
@@ -18,6 +18,7 @@ import SoloRelayRunner from './features/relays/SoloRelayRunner';
 import RelayLobby from './features/relays/RelayLobby';
 import RelayRoom from './features/relays/RelayRoom';
 import SharedCustomRelayPage from './features/relays/SharedCustomRelayPage';
+import { RelayAccessGate } from './features/relays/RelayAccessGate';
 import ReconstructionPage from './features/reconstruction/ReconstructionPage';
 import ResultsPage from './features/results/ResultsPage';
 import LoginPage from './features/auth/LoginPage';
@@ -73,11 +74,20 @@ export default function App() {
         <Route path="/algorithms/trainer/:puzzle/:setId/stats" element={<AlgStatsPage />} />
         <Route path="/battle" element={<BattleLobby />} />
         <Route path="/battle/:code" element={<BattleRoom />} />
-        <Route path="/relays" element={<RelaysPage />} />
-        <Route path="/relays/run" element={<SoloRelayRunner />} />
-        <Route path="/relays/team" element={<RelayLobby />} />
-        <Route path="/relays/team/:code" element={<RelayRoom />} />
-        <Route path="/relays/share/:id" element={<SharedCustomRelayPage />} />
+        <Route
+          path="/relays"
+          element={
+            <RelayAccessGate>
+              <Outlet />
+            </RelayAccessGate>
+          }
+        >
+          <Route index element={<RelaysPage />} />
+          <Route path="run" element={<SoloRelayRunner />} />
+          <Route path="team" element={<RelayLobby />} />
+          <Route path="team/:code" element={<RelayRoom />} />
+          <Route path="share/:id" element={<SharedCustomRelayPage />} />
+        </Route>
         <Route path="/reconstruction" element={<ReconstructionPage />} />
         <Route path="/reconstruction/:id" element={<ReconstructionPage />} />
         <Route path="/results" element={<ResultsPage />} />
