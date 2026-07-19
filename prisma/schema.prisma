@@ -25,6 +25,13 @@ enum BattleStatus {
   FINISHED
 }
 
+enum RelayStatus {
+  LOBBY
+  ASSIGNING
+  ACTIVE
+  FINISHED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -48,6 +55,9 @@ model User {
   algSolves     AlgSolve[]
   algSelections AlgSetSelection[]
   reconstructions Reconstruction[]
+  customRelays    CustomRelay[]
+  relayAttempts   RelayAttempt[]
+  relayParts      RelayParticipant[]
 
   @@index([wcaId])
 }
@@ -213,4 +223,104 @@ model Reconstruction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// A saved custom relay definition (e.g. "my 2x 3x3 + megaminx mix"),
+// shareable by id — mirrors Reconstruction's public-read-by-id pattern.
+// `events` is deliberately a Json column (not a relation table): it's
+// always read/written as one atomic ordered list, never queried per-row,
+// unlike RelayRoomLeg below which needs real per-row fields during a live
+// run.
+model CustomRelay {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  events    Json // { eventId: string; quantity: number }[]
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A completed relay attempt (solo, or one participant's own slice of a
+// completed team relay), for personal history/PBs.
+model RelayAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  relayName   String // denormalized so history stays meaningful if a CustomRelay is later edited/deleted
+  totalTimeMs Int
+  createdAt   DateTime @default(now())
+
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  legs RelayAttemptLeg[]
+
+  @@index([userId])
+}
+
+model RelayAttemptLeg {
+  id        String @id @default(cuid())
+  attemptId String
+  eventId   String
+  order     Int
+  scramble  String
+  splitMs   Int?
+
+  attempt RelayAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+}
+
+// A real-time team relay room — same code/host/password shape as
+// BattleRoom, but relay-specific state (event assignment, shared clock)
+// instead of round/scramble racing fields.
+model RelayRoom {
+  id     String @id @default(cuid())
+  name   String @default("")
+  code   String @unique
+  // Participant.id of the current host — plain string, not an FK, same
+  // non-relation convention as BattleRoom.hostParticipantId (managed in
+  // application code since participants are deleted directly rather than
+  // cascaded from here in every case).
+  hostParticipantId String?
+  isPublic Boolean @default(true)
+  password String?
+  // Exactly one of these is set — which relay definition this room runs.
+  presetId      String?
+  customRelayId String?
+  status        RelayStatus @default(LOBBY)
+  startedAt     DateTime? // set once, the moment the first holder releases — the shared clock's t=0
+  finishedAt    DateTime? // set once, the moment the last participant signals done
+  createdAt     DateTime    @default(now())
+
+  participants RelayParticipant[]
+  legs         RelayRoomLeg[]
+}
+
+model RelayRoomLeg {
+  id           String  @id @default(cuid())
+  roomId       String
+  eventId      String
+  order        Int // position in the relay; disambiguates duplicate events (e.g. two 3x3 legs)
+  scramble     String  @default("") // filled in once assignment locks (on the start-triggering release)
+  assignedToId String? // RelayParticipant.id, null until dragged onto someone
+  splitMs      Int?
+
+  room RelayRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+}
+
+model RelayParticipant {
+  id        String  @id @default(cuid())
+  roomId    String
+  userId    String?
+  guestName String?
+  isReady   Boolean @default(false) // assignment-phase "I'm happy with this" checkbox
+  isDone    Boolean @default(false) // pressed spacebar to signal "finished all my legs"
+
+  room RelayRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([roomId])
 }

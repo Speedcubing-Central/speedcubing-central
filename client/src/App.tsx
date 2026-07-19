@@ -13,6 +13,11 @@ import AlgTrainerPage from './features/alg-trainer/AlgTrainerPage';
 import AlgStatsPage from './features/alg-trainer/AlgStatsPage';
 import BattleLobby from './features/battle/BattleLobby';
 import BattleRoom from './features/battle/BattleRoom';
+import RelaysPage from './features/relays/RelaysPage';
+import SoloRelayRunner from './features/relays/SoloRelayRunner';
+import RelayLobby from './features/relays/RelayLobby';
+import RelayRoom from './features/relays/RelayRoom';
+import SharedCustomRelayPage from './features/relays/SharedCustomRelayPage';
 import ReconstructionPage from './features/reconstruction/ReconstructionPage';
 import ResultsPage from './features/results/ResultsPage';
 import LoginPage from './features/auth/LoginPage';
@@ -68,6 +73,11 @@ export default function App() {
         <Route path="/algorithms/trainer/:puzzle/:setId/stats" element={<AlgStatsPage />} />
         <Route path="/battle" element={<BattleLobby />} />
         <Route path="/battle/:code" element={<BattleRoom />} />
+        <Route path="/relays" element={<RelaysPage />} />
+        <Route path="/relays/run" element={<SoloRelayRunner />} />
+        <Route path="/relays/team" element={<RelayLobby />} />
+        <Route path="/relays/team/:code" element={<RelayRoom />} />
+        <Route path="/relays/share/:id" element={<SharedCustomRelayPage />} />
         <Route path="/reconstruction" element={<ReconstructionPage />} />
         <Route path="/reconstruction/:id" element={<ReconstructionPage />} />
         <Route path="/results" element={<ResultsPage />} />

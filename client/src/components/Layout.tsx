@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/calculator', label: 'Calculator', icon: 'calculator' },
   { to: '/algorithms', label: 'Algorithms', icon: 'cube' },
   { to: '/battle', label: 'Battle', icon: 'swords' },
+  { to: '/relays', label: 'Relays', icon: 'skipForward' },
   { to: '/reconstruction', label: 'Reconstruction', icon: 'film' },
   { to: '/results', label: 'Results', icon: 'trophy' },
   { to: '/settings', label: 'Settings', icon: 'gear' },

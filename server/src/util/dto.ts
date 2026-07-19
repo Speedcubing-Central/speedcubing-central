@@ -1,5 +1,14 @@
-import type { User, Solve, Session, Reconstruction, AlgSolve } from '@prisma/client';
-import type { PublicUser, SolveDTO, SessionDTO, ReconstructionDTO, AlgSolveDTO } from '@scc/shared';
+import type { User, Solve, Session, Reconstruction, AlgSolve, CustomRelay, RelayAttempt, RelayAttemptLeg } from '@prisma/client';
+import type {
+  PublicUser,
+  SolveDTO,
+  SessionDTO,
+  ReconstructionDTO,
+  AlgSolveDTO,
+  CustomRelayDTO,
+  CustomRelayEventEntry,
+  RelayAttemptDTO,
+} from '@scc/shared';
 
 export function toPublicUser(u: User): PublicUser {
   return {
@@ -60,5 +69,28 @@ export function toReconstructionDTO(r: Reconstruction): ReconstructionDTO {
     solution: r.solution,
     timeMs: r.timeMs,
     createdAt: r.createdAt.toISOString(),
+  };
+}
+
+export function toCustomRelayDTO(cr: CustomRelay): CustomRelayDTO {
+  return {
+    id: cr.id,
+    userId: cr.userId,
+    name: cr.name,
+    events: cr.events as unknown as CustomRelayEventEntry[],
+    createdAt: cr.createdAt.toISOString(),
+  };
+}
+
+export function toRelayAttemptDTO(a: RelayAttempt & { legs: RelayAttemptLeg[] }): RelayAttemptDTO {
+  return {
+    id: a.id,
+    userId: a.userId,
+    relayName: a.relayName,
+    totalTimeMs: a.totalTimeMs,
+    createdAt: a.createdAt.toISOString(),
+    legs: a.legs
+      .sort((x, y) => x.order - y.order)
+      .map((l) => ({ id: l.id, eventId: l.eventId, order: l.order, scramble: l.scramble, splitMs: l.splitMs })),
   };
 }

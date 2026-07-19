@@ -7,6 +7,7 @@ import { prisma } from './prisma.js';
 import { env } from './env.js';
 import { getRoundScramble } from './scramble.js';
 import { verifyAccessToken } from './auth/jwt.js';
+import { registerRelayHandlers } from './relaySocket.js';
 import {
   effectiveTime,
   EVENT_IDS,
@@ -18,7 +19,7 @@ import {
   type BattleRoundResultEntry,
 } from '@scc/shared';
 
-interface SocketData {
+export interface SocketData {
   // Set from the verified access_token cookie at handshake time (see the
   // io.use() middleware below) — never from client-supplied event payloads.
   // Undefined means "not logged in" (a guest), which is a legitimate,
@@ -621,6 +622,15 @@ export function attachSocket(server: HttpServer): IOServer {
       pendingCleanup.set(participantId, timer);
     });
   });
+
+  // Registered as a second, independent `io.on('connection', ...)` listener
+  // (Socket.io fires every registered listener per connection) rather than
+  // folded into the callback above — Relay rooms are a fully separate
+  // feature with their own closure-scoped per-socket state (myRelayCode etc,
+  // independent of this file's myCode/myParticipantId), so a user can be in
+  // a Battle room and a Relay room at the same time without the two
+  // features' state colliding.
+  registerRelayHandlers(io);
 
   return io;
 }

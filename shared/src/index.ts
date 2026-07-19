@@ -2,6 +2,9 @@
 
 export * from './averaging.js';
 export * from './algScramble.js';
+export * from './relays.js';
+
+import type { RelayServerToClientEvents, RelayClientToServerEvents } from './relays.js';
 
 export type Role = 'GUEST' | 'USER';
 export type Penalty = 'NONE' | 'PLUS2' | 'DNF';
@@ -172,7 +175,7 @@ export interface ChatMessageDTO {
   sentAt: string;
 }
 
-export interface ServerToClientEvents {
+export interface ServerToClientEvents extends RelayServerToClientEvents {
   room_state: (room: BattleRoomDTO) => void;
   round_start: (payload: { scramble: string; roundNumber: number }) => void;
   participant_finished: (payload: { participantId: string; name: string; time: number | null; penalty: Penalty | null }) => void;
@@ -181,7 +184,7 @@ export interface ServerToClientEvents {
   error_msg: (payload: { message: string }) => void;
 }
 
-export interface ClientToServerEvents {
+export interface ClientToServerEvents extends RelayClientToServerEvents {
   // userId is intentionally not part of this payload — the server derives
   // identity from the caller's verified access_token cookie (see
   // server/src/socket.ts), never from a client-supplied field.

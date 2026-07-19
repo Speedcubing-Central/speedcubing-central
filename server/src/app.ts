@@ -23,6 +23,7 @@ import algSolvesRouter from './routes/algSolves.js';
 import scrambleRouter from './routes/scramble.js';
 import reconstructionsRouter from './routes/reconstructions.js';
 import ccRouter from './routes/cubingContests.js';
+import relaysRouter from './routes/relays.js';
 
 export function createApp() {
   const app = express();
@@ -80,6 +81,7 @@ export function createApp() {
   app.use('/api/scramble', scrambleRouter);
   app.use('/api/reconstructions', reconstructionsRouter);
   app.use('/api/cc', ccRouter);
+  app.use('/api/relays', relaysRouter);
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => {
