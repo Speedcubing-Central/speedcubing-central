@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SessionDTO, SolveDTO, Penalty } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
@@ -14,10 +14,29 @@ export function useTimerData(eventId: string) {
   const setLastSessionForEvent = useSettings((s) => s.setLastSessionForEvent);
 
   const [sessions, setSessions] = useState<SessionDTO[]>([]);
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [currentId, setCurrentIdState] = useState<string | null>(null);
   const [solves, setSolves] = useState<SolveDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [solvesLoading, setSolvesLoading] = useState(true);
+
+  // Whether `currentId` was picked automatically by the effect below (a
+  // fallback/preferred guess) rather than an explicit user action (the
+  // session dropdown, creating a session, or an import) — only automatic
+  // picks are ever corrected once a real lastSessionByEvent value becomes
+  // available. This matters because zustand's persist rehydration (which
+  // lastSessionByEvent comes from) and this event's own session list can
+  // each finish loading in either order depending on machine/network
+  // timing: if the session list happens to arrive first, the effect below
+  // would otherwise lock onto forEvent[0] before lastSessionByEvent has
+  // rehydrated from localStorage — and since that guess is already a
+  // *valid* session for this event, its own guard would never fire again
+  // to correct it once the real preference showed up a moment later. An
+  // explicit selection is never overridden this way.
+  const autoSelectedRef = useRef(false);
+  const setCurrentId = useCallback((id: string) => {
+    autoSelectedRef.current = false;
+    setCurrentIdState(id);
+  }, []);
 
   const eventSessions = sessions.filter((s) => s.eventId === eventId);
 
@@ -44,13 +63,21 @@ export function useTimerData(eventId: string) {
   useEffect(() => {
     const forEvent = sessions.filter((s) => s.eventId === eventId);
     if (forEvent.length === 0) {
-      setCurrentId(null);
+      setCurrentIdState(null);
       return;
     }
-    if (!currentId || !forEvent.some((s) => s.id === currentId)) {
-      const preferred = lastSessionByEvent[eventId];
-      const target = preferred && forEvent.some((s) => s.id === preferred) ? preferred : forEvent[0].id;
-      setCurrentId(target);
+    const preferred = lastSessionByEvent[eventId];
+    const currentIsValid = !!currentId && forEvent.some((s) => s.id === currentId);
+    if (!currentIsValid) {
+      autoSelectedRef.current = true;
+      setCurrentIdState(preferred && forEvent.some((s) => s.id === preferred) ? preferred : forEvent[0].id);
+      return;
+    }
+    // Already valid — but if it was only a fallback guess made before
+    // lastSessionByEvent had rehydrated, and the real preference has since
+    // shown up and points somewhere else, correct it now.
+    if (autoSelectedRef.current && preferred && preferred !== currentId && forEvent.some((s) => s.id === preferred)) {
+      setCurrentIdState(preferred);
     }
   }, [sessions, eventId, currentId, lastSessionByEvent]);
 
