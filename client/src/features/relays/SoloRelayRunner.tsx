@@ -13,7 +13,7 @@ import { eventIconClass } from '../../lib/eventIcons';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
-import { useFittedFontSize } from '../../components/useFittedFontSize';
+import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useRelayScrambles } from './useRelayScrambles';
 import { useRelayTimerEngine } from './useRelayTimerEngine';
 import { guestRelayStore } from './relayLocalStore';
@@ -22,6 +22,13 @@ interface RunState {
   relayName: string;
   legEventIds: string[];
 }
+
+// Keep in sync with the clock card's `md:min-h-[...]` style below — the
+// guaranteed minimum the scramble panel's budget calculation reserves for
+// it, so a tall scramble (e.g. megaminx) can never squeeze the clock below
+// a usable size or force it into its own internal scrollbar.
+const CLOCK_MIN_HEIGHT = 160;
+const COLUMN_GAP = 12; // gap-3
 
 function RelaySettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -193,15 +200,67 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
 
   const tiles = legs ?? state.legEventIds.map((eventId, order) => ({ eventId, order, scramble: '' }));
 
-  // The clock is the dominant element — it grows to fill whatever the tile
-  // strip and scramble panel (both sized to their own natural content, not
-  // stretched) don't need, instead of the reverse: a short scramble (e.g.
-  // 2x2's small diagram) previously left a tall dead gap above it rather
-  // than handing that room to the clock. Font size is fitted to the card's
-  // actual rendered height (see useFittedFontSize), same mechanism as the
-  // plain Timer's digit sizing.
+  // Height budget for the scramble panel's diagram (see useDiagramFit):
+  // column height minus the clock's protected minimum, the tile strip's
+  // actual height, and the gaps between the three. A large scramble (e.g.
+  // megaminx) shrinks to fit this instead of claiming its full preferred
+  // size and squeezing the clock — mirrors TimerPage's identical split,
+  // just with the clock and scramble panel's roles swapped.
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const tilesRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<HTMLDivElement>(null);
-  const digitFontSize = useFittedFontSize(clockRef, settings.entryMode === 'keyboard' ? 56 : 108);
+  const scrambleRef = useRef<HTMLDivElement>(null);
+  const colHeight = useElementHeight(leftColRef);
+  const isDesktop = useIsDesktop();
+  const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isDesktop || colHeight <= 0) {
+      setScrambleMaxHeight(undefined);
+      return;
+    }
+    const tilesH = tilesRef.current?.offsetHeight ?? 0;
+    const budget = colHeight - CLOCK_MIN_HEIGHT - tilesH - COLUMN_GAP * 2;
+    const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
+    return () => clearTimeout(timeout);
+  }, [isDesktop, colHeight]);
+
+  // The clock's own digit size is derived analytically rather than measured
+  // off the clock card's own clientHeight directly (a font sized off its own
+  // container can lock in a stale value while a sibling is still resizing —
+  // see the scramble panel below). Column height and tile-strip height are
+  // stable, reliably-measured quantities; the scramble panel's height is
+  // read directly off its ref rather than through a second ResizeObserver
+  // hook, and re-read on every `activeLeg` change (not just on resize) —
+  // ScramblePanel sizes its diagram in a useLayoutEffect (synchronous,
+  // before paint), so by the time this ordinary effect runs, the DOM already
+  // reflects whatever the newly-selected scramble actually needs, with no
+  // extra render round-trip to wait out.
+  //
+  // A font rendered at exactly its computed "available" size can still
+  // overflow by a few px — glyph ascent/descent for a monospace digit
+  // legitimately exceeds the nominal font-size's em-box at `leading-none`.
+  // FONT_SAFETY_MARGIN and the lowered absolute ceiling (vs.
+  // useFittedFontSize's 144) both build in slack for that instead of sizing
+  // to the exact pixel.
+  const FONT_SAFETY_MARGIN = 16;
+  const MAX_DIGIT_SIZE = 128;
+  const [digitFontSize, setDigitFontSize] = useState(MAX_DIGIT_SIZE);
+  useEffect(() => {
+    const reservedBelow = settings.entryMode === 'keyboard' ? 68 : 96;
+    const clockWidth = clockRef.current?.clientWidth ?? 0;
+    const widthCap = clockWidth * 0.34;
+    if (!isDesktop || colHeight <= 0) {
+      // No bounded column height on mobile (the page scrolls instead) — the
+      // clock renders at its own protected minimum there, so size off that.
+      setDigitFontSize(Math.max(40, Math.min(CLOCK_MIN_HEIGHT - reservedBelow - FONT_SAFETY_MARGIN, widthCap || MAX_DIGIT_SIZE, MAX_DIGIT_SIZE)));
+      return;
+    }
+    const tilesH = tilesRef.current?.offsetHeight ?? 0;
+    const scrambleH = scrambleRef.current?.offsetHeight ?? 0;
+    const clockHeight = colHeight - scrambleH - tilesH - COLUMN_GAP * 2;
+    const heightCap = clockHeight - reservedBelow - FONT_SAFETY_MARGIN;
+    setDigitFontSize(Math.max(40, Math.min(heightCap, widthCap || MAX_DIGIT_SIZE, MAX_DIGIT_SIZE)));
+  }, [isDesktop, colHeight, settings.entryMode, activeLeg?.eventId, activeLeg?.order, scrambleMaxHeight]);
 
   const typedParsed = useMemo(() => parseTimeInput(typed, 2), [typed]);
   const entryDisplay = typed ? (typedParsed ? formatTime(typedParsed.time, typedParsed.penalty, 2) : typed) : formatTime(0, 'NONE', 2);
@@ -230,13 +289,22 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
 
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* LEFT column */}
-        <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
-          {/* Master clock — flex-1, absorbs whatever the tile strip and
-              scramble panel below don't claim. */}
+        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
+          {/* Master clock — protected minimum height (so a tall scramble
+              below can never squeeze it away or force its own scrollbar),
+              but flex-1 so it grows to absorb whatever the tile strip and
+              scramble panel don't need. No padding on this container itself
+              — spacing between the digits and whatever's below them comes
+              from mt-6/gap-6 instead, matching TimerPage's card exactly, so
+              useFittedFontSize's reservedBelow figure (measured against
+              those same margins) stays accurate. */}
           <div
             ref={clockRef}
-            className="card relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 p-6 select-none touch-none overflow-y-auto"
-            style={settings.entryMode === 'keyboard' ? { cursor: 'pointer' } : undefined}
+            className={clsx(
+              'card relative flex-1 min-h-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none',
+              settings.entryMode === 'typing' && 'gap-6',
+            )}
+            style={{ minHeight: isDesktop ? CLOCK_MIN_HEIGHT : undefined, cursor: settings.entryMode === 'keyboard' ? 'pointer' : undefined }}
             onPointerDown={(e) => {
               if (settings.entryMode === 'keyboard' && canControl && !loading) {
                 e.preventDefault();
@@ -262,7 +330,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
                 >
                   {loading ? '—' : formatTime(engine.elapsed, 'NONE', 2)}
                 </div>
-                <p className="text-sm text-muted text-center px-4 shrink-0">{hint}</p>
+                <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">{hint}</p>
               </>
             ) : (
               <>
@@ -292,7 +360,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
           </div>
 
           {/* Event tiles */}
-          <div className="shrink-0 flex flex-col gap-1.5">
+          <div ref={tilesRef} className="shrink-0 flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <div className="label mb-0">Events — click one to view its scramble</div>
               {engine.phase === 'running' && (
@@ -329,10 +397,17 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
             </div>
           </div>
 
-          {/* Selected scramble — sized to its own natural content (see
-              ScramblePanel/useDiagramFit), not stretched to fill space, so a
-              small diagram (2x2) doesn't leave a dead gap above it. */}
-          {activeLeg && <div className="shrink-0"><ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} loading={loading} /></div>}
+          {/* Selected scramble — shrinks (never crops, never scrolls; see
+              useDiagramFit) to fit scrambleMaxHeight when a puzzle's
+              preferred size would otherwise exceed it (megaminx, sq1), but
+              stays at its own smaller natural size otherwise (2x2) rather
+              than stretching to fill the budget — that's what hands the
+              leftover room to the clock above instead of leaving it blank. */}
+          {activeLeg && (
+            <div ref={scrambleRef} className="shrink-0">
+              <ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} loading={loading} maxHeight={scrambleMaxHeight} className="overflow-hidden" />
+            </div>
+          )}
         </div>
 
         {/* RIGHT column */}
