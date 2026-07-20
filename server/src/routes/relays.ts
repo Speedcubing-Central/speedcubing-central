@@ -135,6 +135,47 @@ router.post('/attempts', requireAuth, async (req, res, next) => {
   }
 });
 
+const patchAttemptSchema = z.object({
+  totalTimeMs: z.number().int().positive().max(24 * 60 * 60 * 1000),
+});
+
+// PATCH /api/relays/attempts/:id — edit a recorded attempt's total time (no
+// penalty concept here, unlike a single solve — a relay total is just a
+// plain duration).
+router.patch('/attempts/:id', requireAuth, async (req, res, next) => {
+  try {
+    const existing = await prisma.relayAttempt.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.userId !== req.user!.sub) {
+      res.status(404).json({ error: 'Attempt not found' });
+      return;
+    }
+    const { totalTimeMs } = patchAttemptSchema.parse(req.body);
+    const updated = await prisma.relayAttempt.update({
+      where: { id: existing.id },
+      data: { totalTimeMs },
+      include: { legs: true },
+    });
+    res.json(toRelayAttemptDTO(updated));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /api/relays/attempts/:id
+router.delete('/attempts/:id', requireAuth, async (req, res, next) => {
+  try {
+    const existing = await prisma.relayAttempt.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.userId !== req.user!.sub) {
+      res.status(404).json({ error: 'Attempt not found' });
+      return;
+    }
+    await prisma.relayAttempt.delete({ where: { id: existing.id } });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // ---- Team relay rooms ----
 
 const createRoomSchema = z

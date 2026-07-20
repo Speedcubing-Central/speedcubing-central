@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import '@cubing/icons';
-import { RELAY_PRESETS, expandToLegs, formatTime, type CustomRelayDTO, type RelayAttemptDTO } from '@scc/shared';
+import { RELAY_PRESETS, expandToLegs, type CustomRelayDTO, type RelayAttemptDTO } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
 import { eventIconClass } from '../../lib/eventIcons';
 import { Icon } from '../../components/Icon';
 import CustomRelayBuilder from './CustomRelayBuilder';
+import { RelayAttemptRow } from './RelayAttemptRow';
 import { guestRelayStore } from './relayLocalStore';
 
 function EventIconRow({ events }: { events: string[] }) {
@@ -140,6 +141,34 @@ export default function RelaysPage() {
     );
   }
 
+  async function updateAttempt(attempt: RelayAttemptDTO, totalTimeMs: number) {
+    if (user) {
+      try {
+        await api.patch(`/relays/attempts/${attempt.id}`, { totalTimeMs });
+      } catch (e) {
+        toast.error(apiError(e, 'Failed to update attempt'));
+        return;
+      }
+    } else {
+      guestRelayStore.updateAttempt(attempt.id, totalTimeMs);
+    }
+    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
+  }
+
+  async function deleteAttempt(attempt: RelayAttemptDTO) {
+    if (user) {
+      try {
+        await api.delete(`/relays/attempts/${attempt.id}`);
+      } catch (e) {
+        toast.error(apiError(e, 'Failed to delete attempt'));
+        return;
+      }
+    } else {
+      guestRelayStore.deleteAttempt(attempt.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
+  }
+
   const quickPresets = RELAY_PRESETS.filter((p) => p.group === 'quick');
   const guildfordPresets = RELAY_PRESETS.filter((p) => p.group === 'guildford');
 
@@ -200,11 +229,17 @@ export default function RelaysPage() {
           <div className="label mb-3">Recent Attempts</div>
           <div className="space-y-1.5">
             {attempts.slice(0, 10).map((a) => (
-              <div key={a.id} className="card p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0 truncate text-sm">{a.relayName}</div>
-                <div className="text-xs text-muted">{a.legs.length} events</div>
-                <div className="font-mono text-sm">{formatTime(a.totalTimeMs, 'NONE', 2)}</div>
-              </div>
+              <RelayAttemptRow
+                key={a.id}
+                totalTimeMs={a.totalTimeMs}
+                leading={
+                  <span>
+                    {a.relayName} <span className="text-muted">· {a.legs.length} events</span>
+                  </span>
+                }
+                onSave={(newTimeMs) => updateAttempt(a, newTimeMs)}
+                onDelete={() => deleteAttempt(a)}
+              />
             ))}
           </div>
         </div>

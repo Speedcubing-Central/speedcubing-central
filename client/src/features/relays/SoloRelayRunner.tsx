@@ -16,6 +16,7 @@ import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useRelayScrambles } from './useRelayScrambles';
 import { useRelayTimerEngine } from './useRelayTimerEngine';
+import { RelayAttemptRow } from './RelayAttemptRow';
 import { guestRelayStore } from './relayLocalStore';
 
 interface RunState {
@@ -159,6 +160,34 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
     enabled: settings.entryMode === 'keyboard' && !loading && !completed,
     onStop: finish,
   });
+
+  async function updateAttempt(attempt: RelayAttemptDTO, totalTimeMs: number) {
+    if (user) {
+      try {
+        await api.patch(`/relays/attempts/${attempt.id}`, { totalTimeMs });
+      } catch (e) {
+        toast.error(apiError(e, 'Failed to update attempt'));
+        return;
+      }
+    } else {
+      guestRelayStore.updateAttempt(attempt.id, totalTimeMs);
+    }
+    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
+  }
+
+  async function deleteAttempt(attempt: RelayAttemptDTO) {
+    if (user) {
+      try {
+        await api.delete(`/relays/attempts/${attempt.id}`);
+      } catch (e) {
+        toast.error(apiError(e, 'Failed to delete attempt'));
+        return;
+      }
+    } else {
+      guestRelayStore.deleteAttempt(attempt.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
+  }
 
   const activeLeg = legs?.[selected];
   const canControl = !completed;
@@ -433,12 +462,14 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
             ) : (
               <div className="overflow-y-auto flex-1 min-h-0 space-y-1.5 pr-1">
                 {relayAttempts.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg bg-card-hover/50 px-3 py-2 text-sm">
-                    <span className="text-muted text-xs">{new Date(a.createdAt).toLocaleDateString()}</span>
-                    <span className={clsx('font-mono', best !== null && a.totalTimeMs === best && 'text-accent font-bold')}>
-                      {formatTime(a.totalTimeMs, 'NONE', 2)}
-                    </span>
-                  </div>
+                  <RelayAttemptRow
+                    key={a.id}
+                    totalTimeMs={a.totalTimeMs}
+                    isBest={best !== null && a.totalTimeMs === best}
+                    leading={<span className="text-muted text-xs">{new Date(a.createdAt).toLocaleDateString()}</span>}
+                    onSave={(newTimeMs) => updateAttempt(a, newTimeMs)}
+                    onDelete={() => deleteAttempt(a)}
+                  />
                 ))}
               </div>
             )}

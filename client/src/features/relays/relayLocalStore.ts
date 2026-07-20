@@ -54,4 +54,17 @@ export const guestRelayStore = {
     write(data);
     return attempt;
   },
+  updateAttempt(id: string, totalTimeMs: number): RelayAttemptDTO | null {
+    const data = read();
+    const attempt = data.attempts.find((a) => a.id === id);
+    if (!attempt) return null;
+    attempt.totalTimeMs = totalTimeMs;
+    write(data);
+    return attempt;
+  },
+  deleteAttempt(id: string) {
+    const data = read();
+    data.attempts = data.attempts.filter((a) => a.id !== id);
+    write(data);
+  },
 };
