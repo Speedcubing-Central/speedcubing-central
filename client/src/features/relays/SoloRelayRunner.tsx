@@ -4,14 +4,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import '@cubing/icons';
 import { formatTime, getEvent, type RelayAttemptDTO } from '@scc/shared';
+import { parseTimeInput } from '../../lib/timeInput';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
 import { eventIconClass } from '../../lib/eventIcons';
 import { Icon } from '../../components/Icon';
+import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
-import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
+import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useRelayScrambles } from './useRelayScrambles';
 import { useRelayTimerEngine } from './useRelayTimerEngine';
 import { guestRelayStore } from './relayLocalStore';
@@ -21,10 +23,61 @@ interface RunState {
   legEventIds: string[];
 }
 
-// Keep in sync with the clock card's `md:min-h-[...]` class below — the
-// guaranteed minimum the scramble panel's budget calculation reserves for it.
-const CLOCK_MIN_HEIGHT = 180;
-const COLUMN_GAP = 12; // gap-3
+function RelaySettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const settings = useSettings();
+  return (
+    <Modal open={open} onClose={onClose} title="Relay Settings" size="sm">
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">Time entry</div>
+          <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-card-hover p-1">
+            {(['keyboard', 'typing'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => settings.set({ entryMode: v })}
+                className={clsx(
+                  'px-3 py-1 rounded text-xs font-medium transition-colors',
+                  settings.entryMode === v ? 'bg-accent text-white' : 'text-muted hover:text-gray-700 dark:hover:text-gray-200',
+                )}
+              >
+                {v === 'keyboard' ? 'Timer' : 'Type in'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {settings.entryMode === 'keyboard' && (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">Hold to start</div>
+                <div className="text-xs text-muted">Hold spacebar before releasing to start</div>
+              </div>
+              <button
+                role="switch"
+                aria-checked={settings.holdToStart}
+                onClick={() => settings.set({ holdToStart: !settings.holdToStart })}
+                className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.holdToStart ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover')}
+              >
+                <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', settings.holdToStart && 'translate-x-4')} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">Start sound</div>
+              <button
+                role="switch"
+                aria-checked={settings.startSound}
+                onClick={() => settings.set({ startSound: !settings.startSound })}
+                className={clsx('relative w-10 h-6 rounded-full transition-colors shrink-0', settings.startSound ? 'bg-accent' : 'bg-gray-300 dark:bg-card-hover')}
+              >
+                <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform', settings.startSound && 'translate-x-4')} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
 
 export default function SoloRelayRunner() {
   const location = useLocation();
@@ -52,6 +105,8 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
   const [selected, setSelected] = useState(0);
   const [splits, setSplits] = useState<Record<number, number>>({});
   const [saving, setSaving] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [typed, setTyped] = useState('');
   // Once the relay is stopped, keyboard control is deliberately disabled —
   // a relay attempt is one-shot, not restartable in place (unlike the plain
   // Timer). Tracked separately from the engine's own `phase` since it must
@@ -67,7 +122,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
   const relayAttempts = useMemo(() => allAttempts.filter((a) => a.relayName === state.relayName), [allAttempts, state.relayName]);
   const best = relayAttempts.length > 0 ? Math.min(...relayAttempts.map((a) => a.totalTimeMs)) : null;
 
-  async function handleStop(timeMs: number) {
+  async function finish(timeMs: number) {
     setCompleted(true);
     setSaving(true);
     const legRecords = (legs ?? []).map((l) => ({
@@ -94,8 +149,8 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
     holdToStart: settings.holdToStart,
     holdDuration: settings.holdDuration,
     startSound: settings.startSound,
-    enabled: !loading && !completed,
-    onStop: handleStop,
+    enabled: settings.entryMode === 'keyboard' && !loading && !completed,
+    onStop: finish,
   });
 
   const activeLeg = legs?.[selected];
@@ -104,6 +159,18 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
   function logSplit() {
     if (!activeLeg || engine.phase !== 'running') return;
     setSplits((prev) => ({ ...prev, [activeLeg.order]: Math.round(engine.elapsed) }));
+  }
+
+  function submitTyped() {
+    // No penalty concept for a relay total (RelayAttempt has no penalty
+    // field) — plain time only, so a stray "+"/"DNF" is rejected rather
+    // than silently mis-recorded.
+    const parsed = parseTimeInput(typed, 2);
+    if (!parsed || parsed.penalty !== 'NONE') {
+      toast.error('Enter a plain time, e.g. 1:23.45');
+      return;
+    }
+    finish(parsed.time);
   }
 
   function runAgain() {
@@ -124,27 +191,20 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
               ? 'Saving…'
               : 'Relay complete!';
 
-  // Height budget for the scramble panel (see useDiagramFit): column height
-  // minus the clock card's protected minimum, the tile strip's actual
-  // height, and the gaps between the three — mirrors TimerPage's identical
-  // scramble/timer budget split.
-  const leftColRef = useRef<HTMLDivElement>(null);
-  const tilesRef = useRef<HTMLDivElement>(null);
-  const colHeight = useElementHeight(leftColRef);
-  const isDesktop = useIsDesktop();
-  const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    if (!isDesktop || colHeight <= 0) {
-      setScrambleMaxHeight(undefined);
-      return;
-    }
-    const tilesH = tilesRef.current?.offsetHeight ?? 0;
-    const budget = colHeight - CLOCK_MIN_HEIGHT - tilesH - COLUMN_GAP * 2;
-    const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
-    return () => clearTimeout(timeout);
-  }, [isDesktop, colHeight]);
-
   const tiles = legs ?? state.legEventIds.map((eventId, order) => ({ eventId, order, scramble: '' }));
+
+  // The clock is the dominant element — it grows to fill whatever the tile
+  // strip and scramble panel (both sized to their own natural content, not
+  // stretched) don't need, instead of the reverse: a short scramble (e.g.
+  // 2x2's small diagram) previously left a tall dead gap above it rather
+  // than handing that room to the clock. Font size is fitted to the card's
+  // actual rendered height (see useFittedFontSize), same mechanism as the
+  // plain Timer's digit sizing.
+  const clockRef = useRef<HTMLDivElement>(null);
+  const digitFontSize = useFittedFontSize(clockRef, settings.entryMode === 'keyboard' ? 56 : 108);
+
+  const typedParsed = useMemo(() => parseTimeInput(typed, 2), [typed]);
+  const entryDisplay = typed ? (typedParsed ? formatTime(typedParsed.time, typedParsed.penalty, 2) : typed) : formatTime(0, 'NONE', 2);
 
   return (
     <div className="flex flex-col gap-3 md:h-[calc(100dvh-2rem)]">
@@ -159,6 +219,9 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
               <Icon name="refresh" size={16} /> Run again
             </button>
           )}
+          <button className="btn flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm border border-border" title="Relay Settings" onClick={() => setShowSettings(true)}>
+            <Icon name="gear" size={16} />
+          </button>
           <button className="btn flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-border" onClick={() => navigate('/relays')}>
             <Icon name="x" size={16} /> Exit
           </button>
@@ -167,39 +230,69 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
 
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* LEFT column */}
-        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
-          {/* Master clock — protected minimum height so the tile strip and
-              scramble panel below can never squeeze it away. */}
+        <div className="flex flex-col gap-3 md:flex-[3] min-h-0">
+          {/* Master clock — flex-1, absorbs whatever the tile strip and
+              scramble panel below don't claim. */}
           <div
-            className="card relative shrink-0 flex flex-col items-center justify-center gap-2 p-6 select-none touch-none cursor-pointer"
-            style={{ minHeight: isDesktop ? CLOCK_MIN_HEIGHT : undefined }}
+            ref={clockRef}
+            className="card relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 p-6 select-none touch-none overflow-y-auto"
+            style={settings.entryMode === 'keyboard' ? { cursor: 'pointer' } : undefined}
             onPointerDown={(e) => {
-              if (canControl && !loading) {
+              if (settings.entryMode === 'keyboard' && canControl && !loading) {
                 e.preventDefault();
                 engine.press();
               }
             }}
             onPointerUp={(e) => {
-              if (canControl && !loading) {
+              if (settings.entryMode === 'keyboard' && canControl && !loading) {
                 e.preventDefault();
                 engine.release();
               }
             }}
           >
-            <div
-              className={clsx(
-                'text-5xl md:text-6xl font-mono font-bold tabular-nums transition-colors',
-                engine.phase === 'ready' && 'text-green-400',
-                engine.phase === 'holding' && 'text-red-400',
-              )}
-            >
-              {loading ? '—' : formatTime(engine.elapsed, 'NONE', 2)}
-            </div>
-            <p className="text-sm text-muted text-center px-4">{hint}</p>
+            {settings.entryMode === 'keyboard' ? (
+              <>
+                <div
+                  className={clsx(
+                    'font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0 transition-colors',
+                    engine.phase === 'ready' && 'text-green-400',
+                    engine.phase === 'holding' && 'text-red-400',
+                  )}
+                  style={{ fontSize: digitFontSize }}
+                >
+                  {loading ? '—' : formatTime(engine.elapsed, 'NONE', 2)}
+                </div>
+                <p className="text-sm text-muted text-center px-4 shrink-0">{hint}</p>
+              </>
+            ) : (
+              <>
+                <div
+                  className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', typed && !typedParsed ? 'text-red-400' : '')}
+                  style={{ fontSize: digitFontSize }}
+                >
+                  {entryDisplay}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <input
+                    className="input font-mono text-center text-xl w-40"
+                    placeholder="1:12.04"
+                    value={typed}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && submitTyped()}
+                    disabled={completed || loading}
+                    autoFocus
+                  />
+                  <button className="btn-primary" onClick={submitTyped} disabled={completed || loading}>
+                    Save time
+                  </button>
+                </div>
+                {completed && <p className="text-sm text-muted text-center px-4 shrink-0">{saving ? 'Saving…' : 'Relay complete!'}</p>}
+              </>
+            )}
           </div>
 
           {/* Event tiles */}
-          <div ref={tilesRef} className="shrink-0 flex flex-col gap-1.5">
+          <div className="shrink-0 flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <div className="label mb-0">Events — click one to view its scramble</div>
               {engine.phase === 'running' && (
@@ -236,12 +329,10 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
             </div>
           </div>
 
-          {/* Selected scramble — fills whatever's left */}
-          <div className="flex-1 min-h-0">
-            {activeLeg && (
-              <ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} loading={loading} maxHeight={scrambleMaxHeight} className="h-full overflow-hidden" />
-            )}
-          </div>
+          {/* Selected scramble — sized to its own natural content (see
+              ScramblePanel/useDiagramFit), not stretched to fill space, so a
+              small diagram (2x2) doesn't leave a dead gap above it. */}
+          {activeLeg && <div className="shrink-0"><ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} loading={loading} /></div>}
         </div>
 
         {/* RIGHT column */}
@@ -279,6 +370,8 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
           </div>
         </div>
       </div>
+
+      <RelaySettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }
