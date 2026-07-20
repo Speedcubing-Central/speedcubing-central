@@ -24,11 +24,12 @@ interface RunState {
   legEventIds: string[];
 }
 
-// Keep in sync with the clock card's `md:min-h-[...]` style below — the
-// guaranteed minimum the scramble panel's budget calculation reserves for
-// it, so a tall scramble (e.g. megaminx) can never squeeze the clock below
-// a usable size or force it into its own internal scrollbar.
-const CLOCK_MIN_HEIGHT = 160;
+const CLOCK_MIN_HEIGHT = 200;
+const CLOCK_MAX_HEIGHT = 360;
+// Fraction of the column's leftover (non-tile-strip) height given to the
+// clock — a fixed ratio, not something derived from which scramble is on
+// screen. See the layout effect below for why.
+const CLOCK_SHARE = 0.4;
 const COLUMN_GAP = 12; // gap-3
 
 function RelaySettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -229,67 +230,63 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
 
   const tiles = legs ?? state.legEventIds.map((eventId, order) => ({ eventId, order, scramble: '' }));
 
-  // Height budget for the scramble panel's diagram (see useDiagramFit):
-  // column height minus the clock's protected minimum, the tile strip's
-  // actual height, and the gaps between the three. A large scramble (e.g.
-  // megaminx) shrinks to fit this instead of claiming its full preferred
-  // size and squeezing the clock — mirrors TimerPage's identical split,
-  // just with the clock and scramble panel's roles swapped.
+  // The clock/scramble split is a pure function of the column's total
+  // height alone — deliberately NOT of which event is currently selected.
+  // An earlier version derived the clock's size by measuring the scramble
+  // panel's own per-event rendered height, which had two problems: the
+  // clock's size (and its font, sized off of it) could come out slightly
+  // different between two visits to the very same event, since text-layout/
+  // font-metric timing isn't perfectly deterministic render to render; and
+  // switching between events never touched colHeight, so nothing in that
+  // chain necessarily recomputed on its own — only an actual window resize
+  // reliably forced a fresh measurement. Deriving the split from colHeight/
+  // tilesH only fixes both: the clock is now identical across every visit
+  // to a given event, and it's still properly reactive to real resizes
+  // (colHeight itself is ResizeObserver-driven). The *visible* per-event
+  // size differences you do want (a small 2x2 diagram vs. a big megaminx
+  // one) still come through completely normally — that's ScramblePanel's
+  // own useDiagramFit picking a different diagram size per event within
+  // this same stable cap (see its own [eventId, scramble, ...] deps) — it
+  // just no longer feeds anything back into the clock.
   const leftColRef = useRef<HTMLDivElement>(null);
   const tilesRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<HTMLDivElement>(null);
-  const scrambleRef = useRef<HTMLDivElement>(null);
   const colHeight = useElementHeight(leftColRef);
   const isDesktop = useIsDesktop();
-  const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
+  const [layout, setLayout] = useState<{ clockHeight: number; scrambleMaxHeight: number | undefined; clockWidth: number }>({
+    clockHeight: CLOCK_MIN_HEIGHT,
+    scrambleMaxHeight: undefined,
+    clockWidth: 0,
+  });
   useEffect(() => {
+    const clockWidth = clockRef.current?.clientWidth ?? 0;
     if (!isDesktop || colHeight <= 0) {
-      setScrambleMaxHeight(undefined);
+      setLayout({ clockHeight: CLOCK_MIN_HEIGHT, scrambleMaxHeight: undefined, clockWidth });
       return;
     }
     const tilesH = tilesRef.current?.offsetHeight ?? 0;
-    const budget = colHeight - CLOCK_MIN_HEIGHT - tilesH - COLUMN_GAP * 2;
-    const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
+    const leftover = colHeight - tilesH - COLUMN_GAP * 2;
+    const clockHeight = Math.max(CLOCK_MIN_HEIGHT, Math.min(CLOCK_MAX_HEIGHT, leftover * CLOCK_SHARE));
+    const scrambleMaxHeight = Math.max(200, leftover - clockHeight);
+    const timeout = setTimeout(() => setLayout({ clockHeight, scrambleMaxHeight, clockWidth }), 150);
     return () => clearTimeout(timeout);
   }, [isDesktop, colHeight]);
 
-  // The clock's own digit size is derived analytically rather than measured
-  // off the clock card's own clientHeight directly (a font sized off its own
-  // container can lock in a stale value while a sibling is still resizing —
-  // see the scramble panel below). Column height and tile-strip height are
-  // stable, reliably-measured quantities; the scramble panel's height is
-  // read directly off its ref rather than through a second ResizeObserver
-  // hook, and re-read on every `activeLeg` change (not just on resize) —
-  // ScramblePanel sizes its diagram in a useLayoutEffect (synchronous,
-  // before paint), so by the time this ordinary effect runs, the DOM already
-  // reflects whatever the newly-selected scramble actually needs, with no
-  // extra render round-trip to wait out.
-  //
   // A font rendered at exactly its computed "available" size can still
   // overflow by a few px — glyph ascent/descent for a monospace digit
   // legitimately exceeds the nominal font-size's em-box at `leading-none`.
   // FONT_SAFETY_MARGIN and the lowered absolute ceiling (vs.
   // useFittedFontSize's 144) both build in slack for that instead of sizing
-  // to the exact pixel.
+  // to the exact pixel. Derived directly from `layout` (no separate effect
+  // needed — it's a pure function of already-reactive state).
   const FONT_SAFETY_MARGIN = 16;
   const MAX_DIGIT_SIZE = 128;
-  const [digitFontSize, setDigitFontSize] = useState(MAX_DIGIT_SIZE);
-  useEffect(() => {
-    const reservedBelow = settings.entryMode === 'keyboard' ? 68 : 96;
-    const clockWidth = clockRef.current?.clientWidth ?? 0;
-    const widthCap = clockWidth * 0.34;
-    if (!isDesktop || colHeight <= 0) {
-      // No bounded column height on mobile (the page scrolls instead) — the
-      // clock renders at its own protected minimum there, so size off that.
-      setDigitFontSize(Math.max(40, Math.min(CLOCK_MIN_HEIGHT - reservedBelow - FONT_SAFETY_MARGIN, widthCap || MAX_DIGIT_SIZE, MAX_DIGIT_SIZE)));
-      return;
-    }
-    const tilesH = tilesRef.current?.offsetHeight ?? 0;
-    const scrambleH = scrambleRef.current?.offsetHeight ?? 0;
-    const clockHeight = colHeight - scrambleH - tilesH - COLUMN_GAP * 2;
-    const heightCap = clockHeight - reservedBelow - FONT_SAFETY_MARGIN;
-    setDigitFontSize(Math.max(40, Math.min(heightCap, widthCap || MAX_DIGIT_SIZE, MAX_DIGIT_SIZE)));
-  }, [isDesktop, colHeight, settings.entryMode, activeLeg?.eventId, activeLeg?.order, scrambleMaxHeight]);
+  const reservedBelow = settings.entryMode === 'keyboard' ? 68 : 96;
+  const widthCap = layout.clockWidth * 0.34;
+  const digitFontSize = Math.max(
+    40,
+    Math.min(layout.clockHeight - reservedBelow - FONT_SAFETY_MARGIN, widthCap || MAX_DIGIT_SIZE, MAX_DIGIT_SIZE),
+  );
 
   const typedParsed = useMemo(() => parseTimeInput(typed, 2), [typed]);
   const entryDisplay = typed ? (typedParsed ? formatTime(typedParsed.time, typedParsed.penalty, 2) : typed) : formatTime(0, 'NONE', 2);
@@ -319,21 +316,20 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* LEFT column */}
         <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
-          {/* Master clock — protected minimum height (so a tall scramble
-              below can never squeeze it away or force its own scrollbar),
-              but flex-1 so it grows to absorb whatever the tile strip and
-              scramble panel don't need. No padding on this container itself
-              — spacing between the digits and whatever's below them comes
-              from mt-6/gap-6 instead, matching TimerPage's card exactly, so
-              useFittedFontSize's reservedBelow figure (measured against
-              those same margins) stays accurate. */}
+          {/* Master clock — a fixed height (see the layout effect above:
+              CLOCK_SHARE of the column's leftover space, clamped), not a
+              flex-1 that grows/shrinks with whatever else is on screen. No
+              padding on this container itself — spacing between the digits
+              and whatever's below them comes from mt-6/gap-6 instead,
+              matching TimerPage's card exactly, so reservedBelow (measured
+              against those same margins) stays accurate. */}
           <div
             ref={clockRef}
             className={clsx(
-              'card relative flex-1 min-h-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none',
+              'card relative shrink-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none',
               settings.entryMode === 'typing' && 'gap-6',
             )}
-            style={{ minHeight: isDesktop ? CLOCK_MIN_HEIGHT : undefined, cursor: settings.entryMode === 'keyboard' ? 'pointer' : undefined }}
+            style={{ height: isDesktop ? layout.clockHeight : undefined, cursor: settings.entryMode === 'keyboard' ? 'pointer' : undefined }}
             onPointerDown={(e) => {
               if (settings.entryMode === 'keyboard' && canControl && !loading) {
                 e.preventDefault();
@@ -426,15 +422,22 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
             </div>
           </div>
 
-          {/* Selected scramble — shrinks (never crops, never scrolls; see
-              useDiagramFit) to fit scrambleMaxHeight when a puzzle's
-              preferred size would otherwise exceed it (megaminx, sq1), but
-              stays at its own smaller natural size otherwise (2x2) rather
-              than stretching to fill the budget — that's what hands the
-              leftover room to the clock above instead of leaving it blank. */}
+          {/* Selected scramble — fills whatever's left below the clock and
+              tiles (flex-1 + h-full on the panel itself), with its diagram
+              shrinking (never cropping, never scrolling; see useDiagramFit)
+              to fit layout.scrambleMaxHeight — the same stable budget
+              regardless of which event is selected, so a small diagram
+              (2x2) and a big one (megaminx) both render at their own
+              correct size within it. */}
           {activeLeg && (
-            <div ref={scrambleRef} className="shrink-0">
-              <ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} loading={loading} maxHeight={scrambleMaxHeight} className="overflow-hidden" />
+            <div className="flex-1 min-h-0">
+              <ScramblePanel
+                eventId={activeLeg.eventId}
+                scramble={activeLeg.scramble}
+                loading={loading}
+                maxHeight={layout.scrambleMaxHeight}
+                className="h-full overflow-hidden"
+              />
             </div>
           )}
         </div>
