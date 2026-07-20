@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { getScramble } from './scramble.js';
+import { censorMessage } from './profanity.js';
 import type { SocketData } from './socket.js';
 import {
   getRelayPreset,
@@ -469,7 +470,7 @@ export function registerRelayHandlers(io: RelayIO): void {
         io.to(roomName(code)).emit('chat_message', {
           participantId: myParticipantId,
           name: myName,
-          message,
+          message: censorMessage(message),
           sentAt: new Date().toISOString(),
         });
       }),

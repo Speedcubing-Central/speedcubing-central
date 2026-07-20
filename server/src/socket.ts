@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { getRoundScramble } from './scramble.js';
 import { verifyAccessToken } from './auth/jwt.js';
 import { registerRelayHandlers } from './relaySocket.js';
+import { censorMessage } from './profanity.js';
 import {
   effectiveTime,
   EVENT_IDS,
@@ -87,10 +88,14 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 
 // How long a disconnected participant's row is kept around before it's
 // actually cleaned up (see leaveRoomCleanup / the disconnect handler below)
-// — long enough for a reconnect to resume the same participant (and its
-// accumulated points) instead of starting over at 0, per a live report of
-// exactly that happening.
-const RECONNECT_GRACE_MS = 30_000;
+// — long enough for a reconnect (a refresh, a network blip) to resume the
+// same participant and its accumulated points instead of starting over at
+// 0, but short enough that someone who's actually closed the tab for good
+// doesn't sit around blocking round completion for everyone else for very
+// long — closing a tab fires the exact same `disconnect` event as a
+// refresh or a dropped connection, so there's no way to immediately tell
+// those apart; this grace window is the only thing standing in for it.
+const RECONNECT_GRACE_MS = 12_000;
 
 // pingTimeout/pingInterval default to 20s/25s in socket.io. The most common
 // cause of an "I keep getting disconnected" report for a page like this one
@@ -593,7 +598,7 @@ export function attachSocket(server: HttpServer): IOServer {
         io.to(code).emit('chat_message', {
           participantId: myParticipantId,
           name: myName,
-          message,
+          message: censorMessage(message),
           sentAt: new Date().toISOString(),
         });
       }),

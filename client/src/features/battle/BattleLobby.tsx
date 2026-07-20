@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useAuth } from '../../store/auth';
 import { api, apiError } from '../../lib/api';
+import { getGuestName, setGuestName } from '../../lib/guestName';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { toast } from '../../store/toast';
@@ -31,7 +32,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const [guestNameInput, setGuestNameInput] = useState(() => getGuestName());
   const [eventId, setEventId] = useState('333');
   const [algSetId, setAlgSetId] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(true);
@@ -39,10 +40,11 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const [loading, setLoading] = useState(false);
 
   async function handleCreate() {
-    const displayName = user?.displayName ?? guestName.trim();
+    const displayName = user?.displayName ?? guestNameInput.trim();
     if (!displayName) { toast.error('Enter a display name'); return; }
     if (!name.trim()) { toast.error('Enter a room name'); return; }
     if (!isPublic && !password) { toast.error('Private rooms need a password'); return; }
+    if (!user) setGuestName(displayName);
     setLoading(true);
     try {
       const { data } = await api.post<{ code: string }>('/battle', {
@@ -60,7 +62,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   }
 
   function handleClose() {
-    setName(''); setGuestName(''); setEventId('333'); setAlgSetId(null); setIsPublic(true); setPassword('');
+    setName(''); setEventId('333'); setAlgSetId(null); setIsPublic(true); setPassword('');
     onClose();
   }
 
@@ -70,7 +72,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
         {!user && (
           <div>
             <label className="label mb-1 block">Your display name</label>
-            <input className="input w-full" placeholder="e.g. SpeedyCuber99" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
+            <input className="input w-full" placeholder="e.g. SpeedyCuber99" value={guestNameInput} onChange={(e) => setGuestNameInput(e.target.value)} />
           </div>
         )}
         <div>
@@ -114,19 +116,20 @@ function JoinRoomModal({ open, onClose }: { open: boolean; onClose: () => void }
   const navigate = useNavigate();
 
   const [code, setCode] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const [guestNameInput, setGuestNameInput] = useState(() => getGuestName());
   const [password, setPassword] = useState('');
 
   function handleJoin() {
     const trimmedCode = code.trim().toUpperCase();
     if (!trimmedCode) { toast.error('Enter a room code'); return; }
-    const displayName = user?.displayName ?? guestName.trim();
+    const displayName = user?.displayName ?? guestNameInput.trim();
     if (!displayName) { toast.error('Enter a display name'); return; }
+    if (!user) setGuestName(displayName);
     navigate(`/battle/${trimmedCode}`, { state: { displayName, password: password || undefined } });
   }
 
   function handleClose() {
-    setCode(''); setGuestName(''); setPassword('');
+    setCode(''); setPassword('');
     onClose();
   }
 
@@ -136,7 +139,7 @@ function JoinRoomModal({ open, onClose }: { open: boolean; onClose: () => void }
         {!user && (
           <div>
             <label className="label mb-1 block">Your display name</label>
-            <input className="input w-full" placeholder="e.g. SpeedyCuber99" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
+            <input className="input w-full" placeholder="e.g. SpeedyCuber99" value={guestNameInput} onChange={(e) => setGuestNameInput(e.target.value)} />
           </div>
         )}
         <div>

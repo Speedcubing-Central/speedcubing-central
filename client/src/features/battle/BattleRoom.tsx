@@ -6,13 +6,27 @@ import { parseTimeInput } from '../../lib/timeInput';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
+import { getGuestName, setGuestName } from '../../lib/guestName';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
 import { ScramblePanel } from '../../components/ScramblePanel';
+import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
+import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from '../timer/useTimerEngine';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
 import { battleAlgSetLabel } from './algSetOptions';
 import { EventAndAlgSetSelect } from './EventPicker';
+
+// Keep in sync with the timer card's `md:min-h-[...]` class below — the
+// guaranteed minimum the scramble panel's budget calculation reserves for
+// it, mirroring TimerPage's identical split (see the comment there): the
+// timer card's own clientHeight is observed directly via useFittedFontSize
+// rather than derived by subtracting other elements' measured sizes from
+// the column height — that indirect-subtraction approach turned out to be
+// genuinely racy (see the fix history on the solo relay runner's clock),
+// while observing the flex-1 element's own box via ResizeObserver is not.
+const TIMER_MIN_HEIGHT = 160;
+const COLUMN_GAP = 16; // gap-4
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -205,12 +219,23 @@ export default function BattleRoom() {
   const settings = useSettings();
 
   const state = location.state as { displayName?: string; password?: string } | null;
-  const displayName = user?.displayName ?? state?.displayName ?? '';
+  // `location.state` doesn't survive a hard page refresh — falling back to
+  // the persisted guest name (see lib/guestName.ts) means a refreshed guest
+  // tab resumes with the exact same name it joined with, so the server's
+  // guestName-based reconnect match finds the same participant instead of
+  // creating a second one.
+  const displayName = user?.displayName ?? state?.displayName ?? getGuestName();
   const password = state?.password;
 
-  // Redirect to lobby if no name (guest opened link directly)
+  // Redirect to lobby if no name (guest opened link directly). Not just a
+  // one-shot check: `user` loads asynchronously after mount, so a logged-in
+  // user refreshing could otherwise get stuck on this prompt forever even
+  // once their real displayName becomes available a moment later.
   const [namePrompt, setNamePrompt] = useState(!displayName);
   const [tempName, setTempName] = useState('');
+  useEffect(() => {
+    if (displayName) setNamePrompt(false);
+  }, [displayName]);
 
   const {
     connected,
@@ -381,6 +406,7 @@ export default function BattleRoom() {
 
   function handleNameSubmit() {
     if (!tempName.trim()) return;
+    setGuestName(tempName.trim());
     setNamePrompt(false);
     setTimeout(() => {
       joined.current = false; // re-trigger join effect
@@ -459,6 +485,51 @@ export default function BattleRoom() {
   const eventName = algSetLabel ? `${algSetLabel} Battle` : getEvent(event)?.name ?? event;
   const leaderboard = room ? [...room.participants].sort((a, b) => b.points - a.points) : [];
 
+  // ── Height budget: fills the viewport like TimerPage, instead of letting
+  // the page grow past it and scroll. The scramble panel is capped by a
+  // budget computed from stable, timer-independent measurements (header +
+  // participants list + the timer's own protected minimum); the timer card
+  // itself is flex-1 with its digit size observed directly off its own
+  // rendered height (useFittedFontSize) rather than derived by subtracting
+  // a sibling's measured size from the column total — see TIMER_MIN_HEIGHT's
+  // comment above for why that indirect approach isn't safe.
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const timerCardRef = useRef<HTMLDivElement>(null);
+  const participantsRef = useRef<HTMLDivElement>(null);
+  const colHeight = useElementHeight(leftColRef);
+  const isDesktop = useIsDesktop();
+  const showScramble = room?.status === 'ACTIVE' && !!room.scramble;
+  const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isDesktop || colHeight <= 0) {
+      setScrambleMaxHeight(undefined);
+      return;
+    }
+    const headerH = headerRef.current?.offsetHeight ?? 0;
+    const participantsH = participantsRef.current?.offsetHeight ?? 0;
+    // header→scramble→timer→participants (3 gaps), or header→timer→participants (2) when there's no scramble to show.
+    const gapCount = showScramble ? 3 : 2;
+    const budget = colHeight - headerH - TIMER_MIN_HEIGHT - participantsH - COLUMN_GAP * gapCount;
+    const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
+    return () => clearTimeout(timeout);
+  }, [isDesktop, colHeight, showScramble]);
+
+  // Reserved space below the digit varies by which sub-state the timer card
+  // is showing (penalty buttons, an edit row, "waiting for others" + an edit
+  // link, ...) — each is a fixed, known amount for that particular state,
+  // not something that needs measuring.
+  const reservedBelow = (() => {
+    if (!room || room.status === 'WAITING') return 60;
+    if (submitted && editing) return 150;
+    if (submitted) return 80;
+    if (awaitingSubmit) return 100;
+    if (settings.entryMode === 'typing') return 110;
+    if (engine.phase === 'idle' || isInspectionPhase) return 60;
+    return 30;
+  })();
+  const digitFontSize = useFittedFontSize(timerCardRef, reservedBelow);
+
   // ── Name prompt (guest opened link directly) ─────────────────────────────
   if (namePrompt) {
     return (
@@ -491,11 +562,16 @@ export default function BattleRoom() {
   }
 
   return (
-    <div className="flex flex-col md:grid md:grid-cols-[3fr_2fr] gap-4 min-h-0">
+    // On desktop this fills exactly the content area height (100dvh minus
+    // the page wrapper's padding), same as TimerPage — the grid row below
+    // is flex-1 so both columns share that same bounded height instead of
+    // growing past the viewport and forcing the whole page to scroll.
+    <div className="flex flex-col gap-4 md:h-[calc(100dvh-2rem)]">
+    <div className="flex flex-col md:grid md:grid-cols-[3fr_2fr] gap-4 flex-1 min-h-0">
       {/* ── LEFT: Timer area ── */}
-      <div className="flex flex-col gap-4 min-w-0">
+      <div ref={leftColRef} className="flex flex-col gap-4 min-w-0 min-h-0">
         {/* Room header */}
-        <div className="card p-3 flex items-center gap-3">
+        <div ref={headerRef} className="card p-3 flex items-center gap-3 shrink-0">
           <div className="flex-1 min-w-0">
             <div className="font-semibold truncate">{room.name}</div>
             <div className="text-xs text-muted">
@@ -532,12 +608,24 @@ export default function BattleRoom() {
           </button>
         </div>
 
-        {/* Scramble */}
-        {room.status === 'ACTIVE' && room.scramble && <ScramblePanel eventId={event} scramble={room.scramble} />}
+        {/* Scramble — shrinks (never crops, never scrolls; see useDiagramFit)
+            to fit scrambleMaxHeight so it can't squeeze the timer below its
+            protected minimum. */}
+        {showScramble && (
+          <ScramblePanel eventId={event} scramble={room.scramble} maxHeight={scrambleMaxHeight} className="shrink-0 overflow-hidden" />
+        )}
 
-        {/* Timer */}
+        {/* Timer — protected minimum height so the scramble panel above can
+            never squeeze it away; beyond that it grows to fill whatever's
+            left (flex-1). Digit size is fitted to the card's own rendered
+            height (see useFittedFontSize) instead of a static text-* class,
+            so the clock actually uses the room it's given rather than
+            leaving blank space below it. overflow-y-auto stays as a
+            last-resort fallback. */}
         <div
-          className="card p-6 flex flex-col items-center gap-4 select-none cursor-default flex-1"
+          ref={timerCardRef}
+          className="card relative px-6 flex flex-col items-center justify-center select-none cursor-default flex-1 min-h-0 overflow-y-auto"
+          style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
           onPointerDown={(e) => {
             if (timerActive && !awaitingSubmit && settings.entryMode === 'keyboard') {
               e.preventDefault();
@@ -599,7 +687,7 @@ export default function BattleRoom() {
           ) : submitted ? (
             /* Submitted — waiting for others, still editable until the round ends */
             <div className="flex flex-col items-center gap-2">
-              <div className={clsx('text-5xl font-mono font-bold', timerColor())}>
+              <div className={clsx('font-mono font-bold leading-none', timerColor())} style={{ fontSize: digitFontSize }}>
                 {formatTime(pendingTime, pendingPenalty, settings.solvePrecision)}
               </div>
               <div className="text-sm text-muted">Waiting for others…</div>
@@ -610,7 +698,7 @@ export default function BattleRoom() {
           ) : awaitingSubmit ? (
             /* Stopped — choose penalty */
             <div className="flex flex-col items-center gap-4">
-              <div className={clsx('text-5xl md:text-7xl font-mono font-bold transition-colors', timerColor())}>
+              <div className={clsx('font-mono font-bold leading-none transition-colors', timerColor())} style={{ fontSize: digitFontSize }}>
                 {timerDisplay()}
               </div>
               <div className="flex gap-2">
@@ -661,7 +749,7 @@ export default function BattleRoom() {
           ) : (
             /* Running, inspection, or idle */
             <div className="flex flex-col items-center gap-2">
-              <div className={clsx('text-5xl md:text-7xl font-mono font-bold transition-colors', timerColor())}>
+              <div className={clsx('font-mono font-bold leading-none transition-colors', timerColor())} style={{ fontSize: digitFontSize }}>
                 {timerDisplay()}
               </div>
               {engine.phase === 'idle' && (
@@ -678,33 +766,37 @@ export default function BattleRoom() {
           )}
         </div>
 
-        {/* Participant statuses */}
-        <div className="card p-4 space-y-2">
+        {/* Participant statuses — capped with internal scroll (up to 10
+            players) rather than growing unboundedly and pushing the column
+            past its budget. */}
+        <div ref={participantsRef} className="card p-4 shrink-0">
           <div className="label mb-2">Players</div>
-          {room.participants.map((p) => {
-            const st = participantStatus(p);
-            const isMe = p.id === myId;
-            return (
-              <div key={p.id} className={clsx('flex items-center gap-2 text-sm', isMe && 'font-semibold')}>
-                {dot(st.color)}
-                <span className="flex-1 truncate">{p.name}{isMe && ' (you)'}</span>
-                {p.isHost && <HostBadge />}
-                <span className={clsx('text-xs', st.color === 'green' ? 'text-green-400' : 'text-muted')}>
-                  {st.label}
-                </span>
-              </div>
-            );
-          })}
-          {room.participants.length === 0 && (
-            <div className="text-xs text-muted">No players yet</div>
-          )}
+          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+            {room.participants.map((p) => {
+              const st = participantStatus(p);
+              const isMe = p.id === myId;
+              return (
+                <div key={p.id} className={clsx('flex items-center gap-2 text-sm', isMe && 'font-semibold')}>
+                  {dot(st.color)}
+                  <span className="flex-1 truncate">{p.name}{isMe && ' (you)'}</span>
+                  {p.isHost && <HostBadge />}
+                  <span className={clsx('text-xs', st.color === 'green' ? 'text-green-400' : 'text-muted')}>
+                    {st.label}
+                  </span>
+                </div>
+              );
+            })}
+            {room.participants.length === 0 && (
+              <div className="text-xs text-muted">No players yet</div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── RIGHT: Stats + Leaderboard ── */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 min-h-0">
         {/* Personal stats */}
-        <div className="card p-4">
+        <div className="card p-4 shrink-0">
           <div className="label mb-3">Your Stats</div>
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -727,13 +819,15 @@ export default function BattleRoom() {
           </div>
         </div>
 
-        {/* Leaderboard */}
-        <div className="card p-4 flex-1 min-h-0">
+        {/* Leaderboard — capped with internal scroll (like the players
+            list) rather than flex-1, so Chat below gets to be the column's
+            one genuinely elastic region. */}
+        <div className="card p-4 shrink-0">
           <div className="label mb-3">Leaderboard</div>
           {leaderboard.length === 0 ? (
             <div className="text-xs text-muted">No players yet</div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
               {leaderboard.map((p, i) => {
                 const isMe = p.id === myId;
                 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -757,8 +851,9 @@ export default function BattleRoom() {
           )}
         </div>
 
-        {/* Chat */}
-        <div className="card p-4 flex flex-col" style={{ height: 260 }}>
+        {/* Chat — the column's one elastic region, absorbing whatever's
+            left after Stats/Leaderboard/History (all shrink-0, capped). */}
+        <div className="card p-4 flex flex-col flex-1 min-h-0" style={{ minHeight: 180 }}>
           <div className="label mb-2">Chat</div>
           <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
             {chatMessages.length === 0 ? (
@@ -799,7 +894,7 @@ export default function BattleRoom() {
 
         {/* My solve history */}
         {myHistory.length > 0 && (
-          <div className="card p-4">
+          <div className="card p-4 shrink-0">
             <div className="label mb-3">My Round History</div>
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {[...myHistory].reverse().map((s, i) => (
@@ -832,6 +927,7 @@ export default function BattleRoom() {
           onSave={(newEventId, newAlgSetId) => changeEvent(code.toUpperCase(), newEventId, newAlgSetId ?? undefined)}
         />
       )}
+    </div>
     </div>
   );
 }
