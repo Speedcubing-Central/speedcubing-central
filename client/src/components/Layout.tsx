@@ -43,6 +43,10 @@ export function Layout({ children }: { children: ReactNode }) {
   const isTimer = location.pathname === '/timer';
   const isBattle = location.pathname.startsWith('/battle/');
   const isReconstruction = location.pathname.startsWith('/reconstruction');
+  // The solo relay runner fits itself to the content area exactly like the
+  // Timer (see SoloRelayRunner's md:h-[calc(100dvh-2rem)]) — it needs the
+  // same reduced padding, not the default page max-width/padding.
+  const isRelayRun = location.pathname === '/relays/run';
   // The signed-out landing page (App.tsx's HomeRoute) is the site's actual
   // front door, not an in-app page — it shouldn't come wrapped in the same
   // sidebar/nav chrome as everything you reach *after* deciding to use the
@@ -174,7 +178,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className={clsx('p-4', (isTimer || isBattle || isReconstruction) ? 'md:p-4' : 'max-w-6xl mx-auto md:p-8')}>{children}</div>
+        <div className={clsx('p-4', (isTimer || isBattle || isReconstruction || isRelayRun) ? 'md:p-4' : 'max-w-6xl mx-auto md:p-8')}>{children}</div>
       </main>
 
       {/* Mobile bottom tab bar */}

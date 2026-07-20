@@ -3,67 +3,29 @@
 export interface RelayPreset {
   id: string;
   name: string;
-  // One-line description shown under the name on the relay picker.
-  blurb: string;
   group: 'quick' | 'guildford';
   // Flat ordered event ids — presets are always 1x each event (quantities
   // are a custom-relay-only concept).
   events: string[];
 }
 
-const MINI_GUILDFORD_EVENTS = ['222', '333', '444', '555', '333oh', 'pyram', 'minx', 'skewb', 'sq1'];
+// Guildford's fixed running order: NxN ladder (small to large), OH, then
+// Clock/FTO, then the remaining non-cube events. Mini variants drop 6x6/7x7
+// but otherwise keep the same order; New-Style variants swap Clock for FTO
+// in the same slot.
+const GUILDFORD_TAIL = ['minx', 'pyram', 'skewb', 'sq1'];
+const MINI_CUBES = ['222', '333', '444', '555'];
+const FULL_CUBES = [...MINI_CUBES, '666', '777'];
 
 export const RELAY_PRESETS: RelayPreset[] = [
-  { id: '2-4', name: '2-4 Relay', blurb: '2×2, 3×3, 4×4 back to back.', group: 'quick', events: ['222', '333', '444'] },
-  {
-    id: '2-5',
-    name: '2-5 Relay',
-    blurb: 'A 2-4 plus the 5×5.',
-    group: 'quick',
-    events: ['222', '333', '444', '555'],
-  },
-  {
-    id: '2-6',
-    name: '2-6 Relay',
-    blurb: 'Six cubes, 2×2 up to 6×6.',
-    group: 'quick',
-    events: ['222', '333', '444', '555', '666'],
-  },
-  {
-    id: '2-7',
-    name: '2-7 Relay',
-    blurb: 'The full NxN ladder, 2×2 to 7×7.',
-    group: 'quick',
-    events: ['222', '333', '444', '555', '666', '777'],
-  },
-  {
-    id: 'mini-guildford',
-    name: 'Mini Guildford',
-    blurb: '10 events, every discipline but the big cubes.',
-    group: 'guildford',
-    events: [...MINI_GUILDFORD_EVENTS, 'clock'],
-  },
-  {
-    id: 'guildford',
-    name: 'Guildford',
-    blurb: 'The full 12-event Guildford classic.',
-    group: 'guildford',
-    events: [...MINI_GUILDFORD_EVENTS, '666', '777', 'clock'],
-  },
-  {
-    id: 'mini-guildford-ns',
-    name: 'New-Style Mini Guildford',
-    blurb: 'Mini Guildford with FTO swapped in for Clock.',
-    group: 'guildford',
-    events: [...MINI_GUILDFORD_EVENTS, 'fto'],
-  },
-  {
-    id: 'guildford-ns',
-    name: 'New-Style Guildford',
-    blurb: 'Guildford with FTO swapped in for Clock.',
-    group: 'guildford',
-    events: [...MINI_GUILDFORD_EVENTS, '666', '777', 'fto'],
-  },
+  { id: '2-4', name: '2-4 Relay', group: 'quick', events: ['222', '333', '444'] },
+  { id: '2-5', name: '2-5 Relay', group: 'quick', events: ['222', '333', '444', '555'] },
+  { id: '2-6', name: '2-6 Relay', group: 'quick', events: ['222', '333', '444', '555', '666'] },
+  { id: '2-7', name: '2-7 Relay', group: 'quick', events: ['222', '333', '444', '555', '666', '777'] },
+  { id: 'mini-guildford', name: 'Mini Guildford', group: 'guildford', events: [...MINI_CUBES, '333oh', 'clock', ...GUILDFORD_TAIL] },
+  { id: 'guildford', name: 'Guildford', group: 'guildford', events: [...FULL_CUBES, '333oh', 'clock', ...GUILDFORD_TAIL] },
+  { id: 'mini-guildford-ns', name: 'New-Style Mini Guildford', group: 'guildford', events: [...MINI_CUBES, '333oh', 'fto', ...GUILDFORD_TAIL] },
+  { id: 'guildford-ns', name: 'New-Style Guildford', group: 'guildford', events: [...FULL_CUBES, '333oh', 'fto', ...GUILDFORD_TAIL] },
 ];
 
 export function getRelayPreset(id: string): RelayPreset | undefined {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '@cubing/icons';
 import type { CustomRelayEventEntry, CustomRelayDTO } from '@scc/shared';
-import { expandToLegs } from '@scc/shared';
+import { expandToLegs, getEvent } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
@@ -126,7 +126,7 @@ export default function CustomRelayBuilder({
             {events.map((e, i) => (
               <div key={e.eventId} className="flex items-center gap-2 card p-2">
                 <span className={`cubing-icon ${eventIconClass(e.eventId)}`} style={{ fontSize: 20, lineHeight: 1 }} />
-                <span className="text-sm font-medium flex-1 min-w-0 truncate">{e.eventId}</span>
+                <span className="text-sm font-medium flex-1 min-w-0 truncate">{getEvent(e.eventId)?.name ?? e.eventId}</span>
                 <div className="flex items-center gap-1">
                   <button className="text-muted hover:text-gray-700 dark:hover:text-gray-200 p-1" onClick={() => move(i, -1)} disabled={i === 0} title="Move up">
                     <Icon name="arrowLeft" size={14} className="rotate-90" />

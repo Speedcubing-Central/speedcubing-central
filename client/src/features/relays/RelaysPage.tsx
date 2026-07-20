@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import '@cubing/icons';
-import { RELAY_PRESETS, formatTime, type CustomRelayDTO, type RelayAttemptDTO } from '@scc/shared';
+import { RELAY_PRESETS, expandToLegs, formatTime, type CustomRelayDTO, type RelayAttemptDTO } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
@@ -11,40 +11,80 @@ import { Icon } from '../../components/Icon';
 import CustomRelayBuilder from './CustomRelayBuilder';
 import { guestRelayStore } from './relayLocalStore';
 
-function RelayTile({
-  name,
-  blurb,
-  events,
-  onClick,
-}: {
-  name: string;
-  blurb: string;
-  events: string[];
-  onClick: () => void;
-}) {
+function EventIconRow({ events }: { events: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {events.map((eventId, i) => (
+        <span
+          key={i}
+          className={`cubing-icon ${eventIconClass(eventId)} text-gray-500 dark:text-gray-400 group-hover:text-accent transition-colors`}
+          style={{ fontSize: 26, lineHeight: 1 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RelayTile({ name, events, onClick }: { name: string; events: string[]; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className="card group flex flex-col gap-4 p-5 text-left transition-colors hover:border-accent/50"
     >
-      <div>
-        <div className="font-bold text-base leading-tight">{name}</div>
-        <div className="text-xs text-muted mt-1 leading-snug">{blurb}</div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {events.map((eventId, i) => (
-          <span
-            key={i}
-            className={`cubing-icon ${eventIconClass(eventId)} text-gray-500 dark:text-gray-400 group-hover:text-accent transition-colors`}
-            style={{ fontSize: 26, lineHeight: 1 }}
-          />
-        ))}
-      </div>
+      <div className="font-bold text-base leading-tight">{name}</div>
+      <EventIconRow events={events} />
       <div className="mt-auto pt-1 flex items-center gap-1.5 text-xs font-semibold text-muted">
         <Icon name="skipForward" size={13} />
         {events.length} events
       </div>
     </button>
+  );
+}
+
+function CustomRelayTile({
+  relay,
+  onRun,
+  onShare,
+  onDelete,
+}: {
+  relay: CustomRelayDTO;
+  onRun: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+}) {
+  const legEventIds = expandToLegs(relay.events);
+  return (
+    <div className="card group flex flex-col gap-4 p-5 transition-colors hover:border-accent/50">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onRun}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onRun();
+          }
+        }}
+        className="flex flex-col gap-4 text-left cursor-pointer outline-none"
+      >
+        <div className="font-bold text-base leading-tight truncate">{relay.name}</div>
+        <EventIconRow events={legEventIds} />
+      </div>
+      <div className="mt-auto pt-2 flex items-center justify-between border-t border-border">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-muted pt-2">
+          <Icon name="skipForward" size={13} />
+          {legEventIds.length} events
+        </div>
+        <div className="flex items-center gap-0.5 pt-1">
+          <button className="text-muted hover:text-gray-700 dark:hover:text-gray-200 p-1.5" title="Copy share link" onClick={onShare}>
+            <Icon name="copy" size={15} />
+          </button>
+          <button className="text-muted hover:text-red-400 p-1.5" title="Delete" onClick={onDelete}>
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -71,8 +111,7 @@ export default function RelaysPage() {
   }
 
   function runCustom(relay: CustomRelayDTO) {
-    const legEventIds = relay.events.flatMap((e) => Array(e.quantity).fill(e.eventId));
-    navigate('/relays/run', { state: { relayName: relay.name, legEventIds } });
+    navigate('/relays/run', { state: { relayName: relay.name, legEventIds: expandToLegs(relay.events) } });
   }
 
   async function deleteCustom(relay: CustomRelayDTO) {
@@ -90,7 +129,7 @@ export default function RelaysPage() {
   }
 
   function copyShareLink(relay: CustomRelayDTO) {
-    if (relay.userId === 'guest') {
+    if (!user) {
       toast.error('Log in to get a shareable link');
       return;
     }
@@ -125,7 +164,7 @@ export default function RelaysPage() {
         <div className="label mb-3">Quick Relays</div>
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {quickPresets.map((p) => (
-            <RelayTile key={p.id} name={p.name} blurb={p.blurb} events={p.events} onClick={() => runPreset(p.id)} />
+            <RelayTile key={p.id} name={p.name} events={p.events} onClick={() => runPreset(p.id)} />
           ))}
         </div>
       </div>
@@ -134,31 +173,23 @@ export default function RelaysPage() {
         <div className="label mb-3">Guildford Relays</div>
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {guildfordPresets.map((p) => (
-            <RelayTile key={p.id} name={p.name} blurb={p.blurb} events={p.events} onClick={() => runPreset(p.id)} />
+            <RelayTile key={p.id} name={p.name} events={p.events} onClick={() => runPreset(p.id)} />
           ))}
         </div>
       </div>
 
       {customRelays.length > 0 && (
         <div>
-          <div className="label mb-3">Your Custom Relays</div>
-          <div className="space-y-2">
+          <div className="label mb-3">Custom Relays</div>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {customRelays.map((r) => (
-              <div key={r.id} className="card p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{r.name}</div>
-                  <div className="text-xs text-muted">{r.events.reduce((n, e) => n + e.quantity, 0)} events</div>
-                </div>
-                <button className="text-muted hover:text-gray-700 dark:hover:text-gray-200 p-1.5" title="Copy share link" onClick={() => copyShareLink(r)}>
-                  <Icon name="copy" size={16} />
-                </button>
-                <button className="text-muted hover:text-red-400 p-1.5" title="Delete" onClick={() => deleteCustom(r)}>
-                  <Icon name="trash" size={16} />
-                </button>
-                <button className="btn-primary text-sm px-3 py-1.5" onClick={() => runCustom(r)}>
-                  Run
-                </button>
-              </div>
+              <CustomRelayTile
+                key={r.id}
+                relay={r}
+                onRun={() => runCustom(r)}
+                onShare={() => copyShareLink(r)}
+                onDelete={() => deleteCustom(r)}
+              />
             ))}
           </div>
         </div>
