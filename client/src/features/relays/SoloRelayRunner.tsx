@@ -190,7 +190,13 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
     queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
   }
 
-  const activeLeg = legs?.[selected];
+  // Falls back to state.legEventIds (each with an empty scramble) while
+  // legs is still null so there's always a leg to show — without this,
+  // activeLeg was undefined during loading and the ScramblePanel below
+  // simply didn't render at all (a blank gap in the layout) instead of
+  // showing its own "Scrambling…" loading state.
+  const tiles = legs ?? state.legEventIds.map((eventId, order) => ({ eventId, order, scramble: '' }));
+  const activeLeg = tiles[selected];
   const canControl = !completed;
 
   function logSplit() {
@@ -227,8 +233,6 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
             : saving
               ? 'Saving…'
               : 'Relay complete!';
-
-  const tiles = legs ?? state.legEventIds.map((eventId, order) => ({ eventId, order, scramble: '' }));
 
   // The clock/scramble split is a pure function of the column's total
   // height alone — deliberately NOT of which event is currently selected.
