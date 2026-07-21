@@ -281,6 +281,32 @@ export async function warmUpScrambler(): Promise<void> {
   }));
 }
 
+// A single cubing.js timeout/worker error used to mean immediate failure
+// for whichever caller was waiting — fine for events with a scrambow
+// fallback, but 444/kilominx/fto/redi_cube deliberately have NONE (see
+// their `scrambowType: ''` in shared/src/index.ts — scrambow's 4x4
+// generator specifically is known-bad), so a single transient worker
+// hiccup meant getScramble resolved to '' with nothing left to try. That
+// was reproduced as a real bug: 4x4 (one of the zero-fallback events)
+// intermittently ending up with no scramble in team relays. One retry
+// against a fresh worker (recycle-on-timeout already swaps one in, see
+// runInWorker) catches the transient case without meaningfully hurting
+// Battle Mode's round-start latency, which calls getScramble directly and
+// has no tolerance for a long worst case.
+const CUBING_JS_ATTEMPTS = 2;
+async function getCubingJsScrambleWithRetries(eventId: string): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CUBING_JS_ATTEMPTS; attempt++) {
+    try {
+      return await getCubingJsScramble(eventId);
+    } catch (e) {
+      lastError = e;
+      console.warn(`[scramble] cubing.js attempt ${attempt}/${CUBING_JS_ATTEMPTS} failed for`, eventId, e instanceof Error ? e.message : e);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 // WCA-quality random-state scramble. Scrambow-preferred events use scrambow
 // with cubing.js as fallback; all others use cubing.js with scrambow as fallback.
 export async function getScramble(eventId: string): Promise<string> {
@@ -288,15 +314,15 @@ export async function getScramble(eventId: string): Promise<string> {
     const s = generateScramble(eventId);
     if (s) return s;
     console.warn('[scramble] scrambow failed for', eventId, '— trying cubing.js');
-    try { return await getCubingJsScramble(eventId); } catch (e) {
+    try { return await getCubingJsScrambleWithRetries(eventId); } catch (e) {
       console.warn('[scramble] cubing.js fallback also failed for', eventId, e instanceof Error ? e.message : e);
     }
     return '';
   }
   try {
-    return await getCubingJsScramble(eventId);
+    return await getCubingJsScrambleWithRetries(eventId);
   } catch (e) {
-    console.warn('[scramble] cubing.js failed, falling back:', e instanceof Error ? e.message : e);
+    console.warn('[scramble] cubing.js failed after retries, falling back:', e instanceof Error ? e.message : e);
   }
   return generateScramble(eventId);
 }

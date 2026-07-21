@@ -114,6 +114,20 @@ function MyRelayPanel({
   // rejects it too — see relay_press/relay_release's scramble check) so a
   // fast team can't start the clock before every leg's scramble has landed.
   const scramblesReady = room.legs.every((l) => !!l.scramble);
+  // Generation now retries a slow/failed leg across a few rounds
+  // server-side (see generateScramblesIfReady) rather than giving up
+  // instantly, so this window can occasionally run several seconds long.
+  // Purely cosmetic — just tells anyone staring at the spinner that a
+  // retry is happening, not that something's broken.
+  const [genWaitingLong, setGenWaitingLong] = useState(false);
+  useEffect(() => {
+    if (scramblesReady) {
+      setGenWaitingLong(false);
+      return;
+    }
+    const t = setTimeout(() => setGenWaitingLong(true), 8000);
+    return () => clearTimeout(t);
+  }, [scramblesReady]);
   const iAmHolding = !!me && holding.includes(me.id);
   const myLegs = room.legs.filter((l) => l.assignedToId === me?.id).sort((a, b) => a.order - b.order);
   const [selected, setSelected] = useState(0);
@@ -206,7 +220,11 @@ function MyRelayPanel({
         ) : !scramblesReady ? (
           <>
             <div className="h-10 w-10 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">Generating scrambles…</p>
+            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
+              {genWaitingLong
+                ? "Still generating a couple of scrambles — retrying in the background, won't be much longer…"
+                : 'Generating scrambles…'}
+            </p>
           </>
         ) : (
           <>

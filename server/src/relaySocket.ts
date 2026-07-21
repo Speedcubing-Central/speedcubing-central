@@ -141,14 +141,52 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 // it again" (which lands back in an all-ready ASSIGNING state without a
 // fresh per-person ready toggle) gets fresh scrambles instead of the
 // previous attempt's stale ones.
-async function generateScramblesIfReady(code: string): Promise<void> {
+//
+// getScramble() itself retries transient cubing.js failures once (see
+// scramble.ts), but a few events (444, kilominx, fto, redi_cube) have no
+// scrambow fallback at all, so a worker that's still unhealthy after that
+// retry can still resolve to '' — the exact bug reported ("4x4 simply
+// didn't generate a scramble"). This adds a second, room-level retry layer
+// on top: only the legs that actually came back empty get retried, across
+// a few rounds with a short delay between them (giving a recycled worker
+// time to finish respawning), and a successful leg is persisted and
+// broadcast (via onProgress) as soon as it lands rather than waiting for
+// every round to finish. Never write '' to the database as if it were a
+// real scramble — an empty leg is simply left untouched and picked up by
+// the next round (or the next ready-toggle/"run again", if every round
+// here is exhausted).
+const SCRAMBLE_RETRY_ROUNDS = 3;
+const SCRAMBLE_RETRY_DELAY_MS = 2_000;
+async function generateScramblesIfReady(code: string, onProgress?: () => Promise<void>): Promise<void> {
   const room = await fetchRoom(code);
   if (!room || room.legs.length === 0) return;
   if (!room.legs.every((l) => l.assignedToId) || !room.participants.every((p) => p.isReady)) return;
-  const scrambles = await Promise.all(room.legs.map((l) => getScramble(l.eventId)));
-  await prisma.$transaction(
-    room.legs.map((l, i) => prisma.relayRoomLeg.update({ where: { id: l.id }, data: { scramble: scrambles[i] } })),
-  );
+
+  let pending = room.legs;
+  for (let round = 1; round <= SCRAMBLE_RETRY_ROUNDS && pending.length > 0; round++) {
+    const results = await Promise.all(pending.map(async (l) => ({ leg: l, scramble: await getScramble(l.eventId) })));
+    const succeeded = results.filter((r) => r.scramble);
+    if (succeeded.length > 0) {
+      await prisma.$transaction(
+        succeeded.map((r) => prisma.relayRoomLeg.update({ where: { id: r.leg.id }, data: { scramble: r.scramble } })),
+      );
+      await onProgress?.();
+    }
+    pending = results.filter((r) => !r.scramble).map((r) => r.leg);
+    if (pending.length > 0 && round < SCRAMBLE_RETRY_ROUNDS) {
+      console.warn('[relaySocket] retrying scramble generation for', code, '—', pending.map((l) => l.eventId).join(', '), `(round ${round + 1}/${SCRAMBLE_RETRY_ROUNDS})`);
+      await new Promise((r) => setTimeout(r, SCRAMBLE_RETRY_DELAY_MS));
+    }
+  }
+  if (pending.length > 0) {
+    console.error(
+      '[relaySocket] gave up generating scrambles for',
+      code,
+      '—',
+      pending.map((l) => l.eventId).join(', '),
+      `after ${SCRAMBLE_RETRY_ROUNDS} rounds; will retry on the next ready-toggle or "run again"`,
+    );
+  }
 }
 
 const RECONNECT_GRACE_MS = 30_000;
@@ -402,12 +440,13 @@ export function registerRelayHandlers(io: RelayIO): void {
         // broadcast was the actual cause of "pressing ready feels laggy":
         // the ready badge and the scrambles were both stuck behind the same
         // await, even though nothing about showing "ready" depends on
-        // scrambles existing yet. A second broadcast follows once they
-        // land (or logs and gives up if generation itself fails, same as
-        // any other background failure — the room just stays without
-        // scrambles rather than silently blocking).
+        // scrambles existing yet. Further broadcasts follow as legs land
+        // (onProgress, passed through to each retry round — see
+        // generateScramblesIfReady) and once more when it settles either
+        // way, so the client's "Generating scrambles…" screen sees legs
+        // fill in as they succeed instead of only updating at the very end.
         await emitRelayRoomState(code);
-        generateScramblesIfReady(code)
+        generateScramblesIfReady(code, () => emitRelayRoomState(code))
           .then(() => emitRelayRoomState(code))
           .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
       }),
@@ -584,7 +623,7 @@ export function registerRelayHandlers(io: RelayIO): void {
       // awaited, same reasoning as relay_toggle_ready: generation can take
       // several seconds and nothing about landing on the ASSIGNING screen
       // depends on scrambles already existing.
-      generateScramblesIfReady(code)
+      generateScramblesIfReady(code, () => emitRelayRoomState(code))
         .then(() => emitRelayRoomState(code))
         .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
     }
