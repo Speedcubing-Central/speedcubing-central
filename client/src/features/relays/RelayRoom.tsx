@@ -34,8 +34,12 @@ function EventTile({ id, eventId, label }: { id: string; eventId: string; label:
       {...listeners}
       {...attributes}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
+      // No fixed width — this is a grid item now (see DropZone's
+      // auto-fill/minmax columns), so it stretches to fill its column
+      // instead of a flex-wrap row leaving leftover space on the right
+      // whenever the box is wider than an exact multiple of tile widths.
       className={clsx(
-        'card p-3 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none w-28 shrink-0',
+        'card p-3 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none',
         isDragging && 'opacity-50',
       )}
     >
@@ -485,13 +489,13 @@ export default function RelayRoom() {
                 <div className="label mb-2">Unassigned Events — drag onto a person</div>
                 <DropZone
                   id={UNASSIGNED}
-                  className="card p-4 flex flex-wrap content-start gap-3 overflow-y-auto"
-                  style={{ height: BOX_HEIGHT }}
+                  className="card p-4 grid content-start gap-3 overflow-y-auto"
+                  style={{ height: BOX_HEIGHT, gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}
                 >
                   {room.legs.filter((l) => !l.assignedToId).map((l) => (
                     <EventTile key={l.id} id={l.id} eventId={l.eventId} label={legLabel(l.eventId, l.order)} />
                   ))}
-                  {room.legs.every((l) => l.assignedToId) && <div className="text-sm text-muted p-2 self-center mx-auto">All events assigned</div>}
+                  {room.legs.every((l) => l.assignedToId) && <div className="text-sm text-muted p-2 col-span-full text-center">All events assigned</div>}
                 </DropZone>
               </div>
 
@@ -514,7 +518,8 @@ export default function RelayRoom() {
                       </div>
                       <DropZone
                         id={p.id}
-                        className="flex-1 min-h-0 flex flex-wrap content-start gap-2 rounded-lg overflow-y-auto"
+                        className="flex-1 min-h-0 grid content-start gap-2 rounded-lg overflow-y-auto"
+                        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))' }}
                       >
                         {room.legs.filter((l) => l.assignedToId === p.id).map((l) => (
                           <EventTile key={l.id} id={l.id} eventId={l.eventId} label={legLabel(l.eventId, l.order)} />

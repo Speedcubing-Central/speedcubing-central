@@ -420,6 +420,17 @@ export function registerRelayHandlers(io: RelayIO): void {
 
         if (!everyoneWasHolding) {
           io.to(roomName(code)).emit('relay_hold_state', { holding: [...set] });
+          // The client also guesses locally whether its own release is the
+          // triggering one (from its last-known holding set, to start the
+          // clock without waiting on a round trip — see useRelaySocket's
+          // release()). That guess can occasionally be wrong (e.g. someone
+          // else's release landed on the server microseconds earlier than
+          // this client's copy of the holding set reflected). A room_state
+          // broadcast here — cheap; the room is still just ASSIGNING, no
+          // personalized per-participant emits — is what corrects a wrong
+          // guess: it carries the real startedAt (still null), and the
+          // client resyncs its local state to it on every room_state.
+          await emitRelayRoomState(code);
           return;
         }
 
