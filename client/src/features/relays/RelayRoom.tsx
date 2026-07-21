@@ -106,6 +106,14 @@ function MyRelayPanel({
   // ready-up step (see relaySocket.ts's generateScramblesIfReady), so
   // whatever `room` data is already in hand has what this screen needs.
   const isActive = room.status === 'ACTIVE' || !!startedAt;
+  // Being on this screen only means everyone's readied up — scramble
+  // generation runs in the background afterward (generateScramblesIfReady
+  // in relaySocket.ts) and can take a few seconds for slower events, so
+  // there's a real window where a leg's scramble genuinely isn't here yet.
+  // Hold-to-start is disabled client-side during that window (the server
+  // rejects it too — see relay_press/relay_release's scramble check) so a
+  // fast team can't start the clock before every leg's scramble has landed.
+  const scramblesReady = room.legs.every((l) => !!l.scramble);
   const iAmHolding = !!me && holding.includes(me.id);
   const myLegs = room.legs.filter((l) => l.assignedToId === me?.id).sort((a, b) => a.order - b.order);
   const [selected, setSelected] = useState(0);
@@ -173,12 +181,12 @@ function MyRelayPanel({
           e.preventDefault();
           if (isActive) {
             if (!me?.isDone) markDone(code);
-          } else {
+          } else if (scramblesReady) {
             press(code);
           }
         }}
         onPointerUp={(e) => {
-          if (!isActive) {
+          if (!isActive && scramblesReady) {
             e.preventDefault();
             release(code);
           }
@@ -194,6 +202,11 @@ function MyRelayPanel({
                 ? 'Waiting for everyone else to finish…'
                 : `Press Space (or tap) when you finish your events — ${doneCount}/${room.participants.length} done`}
             </p>
+          </>
+        ) : !scramblesReady ? (
+          <>
+            <div className="h-10 w-10 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">Generating scrambles…</p>
           </>
         ) : (
           <>
@@ -336,8 +349,23 @@ export default function RelayRoom() {
   const allAssigned = !!room && room.legs.every((l) => l.assignedToId);
   const allReady = !!room && room.participants.length > 0 && room.participants.every((p) => p.isReady);
   const readyCount = room?.participants.filter((p) => p.isReady).length ?? 0;
-  const canHold = room?.status === 'ASSIGNING' && allAssigned && allReady;
-  const showMyRelayPanel = canHold || room?.status === 'ACTIVE';
+  // "Ready" and "scrambles actually generated" are not the same moment —
+  // generation runs in the background once everyone readies up (see
+  // generateScramblesIfReady in relaySocket.ts) and can take a few seconds
+  // for slower events. Without this, a fast team could hold-and-release
+  // before generation finished, starting the relay with a blank scramble
+  // for whichever leg hadn't committed yet. The server rejects the press/
+  // release in that case too, but gating here keeps the client from ever
+  // trying in the first place.
+  const scramblesReady = !!room && room.legs.every((l) => !!l.scramble);
+  // Transitioning into the my-events panel only needs allAssigned/allReady —
+  // it shows a "Generating scrambles…" state itself while !scramblesReady
+  // (see MyRelayPanel below) rather than bouncing back to the assignment
+  // screen. canHold gates the actual hold-to-start behavior (keyboard
+  // listener + eligibility to press), which does need scramblesReady.
+  const readyToShowPanel = room?.status === 'ASSIGNING' && allAssigned && allReady;
+  const canHold = readyToShowPanel && scramblesReady;
+  const showMyRelayPanel = readyToShowPanel || room?.status === 'ACTIVE';
   const showAssigningScreen = room?.status === 'ASSIGNING' && !showMyRelayPanel;
   const me = room?.participants.find((p) => p.id === myParticipantId);
   const meIsReady = me?.isReady ?? false;

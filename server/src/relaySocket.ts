@@ -39,16 +39,26 @@ type RoomWithRelations = NonNullable<Awaited<ReturnType<typeof fetchRoom>>>;
 // broadcast DTO, most of which this validation never looks at. Every extra
 // round trip here is latency a user directly feels as "did my press
 // register yet", so this only selects the handful of fields actually
-// needed: whether every leg has an assignee, whether every participant is
-// ready, and the participant id list itself (for the "was everyone in the
-// holding set" check).
+// needed: whether every leg has an assignee AND a generated scramble,
+// whether every participant is ready, and the participant id list itself
+// (for the "was everyone in the holding set" check).
+//
+// The scramble check specifically closes a real race: scrambles are
+// generated in the background once everyone's ready (see
+// generateScramblesIfReady), which can legitimately take several seconds
+// for some events — without gating on it here too, a fast team could
+// hold-and-release before that background write actually landed, starting
+// the relay with whichever legs' scrambles hadn't committed yet still
+// blank (a bug reported as "a random event's scramble just doesn't show up
+// sometimes, then fixes itself" — the "fixes itself" was the deferred
+// generateScramblesIfReady follow-up broadcast finally arriving).
 async function fetchHoldState(code: string) {
   return prisma.relayRoom.findUnique({
     where: { code },
     select: {
       id: true,
       status: true,
-      legs: { select: { assignedToId: true } },
+      legs: { select: { assignedToId: true, scramble: true } },
       participants: { select: { id: true, isReady: true } },
     },
   });
@@ -410,10 +420,15 @@ export function registerRelayHandlers(io: RelayIO): void {
         if (!parsed.success || !myParticipantId) return;
         const code = parsed.data.code.toUpperCase();
         const room = await fetchHoldState(code);
-        // Only allowed once every leg is assigned and everyone has readied
-        // up — validated server-side, never just trusted from the client.
+        // Only allowed once every leg is assigned, everyone has readied up,
+        // AND every leg's background-generated scramble has actually
+        // landed — validated server-side, never just trusted from the
+        // client. That last check matters: ready and "scrambles exist" are
+        // not the same moment (see generateScramblesIfReady / fetchHoldState's
+        // comment) — without it, a fast team could start holding before
+        // generation finished.
         if (!room || room.status !== 'ASSIGNING') return;
-        if (room.legs.some((l) => !l.assignedToId) || room.participants.some((p) => !p.isReady)) return;
+        if (room.legs.some((l) => !l.assignedToId || !l.scramble) || room.participants.some((p) => !p.isReady)) return;
         let set = holding.get(code);
         if (!set) {
           set = new Set();
@@ -433,7 +448,7 @@ export function registerRelayHandlers(io: RelayIO): void {
         const set = holding.get(code);
         if (!set || !set.has(myParticipantId)) return;
         const room = await fetchHoldState(code);
-        if (!room || room.status !== 'ASSIGNING') {
+        if (!room || room.status !== 'ASSIGNING' || room.legs.some((l) => !l.assignedToId || !l.scramble)) {
           set.delete(myParticipantId);
           return;
         }
@@ -462,11 +477,10 @@ export function registerRelayHandlers(io: RelayIO): void {
         }
 
         holding.delete(code);
-        // Scrambles already exist by this point — they're generated as soon
-        // as everyone readies up (see generateScramblesIfReady), not
-        // deferred until this actual release. Reaching here requires
-        // allAssigned && allReady (relay_press already checked that), which
-        // is exactly the condition that guarantees they were generated.
+        // Scrambles are guaranteed to exist by this point — both this
+        // handler and relay_press independently check every leg has one
+        // (see fetchHoldState's comment on why "ready" alone doesn't
+        // guarantee that).
         //
         // startedAt comes from this Update's own return value rather than a
         // second fetch right after — an earlier version re-fetched the
