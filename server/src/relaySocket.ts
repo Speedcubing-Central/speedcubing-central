@@ -54,13 +54,27 @@ async function fetchHoldState(code: string) {
   });
 }
 
-async function resolveRelayName(room: { presetId: string | null; customRelayId: string | null }): Promise<string> {
-  if (room.presetId) return getRelayPreset(room.presetId)?.name ?? 'Relay';
-  if (room.customRelayId) {
+// Cached per room code — presetId/customRelayId never change after a room
+// is created, so there's no reason to re-resolve this on every single
+// broadcast (emitRelayRoomState fires on every press/release/ready-toggle/
+// assignment). For a custom relay this was a real, unnecessary database
+// round trip on every one of those, not just a cheap in-memory lookup like
+// the preset case already was.
+const relayNameCache = new Map<string, string>();
+async function resolveRelayName(room: { code: string; presetId: string | null; customRelayId: string | null }): Promise<string> {
+  const cached = relayNameCache.get(room.code);
+  if (cached) return cached;
+  let name: string;
+  if (room.presetId) {
+    name = getRelayPreset(room.presetId)?.name ?? 'Relay';
+  } else if (room.customRelayId) {
     const cr = await prisma.customRelay.findUnique({ where: { id: room.customRelayId } });
-    return cr?.name ?? 'Custom Relay';
+    name = cr?.name ?? 'Custom Relay';
+  } else {
+    name = 'Relay';
   }
-  return 'Relay';
+  relayNameCache.set(room.code, name);
+  return name;
 }
 
 function toRelayRoomDTO(room: RoomWithRelations, relayName: string, viewerParticipantId: string | null): RelayRoomDTO {
@@ -101,6 +115,7 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
   const room = await prisma.relayRoom.findUnique({ where: { code }, include: { participants: { select: { id: true } } } });
   if (room && room.participants.length === 0) {
     await prisma.relayRoom.delete({ where: { id: room.id } });
+    relayNameCache.delete(code);
   }
 }
 
@@ -371,8 +386,20 @@ export function registerRelayHandlers(io: RelayIO): void {
         const room = await fetchRoom(code);
         if (!room || room.status !== 'ASSIGNING') return;
         await prisma.relayParticipant.update({ where: { id: myParticipantId }, data: { isReady: parsed.data.isReady } });
-        await generateScramblesIfReady(code);
+        // Broadcast the ready-state change immediately. Scramble generation
+        // (below) can legitimately take several seconds for some events
+        // (cold WASM workers — see scramble.ts) — awaiting it before this
+        // broadcast was the actual cause of "pressing ready feels laggy":
+        // the ready badge and the scrambles were both stuck behind the same
+        // await, even though nothing about showing "ready" depends on
+        // scrambles existing yet. A second broadcast follows once they
+        // land (or logs and gives up if generation itself fails, same as
+        // any other background failure — the room just stays without
+        // scrambles rather than silently blocking).
         await emitRelayRoomState(code);
+        generateScramblesIfReady(code)
+          .then(() => emitRelayRoomState(code))
+          .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
       }),
     );
 
@@ -476,30 +503,38 @@ export function registerRelayHandlers(io: RelayIO): void {
         const totalTimeMs = finishedAt.getTime() - fresh.startedAt!.getTime();
         await prisma.relayRoom.update({ where: { id: fresh.id }, data: { status: 'FINISHED', finishedAt } });
 
-        // Give every logged-in participant their own attempt record (only
-        // the legs they actually solved), all sharing the team's total time.
-        const relayName = await resolveRelayName(fresh);
-        for (const p of fresh.participants) {
-          if (!p.userId) continue;
-          const myLegs = fresh.legs.filter((l) => l.assignedToId === p.id).sort((a, b) => a.order - b.order);
-          if (myLegs.length === 0) continue;
-          await prisma.relayAttempt.create({
-            data: {
-              userId: p.userId,
-              relayName,
-              totalTimeMs,
-              legs: {
-                create: myLegs.map((l) => ({ eventId: l.eventId, order: l.order, scramble: l.scramble, splitMs: l.splitMs })),
-              },
-            },
-          });
-        }
-
+        // The "everyone's done, clock stopped" signal every participant is
+        // actively waiting on — sent immediately. Personal attempt-history
+        // records (below) are saved in the background: nobody's watching
+        // for those to appear, so sequentially writing one (or more, with
+        // logged-in participants) database row per person before this
+        // broadcast was the actual cause of "the clock doesn't stop right
+        // away" — the stop signal was stuck behind writes nobody was even
+        // looking at yet.
         io.to(roomName(code)).emit('relay_completed', {
           totalTimeMs,
           legs: fresh.legs.map((l) => ({ eventId: l.eventId, order: l.order, assignedToId: l.assignedToId, splitMs: l.splitMs })),
         });
         await emitRelayRoomState(code);
+
+        (async () => {
+          const relayName = await resolveRelayName(fresh);
+          for (const p of fresh.participants) {
+            if (!p.userId) continue;
+            const myLegs = fresh.legs.filter((l) => l.assignedToId === p.id).sort((a, b) => a.order - b.order);
+            if (myLegs.length === 0) continue;
+            await prisma.relayAttempt.create({
+              data: {
+                userId: p.userId,
+                relayName,
+                totalTimeMs,
+                legs: {
+                  create: myLegs.map((l) => ({ eventId: l.eventId, order: l.order, scramble: l.scramble, splitMs: l.splitMs })),
+                },
+              },
+            });
+          }
+        })().catch((e) => console.error('[relaySocket] failed to record relay attempts:', e instanceof Error ? e.message : e));
         // Deliberately not clearing participantSockets here (as an earlier
         // version did) — "Run it again" can take this same room straight
         // back into another ACTIVE phase without anyone reconnecting, and
@@ -526,13 +561,18 @@ export function registerRelayHandlers(io: RelayIO): void {
         prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ASSIGNING', startedAt: null, finishedAt: null } }),
         prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
       ]);
+      await emitRelayRoomState(code);
       // "Run it again" (keepReady) lands everyone back in an all-ready state
       // without going through relay_toggle_ready, so it has to trigger
       // scramble generation itself — otherwise the hold screen would show
       // the previous attempt's stale scrambles. A no-op for "adjust
-      // distribution" (keepReady=false leaves the room not-all-ready).
-      await generateScramblesIfReady(code);
-      await emitRelayRoomState(code);
+      // distribution" (keepReady=false leaves the room not-all-ready). Not
+      // awaited, same reasoning as relay_toggle_ready: generation can take
+      // several seconds and nothing about landing on the ASSIGNING screen
+      // depends on scrambles already existing.
+      generateScramblesIfReady(code)
+        .then(() => emitRelayRoomState(code))
+        .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
     }
 
     socket.on(

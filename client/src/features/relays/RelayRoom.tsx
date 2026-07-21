@@ -234,7 +234,22 @@ function MyRelayPanel({
 
       {activeLeg && (
         <div className="flex-1 min-h-0">
-          <ScramblePanel eventId={activeLeg.eventId} scramble={activeLeg.scramble} maxHeight={layout.scrambleMaxHeight} className="h-full overflow-hidden" />
+          {/* Scrambles are generated as soon as everyone readies up, not
+              deferred until the actual hold-to-start release (see
+              relaySocket.ts's generateScramblesIfReady) — but that
+              generation itself is backgrounded server-side and can
+              legitimately take a few seconds for some events, so there's a
+              brief real window where a leg's scramble genuinely isn't
+              here yet. `loading` shows the same "Scrambling…" state
+              SoloRelayRunner uses rather than an empty string reading as a
+              solved cube with no scramble at all. */}
+          <ScramblePanel
+            eventId={activeLeg.eventId}
+            scramble={activeLeg.scramble}
+            loading={!activeLeg.scramble}
+            maxHeight={layout.scrambleMaxHeight}
+            className="h-full overflow-hidden"
+          />
         </div>
       )}
     </div>
