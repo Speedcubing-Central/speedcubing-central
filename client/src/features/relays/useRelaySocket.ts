@@ -85,6 +85,14 @@ export function useRelaySocket() {
     socketRef.current?.emit('relay_mark_done', { code });
   }, []);
 
+  const adjustDistribution = useCallback((code: string) => {
+    socketRef.current?.emit('relay_adjust_distribution', { code });
+  }, []);
+
+  const runAgain = useCallback((code: string) => {
+    socketRef.current?.emit('relay_run_again', { code });
+  }, []);
+
   const sendChatMessage = useCallback((code: string, message: string) => {
     socketRef.current?.emit('send_chat_message', { code, message });
   }, []);
@@ -108,6 +116,8 @@ export function useRelaySocket() {
     press,
     release,
     markDone,
+    adjustDistribution,
+    runAgain,
     sendChatMessage,
   };
 }

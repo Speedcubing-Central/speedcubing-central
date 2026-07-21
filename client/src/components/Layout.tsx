@@ -43,10 +43,15 @@ export function Layout({ children }: { children: ReactNode }) {
   const isTimer = location.pathname === '/timer';
   const isBattle = location.pathname.startsWith('/battle/');
   const isReconstruction = location.pathname.startsWith('/reconstruction');
-  // The solo relay runner fits itself to the content area exactly like the
-  // Timer (see SoloRelayRunner's md:h-[calc(100dvh-2rem)]) — it needs the
-  // same reduced padding, not the default page max-width/padding.
-  const isRelayRun = location.pathname === '/relays/run';
+  // The solo relay runner and a team relay room's own "my events" screen
+  // both fit themselves to the content area exactly like the Timer (see
+  // md:h-[calc(100dvh-2rem)] in SoloRelayRunner/RelayRoom) — they need the
+  // same reduced padding, not the default page max-width/padding. A team
+  // room is only height-bound some of the time (its lobby/assigning/finished
+  // views use normal page flow), but the padding has to be consistent for
+  // the whole route regardless — RelayRoom's own wrapper only applies the
+  // height-bound class when it actually needs it.
+  const isRelayRun = location.pathname === '/relays/run' || location.pathname.startsWith('/relays/team/');
   // The signed-out landing page (App.tsx's HomeRoute) is the site's actual
   // front door, not an in-app page — it shouldn't come wrapped in the same
   // sidebar/nav chrome as everything you reach *after* deciding to use the

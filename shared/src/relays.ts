@@ -150,4 +150,12 @@ export interface RelayClientToServerEvents {
   relay_press: (payload: { code: string }) => void;
   relay_release: (payload: { code: string }) => void;
   relay_mark_done: (payload: { code: string }) => void;
+  // host-only, room.status === 'FINISHED': back to ASSIGNING, keeping the
+  // existing event assignments so the host can rearrange them — resets
+  // everyone's ready/done state, since the assignments might change.
+  relay_adjust_distribution: (payload: { code: string }) => void;
+  // host-only, room.status === 'FINISHED': back to ASSIGNING with the exact
+  // same assignments and everyone already marked ready (nothing changed, so
+  // there's nothing to re-confirm) — lands straight on the hold-to-start screen.
+  relay_run_again: (payload: { code: string }) => void;
 }

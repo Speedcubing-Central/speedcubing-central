@@ -442,7 +442,50 @@ export function registerRelayHandlers(io: RelayIO): void {
           legs: fresh.legs.map((l) => ({ eventId: l.eventId, order: l.order, assignedToId: l.assignedToId, splitMs: l.splitMs })),
         });
         await emitRelayRoomState(code);
-        participantSockets.delete(code);
+        // Deliberately not clearing participantSockets here (as an earlier
+        // version did) — "Run it again" can take this same room straight
+        // back into another ACTIVE phase without anyone reconnecting, and
+        // that per-participant socket map is what makes the personalized
+        // (own-scramble-only) emits in emitRelayRoomState possible.
+      }),
+    );
+
+    // Shared by relay_adjust_distribution/relay_run_again: both take a
+    // FINISHED room back to ASSIGNING with the same leg assignments, just
+    // differing in whether ready state carries over. `keepReady=true` is
+    // "run it again" (nothing changed, skip straight to hold-to-start);
+    // `keepReady=false` is "adjust distribution" (assignments might change,
+    // so everyone has to re-confirm).
+    async function restartAssigning(code: string, participantId: string, keepReady: boolean): Promise<void> {
+      const room = await fetchRoom(code);
+      if (!room) return;
+      if (room.hostParticipantId !== participantId) {
+        io.to(participantSockets.get(code)?.get(participantId) ?? '').emit('error_msg', { message: 'Only the host can do that' });
+        return;
+      }
+      if (room.status !== 'FINISHED') return;
+      await prisma.$transaction([
+        prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ASSIGNING', startedAt: null, finishedAt: null } }),
+        prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
+      ]);
+      await emitRelayRoomState(code);
+    }
+
+    socket.on(
+      'relay_adjust_distribution',
+      safe(async (raw) => {
+        const parsed = codeSchema.safeParse(raw);
+        if (!parsed.success || !myParticipantId) return;
+        await restartAssigning(parsed.data.code.toUpperCase(), myParticipantId, false);
+      }),
+    );
+
+    socket.on(
+      'relay_run_again',
+      safe(async (raw) => {
+        const parsed = codeSchema.safeParse(raw);
+        if (!parsed.success || !myParticipantId) return;
+        await restartAssigning(parsed.data.code.toUpperCase(), myParticipantId, true);
       }),
     );
 
