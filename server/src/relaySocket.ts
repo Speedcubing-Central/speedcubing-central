@@ -33,6 +33,27 @@ async function fetchRoom(code: string) {
 
 type RoomWithRelations = NonNullable<Awaited<ReturnType<typeof fetchRoom>>>;
 
+// A deliberately narrow query for the hold-to-start hot path (relay_press/
+// relay_release fire on every keypress and need to feel instant) — the full
+// fetchRoom() pulls every leg/participant field via roomInclude for the
+// broadcast DTO, most of which this validation never looks at. Every extra
+// round trip here is latency a user directly feels as "did my press
+// register yet", so this only selects the handful of fields actually
+// needed: whether every leg has an assignee, whether every participant is
+// ready, and the participant id list itself (for the "was everyone in the
+// holding set" check).
+async function fetchHoldState(code: string) {
+  return prisma.relayRoom.findUnique({
+    where: { code },
+    select: {
+      id: true,
+      status: true,
+      legs: { select: { assignedToId: true } },
+      participants: { select: { id: true, isReady: true } },
+    },
+  });
+}
+
 async function resolveRelayName(room: { presetId: string | null; customRelayId: string | null }): Promise<string> {
   if (room.presetId) return getRelayPreset(room.presetId)?.name ?? 'Relay';
   if (room.customRelayId) {
@@ -81,6 +102,28 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
   if (room && room.participants.length === 0) {
     await prisma.relayRoom.delete({ where: { id: room.id } });
   }
+}
+
+// If every leg is assigned and every participant is ready, (re)generates
+// every leg's scramble right away instead of waiting for the actual
+// hold-to-start release — so the hold screen (and MyRelayPanel's tile
+// strip) shows real scrambles immediately rather than a blank placeholder
+// while everyone gets ready to go. Safe to do here specifically because
+// reaching "everyone ready" already guarantees the assignments are final:
+// any further reassignment resets ready state straight back to false (see
+// relay_assign_event), which would just re-trigger this same generation
+// once ready again. Always regenerates rather than only-if-empty, so "Run
+// it again" (which lands back in an all-ready ASSIGNING state without a
+// fresh per-person ready toggle) gets fresh scrambles instead of the
+// previous attempt's stale ones.
+async function generateScramblesIfReady(code: string): Promise<void> {
+  const room = await fetchRoom(code);
+  if (!room || room.legs.length === 0) return;
+  if (!room.legs.every((l) => l.assignedToId) || !room.participants.every((p) => p.isReady)) return;
+  const scrambles = await Promise.all(room.legs.map((l) => getScramble(l.eventId)));
+  await prisma.$transaction(
+    room.legs.map((l, i) => prisma.relayRoomLeg.update({ where: { id: l.id }, data: { scramble: scrambles[i] } })),
+  );
 }
 
 const RECONNECT_GRACE_MS = 30_000;
@@ -328,6 +371,7 @@ export function registerRelayHandlers(io: RelayIO): void {
         const room = await fetchRoom(code);
         if (!room || room.status !== 'ASSIGNING') return;
         await prisma.relayParticipant.update({ where: { id: myParticipantId }, data: { isReady: parsed.data.isReady } });
+        await generateScramblesIfReady(code);
         await emitRelayRoomState(code);
       }),
     );
@@ -338,7 +382,7 @@ export function registerRelayHandlers(io: RelayIO): void {
         const parsed = codeSchema.safeParse(raw);
         if (!parsed.success || !myParticipantId) return;
         const code = parsed.data.code.toUpperCase();
-        const room = await fetchRoom(code);
+        const room = await fetchHoldState(code);
         // Only allowed once every leg is assigned and everyone has readied
         // up — validated server-side, never just trusted from the client.
         if (!room || room.status !== 'ASSIGNING') return;
@@ -361,7 +405,7 @@ export function registerRelayHandlers(io: RelayIO): void {
         const code = parsed.data.code.toUpperCase();
         const set = holding.get(code);
         if (!set || !set.has(myParticipantId)) return;
-        const room = await fetchRoom(code);
+        const room = await fetchHoldState(code);
         if (!room || room.status !== 'ASSIGNING') {
           set.delete(myParticipantId);
           return;
@@ -380,17 +424,20 @@ export function registerRelayHandlers(io: RelayIO): void {
         }
 
         holding.delete(code);
-        // Scrambles are deliberately generated now (not at assignment time)
-        // so a last-second reassignment can never leave a stale scramble
-        // attached to the wrong assignee.
-        const scrambles = await Promise.all(room.legs.map((l) => getScramble(l.eventId)));
-        await prisma.$transaction([
-          ...room.legs.map((l, i) => prisma.relayRoomLeg.update({ where: { id: l.id }, data: { scramble: scrambles[i] } })),
-          prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ACTIVE', startedAt: new Date() } }),
-        ]);
-        const fresh = await fetchRoom(code);
-        if (fresh?.startedAt) {
-          io.to(roomName(code)).emit('relay_started', { startedAt: fresh.startedAt.toISOString() });
+        // Scrambles already exist by this point — they're generated as soon
+        // as everyone readies up (see generateScramblesIfReady), not
+        // deferred until this actual release. Reaching here requires
+        // allAssigned && allReady (relay_press already checked that), which
+        // is exactly the condition that guarantees they were generated.
+        //
+        // startedAt comes from this Update's own return value rather than a
+        // second fetch right after — an earlier version re-fetched the
+        // whole room here just to read back a timestamp it had just set,
+        // adding a full extra round trip to the one action (starting the
+        // shared clock) where latency is most noticeable.
+        const updated = await prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ACTIVE', startedAt: new Date() } });
+        if (updated.startedAt) {
+          io.to(roomName(code)).emit('relay_started', { startedAt: updated.startedAt.toISOString() });
         }
         await emitRelayRoomState(code);
       }),
@@ -468,6 +515,12 @@ export function registerRelayHandlers(io: RelayIO): void {
         prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ASSIGNING', startedAt: null, finishedAt: null } }),
         prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
       ]);
+      // "Run it again" (keepReady) lands everyone back in an all-ready state
+      // without going through relay_toggle_ready, so it has to trigger
+      // scramble generation itself — otherwise the hold screen would show
+      // the previous attempt's stale scrambles. A no-op for "adjust
+      // distribution" (keepReady=false leaves the room not-all-ready).
+      await generateScramblesIfReady(code);
       await emitRelayRoomState(code);
     }
 

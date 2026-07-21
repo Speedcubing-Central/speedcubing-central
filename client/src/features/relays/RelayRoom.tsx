@@ -16,10 +16,14 @@ import { useRelaySocket } from './useRelaySocket';
 
 const UNASSIGNED = 'unassigned';
 
-// Deliberately generous and fixed, not content-driven — a box sized to
-// "just barely fit however many events are in it today" is the thing that
-// was cramped; see MyRelayPanel below for the same non-content-driven
-// approach applied to the clock/scramble split.
+// The unassigned-events pool's fixed height — modest and content-independent
+// on purpose, since it's not the main event here. The per-participant boxes
+// get the real "as big as possible" treatment instead: they fill whatever
+// vertical space is actually available (grid-auto-rows: 1fr within a
+// bounded, viewport-fit column — see the ASSIGNING screen below), which
+// with few participants ends up far bigger than any fixed pixel value
+// could reasonably guess. See MyRelayPanel below for the same
+// non-content-driven approach applied to the clock/scramble split.
 const BOX_HEIGHT = 208; // h-52
 
 function EventTile({ id, eventId, label }: { id: string; eventId: string; label: string }) {
@@ -90,7 +94,14 @@ function MyRelayPanel({
   release: (code: string) => void;
   markDone: (code: string) => void;
 }) {
-  const isActive = room.status === 'ACTIVE';
+  // relay_started arrives before the (heavier) relay_room_state broadcast
+  // that flips room.status to 'ACTIVE' — keying off startedAt too means the
+  // clock visibly starts the instant that first, lighter event lands
+  // instead of waiting on the second one. Safe to do: by the time
+  // startedAt is set, every leg's scramble was already generated at the
+  // ready-up step (see relaySocket.ts's generateScramblesIfReady), so
+  // whatever `room` data is already in hand has what this screen needs.
+  const isActive = room.status === 'ACTIVE' || !!startedAt;
   const iAmHolding = !!me && holding.includes(me.id);
   const myLegs = room.legs.filter((l) => l.assignedToId === me?.id).sort((a, b) => a.order - b.order);
   const [selected, setSelected] = useState(0);
@@ -308,6 +319,7 @@ export default function RelayRoom() {
   const readyCount = room?.participants.filter((p) => p.isReady).length ?? 0;
   const canHold = room?.status === 'ASSIGNING' && allAssigned && allReady;
   const showMyRelayPanel = canHold || room?.status === 'ACTIVE';
+  const showAssigningScreen = room?.status === 'ASSIGNING' && !showMyRelayPanel;
   const me = room?.participants.find((p) => p.id === myParticipantId);
   const meIsReady = me?.isReady ?? false;
   const meIsDone = me?.isDone ?? false;
@@ -419,12 +431,16 @@ export default function RelayRoom() {
     ? new Date(room.finishedAt).getTime() - new Date(room.startedAt).getTime()
     : null);
 
+  const fillHeight = showMyRelayPanel || showAssigningScreen;
+
   return (
     // The height-bound treatment (fills the viewport like TimerPage, no
-    // page scroll) only applies once the my-events panel is showing — that's
-    // the screen meant to "look like solo relays". LOBBY/ASSIGNING/FINISHED
-    // keep the page's normal auto-height flow.
-    <div className={clsx('flex flex-col gap-4', showMyRelayPanel ? 'md:h-[calc(100dvh-2rem)]' : 'pb-8')}>
+    // page scroll) applies to the assignment screen and the my-events
+    // panel — the two screens where cramming everything into the actual
+    // available space matters (bigger drop zones, a bigger clock). LOBBY
+    // and the FINISHED modal are just small centered cards and keep the
+    // page's normal auto-height flow.
+    <div className={clsx('flex flex-col gap-4', fillHeight ? 'md:h-[calc(100dvh-2rem)]' : 'pb-8')}>
       {/* Header */}
       <div className="card p-3 flex items-center gap-3 shrink-0">
         <div className="flex-1 min-w-0">
@@ -458,11 +474,14 @@ export default function RelayRoom() {
         </div>
       )}
 
-      {room.status === 'ASSIGNING' && !showMyRelayPanel && (
+      {showAssigningScreen && (
         <DndContext onDragEnd={handleDragEnd}>
-          <div className="grid xl:grid-cols-[3fr_1fr] gap-4">
-            <div className="space-y-4">
-              <div>
+          <div className="grid xl:grid-cols-[3fr_1fr] gap-4 flex-1 min-h-0">
+            <div className="flex flex-col gap-4 min-h-0">
+              {/* Unassigned pool — shrink-0, modest fixed size; the
+                  participant boxes below are where "as big as possible"
+                  actually matters. */}
+              <div className="shrink-0">
                 <div className="label mb-2">Unassigned Events — drag onto a person</div>
                 <DropZone
                   id={UNASSIGNED}
@@ -476,34 +495,39 @@ export default function RelayRoom() {
                 </DropZone>
               </div>
 
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-                {room.participants.map((p) => (
-                  <div key={p.id} className="card p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">{p.name}{p.isHost && ' 👑'}</span>
-                      <span className={clsx('text-xs px-2 py-1 rounded-full font-medium', p.isReady ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400')}>
-                        {p.isReady ? 'Ready' : 'Not ready'}
-                      </span>
+              {/* Participant boxes — fill whatever vertical space is left
+                  (flex-1) instead of a small fixed height; grid-auto-rows:
+                  1fr stretches every row of cards to share that space
+                  evenly, so with few participants each box gets genuinely
+                  large. Still not content-driven — a row's height comes
+                  from how much room is available, never from how many
+                  events happen to be sitting in a box that round. */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="grid gap-4 h-full" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gridAutoRows: '1fr' }}>
+                  {room.participants.map((p) => (
+                    <div key={p.id} className="card p-3 flex flex-col gap-2 min-h-[160px]">
+                      <div className="flex items-center justify-between gap-2 shrink-0">
+                        <span className="text-sm font-medium truncate">{p.name}{p.isHost && ' 👑'}</span>
+                        <span className={clsx('text-xs px-2 py-1 rounded-full font-medium', p.isReady ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400')}>
+                          {p.isReady ? 'Ready' : 'Not ready'}
+                        </span>
+                      </div>
+                      <DropZone
+                        id={p.id}
+                        className="flex-1 min-h-0 flex flex-wrap content-start gap-2 rounded-lg overflow-y-auto"
+                      >
+                        {room.legs.filter((l) => l.assignedToId === p.id).map((l) => (
+                          <EventTile key={l.id} id={l.id} eventId={l.eventId} label={legLabel(l.eventId, l.order)} />
+                        ))}
+                      </DropZone>
                     </div>
-                    {/* Fixed height so this box doesn't grow as more events land
-                        in it — it already has enough room; a person with more
-                        events than fit just gets an internal scrollbar. */}
-                    <DropZone
-                      id={p.id}
-                      className="flex flex-wrap content-start gap-2 rounded-lg overflow-y-auto"
-                      style={{ height: BOX_HEIGHT }}
-                    >
-                      {room.legs.filter((l) => l.assignedToId === p.id).map((l) => (
-                        <EventTile key={l.id} id={l.id} eventId={l.eventId} label={legLabel(l.eventId, l.order)} />
-                      ))}
-                    </DropZone>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* Ready control — one canonical button for the whole team,
                   disabled until every event has a home. */}
-              <div className="card p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="card p-5 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
                 <div>
                   <div className="font-semibold">{readyCount} / {room.participants.length} ready</div>
                   <div className="text-xs text-muted">
@@ -520,9 +544,11 @@ export default function RelayRoom() {
               </div>
             </div>
 
-            {/* Chat */}
-            <div className="card p-4 flex flex-col" style={{ height: 400 }}>
-              <div className="label mb-2">Chat</div>
+            {/* Chat — fills the same bounded column height as the content
+                side, instead of a fixed 400px that left a growing gap of
+                its own on tall screens. */}
+            <div className="card p-4 flex flex-col min-h-0">
+              <div className="label mb-2 shrink-0">Chat</div>
               <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
                 {chatMessages.length === 0 ? (
                   <div className="text-xs text-muted">Discuss who's doing what…</div>

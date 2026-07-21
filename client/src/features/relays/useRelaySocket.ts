@@ -66,6 +66,22 @@ export function useRelaySocket() {
   }, []);
 
   const assignEvent = useCallback((code: string, legId: string, participantId: string | null) => {
+    // Optimistic — the tile reflects its new slot the instant you drop it
+    // instead of visually snapping back and then jumping once the
+    // server's round trip confirms the move. Mirrors exactly what the
+    // server itself does (see relaySocket.ts's relay_assign_event): move
+    // the leg, reset everyone's ready state. The authoritative
+    // relay_room_state broadcast that follows just confirms this — if it
+    // ever disagrees (e.g. two people dragging at once), that broadcast
+    // wins, same as before.
+    setRoom((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        legs: prev.legs.map((l) => (l.id === legId ? { ...l, assignedToId: participantId } : l)),
+        participants: prev.participants.map((p) => ({ ...p, isReady: false })),
+      };
+    });
     socketRef.current?.emit('relay_assign_event', { code, legId, participantId });
   }, []);
 
@@ -73,11 +89,21 @@ export function useRelaySocket() {
     socketRef.current?.emit('relay_toggle_ready', { code, isReady });
   }, []);
 
+  // Optimistic, same reasoning as assignEvent above — your own press/
+  // release should register the instant you do it, not once a full
+  // server round trip confirms it. The server's own relay_hold_state
+  // broadcast (reflecting every participant, not just you) still arrives
+  // right after and is authoritative; this just avoids visibly waiting on
+  // it for your own action specifically.
   const press = useCallback((code: string) => {
+    const id = myParticipantIdRef.current;
+    if (id) setHolding((prev) => (prev.includes(id) ? prev : [...prev, id]));
     socketRef.current?.emit('relay_press', { code });
   }, []);
 
   const release = useCallback((code: string) => {
+    const id = myParticipantIdRef.current;
+    if (id) setHolding((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : prev));
     socketRef.current?.emit('relay_release', { code });
   }, []);
 
