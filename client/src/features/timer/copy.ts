@@ -19,7 +19,8 @@ export function formatAverageCopy(view: SolveAverage, eventId: string, precision
   const evName = getEvent(eventId)?.name ?? eventId;
   const fmtVal = (v: number) => (isFmc ? formatMoveCount(v, 'NONE', 2) : formatTime(Math.round(v), 'NONE', precision));
   const value = view.value === null ? '—' : !isFinite(view.value) ? 'DNF' : fmtVal(view.value);
-  const lines = [`ao${view.size}: ${value} (${evName})`, ''];
+  const label = view.size === 3 ? 'mo3' : `ao${view.size}`;
+  const lines = [`${label}: ${value} (${evName})`, ''];
   view.window.forEach((s, i) => {
     const dropped = view.droppedIndices.includes(i);
     const t = isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, precision);
