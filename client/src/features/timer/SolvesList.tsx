@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { formatTime, type SolveDTO } from '@scc/shared';
+import { formatTime, formatMoveCount, type SolveDTO } from '@scc/shared';
 import { Icon } from '../../components/Icon';
 import { makeAverageView, sortedSolveIndices, type AvgSize, type SolveSortBy } from './stats';
 import { copyText, formatSolveCopy } from './copy';
@@ -144,7 +144,12 @@ function SolveRow({
   selected: boolean;
   onToggleSelect: () => void;
 }) {
-  const fmtAvg = (v: number | null) => (v === null ? '—' : !isFinite(v) ? 'DNF' : formatTime(Math.round(v), 'NONE', precision));
+  const isFmc = event === '333fm';
+  const fmtTime = (t: number, p: typeof solve.penalty) => (isFmc ? formatMoveCount(t, p) : formatTime(t, p, precision));
+  // ao5/ao12 here are averages (WCA reports FMC means to 2 decimals), unlike
+  // fmtTime above which only ever formats one solve's own whole move count.
+  const fmtAvg = (v: number | null) =>
+    v === null ? '—' : !isFinite(v) ? 'DNF' : isFmc ? formatMoveCount(v, 'NONE', 2) : formatTime(Math.round(v), 'NONE', precision);
   const ao5 = makeAverageView(solves, index, 5);
   const ao12 = makeAverageView(solves, index, 12);
 
@@ -157,7 +162,7 @@ function SolveRow({
         <input type="checkbox" className="accent-accent" checked={selected} onChange={onToggleSelect} onClick={(e) => e.stopPropagation()} />
         <span className="text-muted text-xs text-right">{solves.length - index}.</span>
         <span className={clsx('font-mono font-semibold', solve.penalty === 'DNF' && 'text-red-400')}>
-          {formatTime(solve.time, solve.penalty, precision)}
+          {fmtTime(solve.time, solve.penalty)}
         </span>
         <span className="font-mono text-xs text-muted text-right">{ao5 ? fmtAvg(ao5.value) : '·'}</span>
         <span className="font-mono text-xs text-muted text-right">{ao12 ? fmtAvg(ao12.value) : '·'}</span>
@@ -173,7 +178,7 @@ function SolveRow({
         onClick={onOpenSolve}
         className={clsx('text-left font-mono font-semibold hover:text-accent', solve.penalty === 'DNF' && 'text-red-400')}
       >
-        {formatTime(solve.time, solve.penalty, precision)}
+        {fmtTime(solve.time, solve.penalty)}
       </button>
       <button
         onClick={() => ao5 && onOpenAverage(5, index)}

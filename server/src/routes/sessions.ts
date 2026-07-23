@@ -19,6 +19,10 @@ const solveSchema = z.object({
   time: z.number().int().nonnegative(),
   penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
   scramble: z.string().max(2000).default(''),
+  // FMC only — an 80-move solution written in this app's box notation
+  // (single letter + optional modifier, space-separated) comfortably fits
+  // well under this; the cap is just a sanity bound, not a real constraint.
+  solution: z.string().max(2000).optional(),
 });
 
 // Bulk import (e.g. from an external timer export) — allows a custom
@@ -124,6 +128,7 @@ router.post('/:id/solves', async (req, res, next) => {
         time: data.time,
         penalty: data.penalty,
         scramble: data.scramble,
+        solution: data.solution ?? null,
       },
     });
     res.status(201).json(toSolveDTO(solve));

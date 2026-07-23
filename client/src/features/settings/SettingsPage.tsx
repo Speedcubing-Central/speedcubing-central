@@ -120,7 +120,7 @@ export default function SettingsPage() {
           </div>
         </Field>
 
-        <Field label="Color theme" hint="A full palette, not just the accent — only visible in dark mode.">
+        <Field label="Color theme" hint="A full palette, not just the accent. Only visible in dark mode.">
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {THEME_PRESETS.map((p) => (
               <button

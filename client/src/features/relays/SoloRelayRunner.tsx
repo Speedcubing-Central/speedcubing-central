@@ -391,7 +391,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
           {/* Event tiles */}
           <div ref={tilesRef} className="shrink-0 flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="label mb-0">Events — click one to view its scramble</div>
+              <div className="label mb-0">Events (click one to view its scramble)</div>
               {engine.phase === 'running' && (
                 <button className="btn-ghost text-xs px-2 py-1 shrink-0" onClick={logSplit}>
                   Log split
@@ -465,7 +465,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
           <div className="card p-5 flex flex-col flex-1 min-h-0">
             <h3 className="font-bold text-lg mb-3 shrink-0">History</h3>
             {relayAttempts.length === 0 ? (
-              <p className="text-muted text-sm">No attempts yet — this is your first.</p>
+              <p className="text-muted text-sm">No attempts yet. This is your first.</p>
             ) : (
               <div className="overflow-y-auto flex-1 min-h-0 space-y-1.5 pr-1">
                 {relayAttempts.map((a) => (

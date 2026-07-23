@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { formatTime } from '@scc/shared';
+import { formatTime, formatMoveCount } from '@scc/shared';
 import type { PbHit } from './stats';
 
 // Kept comfortably under the 3s cap the feature calls for — confetti pieces
@@ -23,10 +23,12 @@ interface ConfettiPiece {
 export function PbCelebration({
   hits,
   precision,
+  isFmc,
   onDone,
 }: {
   hits: PbHit[];
   precision: 2 | 3;
+  isFmc?: boolean;
   onDone: () => void;
 }) {
   useEffect(() => {
@@ -78,7 +80,8 @@ export function PbCelebration({
               className="pb-text-enter font-mono font-extrabold text-2xl md:text-3xl text-white text-center whitespace-nowrap"
               style={{ animationDelay: `${i * 0.12}s` }}
             >
-              {formatTime(Math.round(h.value), 'NONE', precision)} <span className="text-accent">PB {h.label}</span>
+              {isFmc ? formatMoveCount(h.value, 'NONE', h.label === 'single' ? 0 : 2) : formatTime(Math.round(h.value), 'NONE', precision)}{' '}
+              <span className="text-accent">PB {h.label}</span>
             </div>
           ))}
         </div>

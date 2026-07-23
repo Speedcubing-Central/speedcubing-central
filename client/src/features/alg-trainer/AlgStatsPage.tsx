@@ -71,7 +71,7 @@ export default function AlgStatsPage() {
       />
 
       {rows.length === 0 ? (
-        <p className="text-muted text-sm text-center py-12">No attempts yet — start training to build up per-case stats.</p>
+        <p className="text-muted text-sm text-center py-12">No attempts yet. Start training to build up per-case stats.</p>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {rows.map(({ c, stats }) => {

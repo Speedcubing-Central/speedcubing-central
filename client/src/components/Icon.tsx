@@ -41,7 +41,8 @@ export type IconName =
   | 'panel'
   | 'copy'
   | 'pencil'
-  | 'upload';
+  | 'upload'
+  | 'info';
 
 const PATHS: Record<IconName, JSX.Element> = {
   home: (
@@ -224,6 +225,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <path d="M12 15.5V4M8 8l4-4 4 4" />
       <path d="M4.5 15v3A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" />
     </>
   ),
 };

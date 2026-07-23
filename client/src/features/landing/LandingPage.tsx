@@ -178,7 +178,7 @@ export default function LandingPage() {
                 Try the Timer
               </Link>
             </div>
-            <p className="text-xs text-muted mt-3">No account needed to start timing — sign up later to save your solves.</p>
+            <p className="text-xs text-muted mt-3">No account needed to start timing. Sign up later to save your solves.</p>
           </div>
 
           <div className="flex flex-col items-center gap-3">

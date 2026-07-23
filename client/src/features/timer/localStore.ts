@@ -60,7 +60,7 @@ export const guestStore = {
   listSolves(sessionId: string): SolveDTO[] {
     return read().solves[sessionId] ?? [];
   },
-  addSolve(sessionId: string, time: number, penalty: Penalty, scramble: string): SolveDTO {
+  addSolve(sessionId: string, time: number, penalty: Penalty, scramble: string, solution?: string): SolveDTO {
     const data = read();
     const solve: SolveDTO = {
       id: uid(),
@@ -69,6 +69,7 @@ export const guestStore = {
       time,
       penalty,
       scramble,
+      solution,
       createdAt: new Date().toISOString(),
     };
     (data.solves[sessionId] ??= []).unshift(solve);

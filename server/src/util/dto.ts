@@ -31,6 +31,7 @@ export function toSolveDTO(s: Solve): SolveDTO {
     time: s.time,
     penalty: s.penalty,
     scramble: s.scramble,
+    solution: s.solution ?? undefined,
     createdAt: s.createdAt.toISOString(),
   };
 }

@@ -18,15 +18,23 @@ export function EventSelector({
   value,
   onChange,
   className,
+  excludeIds,
 }: {
   value: string;
   onChange: (id: string) => void;
   className?: string;
+  // Lets a caller drop events that don't make sense for it (e.g. FMC's
+  // move-count/verification flow only exists on the Timer page — Relays'
+  // CustomRelayBuilder, the other caller of this component, excludes it via
+  // TIMER_ONLY_EVENT_IDS). Defaults to none excluded so existing callers
+  // that don't care keep seeing every event, same as before this prop existed.
+  excludeIds?: string[];
 }) {
+  const wcaEvents = excludeIds ? WCA_EVENTS.filter((e) => !excludeIds.includes(e.id)) : WCA_EVENTS;
   return (
     <select className={clsx('input max-w-[200px]', className)} value={value} onChange={(e) => onChange(e.target.value)}>
       <optgroup label="WCA Events">
-        {WCA_EVENTS.map((e) => (
+        {wcaEvents.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}
       </optgroup>

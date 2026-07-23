@@ -37,7 +37,31 @@ export const WCA_EVENTS: WcaEvent[] = [
   { id: 'clock', name: 'Clock', scrambowType: 'clock' },
   { id: 'skewb', name: 'Skewb', scrambowType: 'skewb' },
   { id: 'sq1', name: 'Square-1', scrambowType: 'sq1' },
+  // FMC scrambles are ordinary random-state 3x3 scrambles (cubing.js's own
+  // event registry maps '333fm' to the same puzzleID/scramble type as
+  // '333' — see server/src/scramble.ts's getScramble, which needs no
+  // special-casing here since this id is passed straight through to both
+  // cubing.js and scrambow). scrambowType reuses '333' for the same reason.
+  { id: '333fm', name: 'FMC', scrambowType: '333' },
 ];
+
+// FMC's input/scoring model (a 1-hour time limit, move-count results
+// instead of a stopwatch time, solution verification) only makes sense on
+// the Timer page — Battle, Relays, Reconstruction, and the Algorithm
+// Library all assume a normal timed single solve. Rather than hardcoding
+// '333fm' as a magic string in every feature's own event-list filter, this
+// is the one place that decision lives; each feature's picker excludes
+// whatever's listed here (see EventSelector's excludeIds, EventPicker's
+// explicit allowlist which already excludes it implicitly, and
+// ReconstructionPage's own filter).
+export const TIMER_ONLY_EVENT_IDS = ['333fm'];
+
+// No random-state 3x3 scramble is solvable in fewer moves than this — used
+// to floor BPA/target-move-count projections at a value that's actually
+// reachable, instead of the idealized-but-impossible 0 every time-based
+// event's equivalent projection uses (see client/src/features/timer/stats.ts's
+// `minValue` param).
+export const FMC_MIN_MOVES = 15;
 
 export const UNOFFICIAL_EVENTS: WcaEvent[] = [
   { id: 'kilominx', name: 'Kilominx', scrambowType: '' },
@@ -78,6 +102,10 @@ export interface SolveDTO {
   time: number; // milliseconds
   penalty: Penalty;
   scramble: string;
+  // FMC only: the move sequence that was actually submitted. Undefined for
+  // every other event, and for an FMC solve that was given up on or timed
+  // out before a solution was ever submitted.
+  solution?: string;
   createdAt: string;
 }
 
@@ -231,4 +259,27 @@ export function formatTime(
   const frac = decimals > 0 ? `.${String(rounded % 1000).padStart(3, '0').slice(0, decimals)}` : '';
   const base = minutes > 0 ? `${minutes}:${String(secs).padStart(2, '0')}${frac}` : `${secs}${frac}`;
   return penalty === 'PLUS2' ? `${base}+` : base;
+}
+
+// FMC results are a move count, not a time — SolveDTO's `time` field is
+// reused to hold that count (in whole moves, not milliseconds) rather than
+// adding a parallel field just for one event, since every other consumer
+// of a solve (averaging, DNF handling, PB detection) only cares that
+// "lower is better" and already works on a bare number regardless of unit.
+// This formatter is the one place that number gets displayed as what it
+// actually is — callers that already know they're rendering an FMC solve
+// should use this instead of formatTime. FMC never carries a PLUS2 penalty
+// (see the Timer page's FMC input flow, which only ever submits NONE or
+// DNF), but the check is here anyway since penalty is still a plain
+// Penalty value that could in principle be anything.
+//
+// `decimals` defaults to 0 (a single solve is always a whole move count —
+// every existing 2-arg call site keeps that behavior unchanged) but callers
+// formatting a mean/average (mo3, ao5, ...) pass 2, matching WCA's own
+// convention of reporting FMC means to 2 decimal places even though no
+// individual solve ever has a fractional move count.
+export function formatMoveCount(moves: number | null | undefined, penalty: Penalty = 'NONE', decimals = 0): string {
+  if (penalty === 'DNF') return 'DNF';
+  if (moves === null || moves === undefined || !isFinite(moves)) return 'DNF';
+  return decimals > 0 ? moves.toFixed(decimals) : String(Math.round(moves));
 }

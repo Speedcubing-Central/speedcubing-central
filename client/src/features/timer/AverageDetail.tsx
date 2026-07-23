@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
-import { formatTime } from '@scc/shared';
+import { formatTime, formatMoveCount } from '@scc/shared';
 import { useSettings } from '../../store/settings';
 import { formatScrambleForCopy } from '../../lib/scramble';
 import { copyText, formatAverageCopy } from './copy';
@@ -17,7 +17,15 @@ const OVERSCAN = 15;
 // here by opening a single large average instead of a large session.
 export function AverageDetail({ view, event, onClose }: { view: SolveAverage; event: string; onClose: () => void }) {
   const { solvePrecision } = useSettings();
-  const value = view.value === null ? '—' : !isFinite(view.value) ? 'DNF' : formatTime(Math.round(view.value), 'NONE', solvePrecision);
+  const isFmc = event === '333fm';
+  const value =
+    view.value === null
+      ? '—'
+      : !isFinite(view.value)
+        ? 'DNF'
+        : isFmc
+          ? formatMoveCount(view.value, 'NONE', 2)
+          : formatTime(Math.round(view.value), 'NONE', solvePrecision);
   const label = view.size === 3 ? 'mo3' : `ao${view.size}`;
   const droppedSet = useMemo(() => new Set(view.droppedIndices), [view.droppedIndices]);
 
@@ -61,7 +69,7 @@ export function AverageDetail({ view, event, onClose }: { view: SolveAverage; ev
   const visible = view.window.slice(start, end);
 
   return (
-    <Modal open onClose={onClose} title={`${label} — ${value}`} size="lg">
+    <Modal open onClose={onClose} title={`${label}: ${value}`} size="lg">
       <div className="flex justify-end mb-3">
         <button className="btn-primary" onClick={() => copyText(formatAverageCopy(view, event, solvePrecision), 'Average copied')}>
           <Icon name="copy" size={15} /> Copy average
@@ -81,7 +89,7 @@ export function AverageDetail({ view, event, onClose }: { view: SolveAverage; ev
                 <span className="text-muted text-xs">{index + 1}.</span>
                 <span className="font-mono">
                   {dropped ? '(' : ''}
-                  {formatTime(s.time, s.penalty, solvePrecision)}
+                  {isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, solvePrecision)}
                   {dropped ? ')' : ''}
                 </span>
                 <span className="font-mono text-xs text-muted break-words">{formatScrambleForCopy(s.scramble, event) || '—'}</span>

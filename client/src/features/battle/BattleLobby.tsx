@@ -249,11 +249,11 @@ export default function BattleLobby() {
 
         <div className="card p-4 text-xs text-muted space-y-1">
           <div className="font-medium text-sm text-gray-900 dark:text-gray-200 mb-2">How points work</div>
-          <div>🥇 1st place — <span className="text-gray-900 dark:text-white">+5 pts</span></div>
-          <div>🥈 2nd place — <span className="text-gray-900 dark:text-white">+3 pts</span></div>
-          <div>🥉 3rd place — <span className="text-gray-900 dark:text-white">+2 pts</span></div>
-          <div>4th+ place — <span className="text-gray-900 dark:text-white">+1 pt</span></div>
-          <div>DNF — <span className="text-gray-900 dark:text-white">+0 pts</span></div>
+          <div>🥇 1st place: <span className="text-gray-900 dark:text-white">+5 pts</span></div>
+          <div>🥈 2nd place: <span className="text-gray-900 dark:text-white">+3 pts</span></div>
+          <div>🥉 3rd place: <span className="text-gray-900 dark:text-white">+2 pts</span></div>
+          <div>4th+ place: <span className="text-gray-900 dark:text-white">+1 pt</span></div>
+          <div>DNF: <span className="text-gray-900 dark:text-white">+0 pts</span></div>
           <div className="pt-1 border-t border-gray-200 dark:border-border mt-2">Points are tracked for the lifetime of the room session.</div>
         </div>
       </div>

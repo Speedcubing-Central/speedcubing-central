@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { WCA_EVENTS, UNOFFICIAL_EVENTS, getEvent, type ReconstructionDTO } from '@scc/shared';
+import { WCA_EVENTS, UNOFFICIAL_EVENTS, TIMER_ONLY_EVENT_IDS, getEvent, type ReconstructionDTO } from '@scc/shared';
 import { PageHeader, EmptyState, Skeleton } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
@@ -32,7 +32,11 @@ function puzzleForEvent(eventId: string): string {
 // event, so there's nothing to reconstruct differently — point people at 333/
 // 444/555 instead of offering redundant options.
 const REDUNDANT_EVENT_IDS = ['333oh', '333bf', '444bf', '555bf'];
-const RECONSTRUCTION_WCA_EVENTS = WCA_EVENTS.filter((e) => !REDUNDANT_EVENT_IDS.includes(e.id));
+// FMC (move-count results, no timed playback) doesn't fit this page's
+// timed-solve-reconstruction model — it's Timer-only, see TIMER_ONLY_EVENT_IDS.
+const RECONSTRUCTION_WCA_EVENTS = WCA_EVENTS.filter(
+  (e) => !REDUNDANT_EVENT_IDS.includes(e.id) && !TIMER_ONLY_EVENT_IDS.includes(e.id),
+);
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 

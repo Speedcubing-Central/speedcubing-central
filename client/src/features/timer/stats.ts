@@ -177,11 +177,19 @@ function projected(solves: SolveDTO[], size: number, hypothetical: TimedSolve): 
   return r.value;
 }
 
-export function bpa(solves: SolveDTO[], size: number): number | null {
-  return projected(solves, size, { time: 0, penalty: 'NONE' });
+// `minValue` is the smallest a single result could ever legitimately be —
+// 0 for every time-based event (an idealized, never-actually-reachable
+// floor, which is fine for a hypothetical "best possible" projection), but
+// FMC has a real, non-zero floor: no scramble can be solved in fewer than
+// 15 moves, so a BPA/target projection that ignores that would suggest a
+// mathematically impossible next result instead of just an unrealistic one.
+export function bpa(solves: SolveDTO[], size: number, minValue = 0): number | null {
+  return projected(solves, size, { time: minValue, penalty: 'NONE' });
 }
 
 // Mo3: any DNF = DNF, so WPA is always DNF and therefore not useful to show.
+// No minValue param needed — the hypothetical here is a DNF, and DNF
+// short-circuits computeAvg to Infinity regardless of the `time` field.
 export function wpa(solves: SolveDTO[], size: number): number | null {
   if (size === 3) return null;
   return projected(solves, size, { time: 0, penalty: 'DNF' });
@@ -191,7 +199,7 @@ export function wpa(solves: SolveDTO[], size: number): number | null {
 // Returns null if no best yet or beating it is impossible even with a perfect solve.
 // `precomputedBest` lets buildStatsTable pass in a value it already computed
 // instead of this doing its own extra O(n·size) pass to find it again.
-export function targetForBest(solves: SolveDTO[], size: number, precomputedBest?: number | null): number | null {
+export function targetForBest(solves: SolveDTO[], size: number, precomputedBest?: number | null, minValue = 0): number | null {
   const best = precomputedBest !== undefined ? precomputedBest : bestAverage(solves, size);
   if (best === null || solves.length < size - 1) return null;
   const win = solves.slice(0, size - 1).map(toTimed);
@@ -200,8 +208,8 @@ export function targetForBest(solves: SolveDTO[], size: number, precomputedBest?
     if (r.isDNF) return Infinity;
     return r.value ?? Infinity;
   };
-  if (avgAt(0) >= best) return null; // can't PB even with a perfect solve
-  let lo = 0;
+  if (avgAt(minValue) >= best) return null; // can't PB even with the best legitimately-possible next result
+  let lo = minValue;
   let hi = Math.max(best * size, 600000);
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
@@ -221,7 +229,7 @@ export interface AvgRow {
   target: number | null;
 }
 
-export function buildStatsTable(solves: SolveDTO[]): AvgRow[] {
+export function buildStatsTable(solves: SolveDTO[], minValue = 0): AvgRow[] {
   return AVERAGE_SIZES.map((size) => {
     const { value: best, index: bestIndex } = bestAverageWithIndex(solves, size);
     return {
@@ -229,9 +237,9 @@ export function buildStatsTable(solves: SolveDTO[]): AvgRow[] {
       current: currentAverage(solves, size),
       best,
       bestIndex,
-      bpa: bpa(solves, size),
+      bpa: bpa(solves, size, minValue),
       wpa: wpa(solves, size),
-      target: targetForBest(solves, size, best),
+      target: targetForBest(solves, size, best, minValue),
     };
   });
 }

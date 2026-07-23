@@ -76,6 +76,6 @@ export const OLL_SET: AlgSet = {
   id: 'OLL',
   name: 'OLL',
   kind: 'oll',
-  description: 'Orientation of the Last Layer — all 57 cases.',
+  description: 'Orientation of the Last Layer: all 57 cases.',
   cases: ollCases,
 };

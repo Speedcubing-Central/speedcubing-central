@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { formatTime, getEvent, type Penalty } from '@scc/shared';
+import { formatTime, formatMoveCount, getEvent, type Penalty } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
@@ -12,6 +12,9 @@ import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
+import { useFmcEngine } from './useFmcEngine';
+import { FmcStartPanel } from './FmcStartPanel';
+import { FmcAttemptView } from './FmcAttemptView';
 import { useTimerData } from './useTimerData';
 import { useScrambler } from './useScrambler';
 import { singleStats, makeAverageView, detectNewPBs, type AvgSize, type PbHit, type SolveAverage, type SolveSortBy } from './stats';
@@ -105,7 +108,7 @@ export default function TimerPage() {
   }, []);
 
   const onComplete = useCallback(
-    async (timeMs: number, penalty: Penalty) => {
+    async (timeMs: number, penalty: Penalty, solution?: string) => {
       setSubmitting(true);
       try {
         let sessionId = data.currentId;
@@ -114,7 +117,7 @@ export default function TimerPage() {
           sessionId = created.id;
         }
         const prevSolves = data.solves;
-        const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId);
+        const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId, solution);
         scr.advance();
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
@@ -138,6 +141,16 @@ export default function TimerPage() {
   // otherwise be wide enough to hit during ordinary, non-rushed solving.
   const inputBlocked = data.solvesLoading || scr.loading || submitting;
 
+  // FMC is the only Timer mode that doesn't use useTimerEngine's
+  // hold-to-start stopwatch at all — it's driven by its own countdown
+  // instead (see useFmcEngine). While an attempt is running, TimerPage
+  // replaces its entire body with FmcAttemptView (see the return below)
+  // rather than swapping out just the timer card, so the scramble can stay
+  // hidden until Start is clicked and Stats/Solves/the controls bar are
+  // genuinely unmounted for the duration of the attempt, not just hidden.
+  const isFmc = event === '333fm';
+  const fmcEngine = useFmcEngine(scr.scramble, () => onComplete(0, 'DNF'));
+
   // Keeps the manual-entry input focused across everything that would
   // otherwise silently steal it: clicking "new scramble"/"previous
   // scramble" (scr.scramble changes) and submitting a time (inputBlocked
@@ -145,10 +158,10 @@ export default function TimerPage() {
   // in flight, and a *disabled* input can't hold focus, so it's lost the
   // moment that starts) — so typing the next time never needs a re-click.
   useEffect(() => {
-    if (entryMode === 'typing' && !inputBlocked && !anyModalOpen) {
+    if (!isFmc && entryMode === 'typing' && !inputBlocked && !anyModalOpen) {
       typedInputRef.current?.focus();
     }
-  }, [entryMode, inputBlocked, anyModalOpen, scr.scramble]);
+  }, [isFmc, entryMode, inputBlocked, anyModalOpen, scr.scramble]);
 
   const engine = useTimerEngine({
     inspection,
@@ -157,14 +170,17 @@ export default function TimerPage() {
     holdToStart,
     holdDuration,
     startSound,
-    enabled: entryMode === 'keyboard' && !anyModalOpen && !inputBlocked,
+    enabled: !isFmc && entryMode === 'keyboard' && !anyModalOpen && !inputBlocked,
     onComplete,
   });
 
   // Same idle/stopped-only gating the Enter-hotkey already uses for
   // scr.advance() (see the keydown handler below) — going back to a
   // previous scramble while a solve is armed/running would swap out the
-  // scramble out from under it.
+  // scramble out from under it. Only relevant to the non-FMC ScramblePanel
+  // below — FMC never renders it at all while an attempt is running (see
+  // the FmcAttemptView branch in the return below), so there's no
+  // "swap mid-attempt" scenario left to guard against here.
   const canGoBack = scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped');
 
   const stats = useMemo(() => singleStats(data.solves), [data.solves]);
@@ -278,7 +294,7 @@ export default function TimerPage() {
   const hintText = (() => {
     const p = engine.phase;
     if (p === 'idle') return 'Hold Space (or touch & hold), release to start';
-    if (p === 'inspecting') return 'Inspecting — hold Space to get ready';
+    if (p === 'inspecting') return 'Inspecting. Hold Space to get ready';
     if (p === 'holding') return 'Keep holding…';
     if (p === 'ready') return 'Release to start!';
     if (p === 'running') return 'Press Space / tap to stop';
@@ -300,6 +316,25 @@ export default function TimerPage() {
       ? 'text-gray-900 dark:text-gray-100'
       : 'text-red-400'
     : 'text-muted';
+
+  // While an FMC attempt is actually running, the entire page body swaps to
+  // FmcAttemptView instead of the normal controls-bar + two-column layout —
+  // a real unmount, not CSS-hiding, so Stats/Solves/session controls are
+  // genuinely gone for the duration (per the "only see the timer, scramble,
+  // and move boxes" requirement), not just visually tucked away. Every hook
+  // above (including useFmcEngine, the Enter-hotkey effect, useTimerEngine)
+  // still runs unconditionally regardless of which branch renders —
+  // precedent: RelayRoom.tsx's MyRelayPanel swap works the same way.
+  if (isFmc && fmcEngine.status === 'running') {
+    return (
+      <FmcAttemptView
+        scramble={scr.scramble}
+        remainingMs={fmcEngine.remainingMs}
+        finish={fmcEngine.finish}
+        onSubmit={onComplete}
+      />
+    );
+  }
 
   return (
     // On desktop the outer div fills exactly the content area height (100dvh minus the p-8 wrapper = 4rem).
@@ -344,88 +379,114 @@ export default function TimerPage() {
         {/* LEFT column */}
         <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
 
-          {/* Scramble panel — sized to its own content per event (a short
-              3x3 scramble and a 7-line megaminx one legitimately need
-              different amounts of room). Its diagram shrinks (never crops —
-              see useDiagramFit) to fit scrambleMaxHeight, a budget computed
-              above from the column height minus the timer card's protected
-              minimum, so the panel can never squeeze the timer away. On
-              mobile scrambleMaxHeight is undefined (the whole page scrolls
-              instead), so the diagram just renders at its preferred size. */}
-          <ScramblePanel
-            eventId={event}
-            scramble={scr.scramble}
-            loading={scr.loading}
-            onRefresh={() => scr.refresh()}
-            onGoBack={scr.goBack}
-            canGoBack={canGoBack}
-            maxHeight={scrambleMaxHeight}
-            className="overflow-hidden"
-          />
-
-          {/* Timer card — has a protected minimum height (md:min-h-[...])
-              so the scramble panel above can never squeeze it away; beyond
-              that minimum it grows to fill whatever's left (flex-1). The
-              digit display and whatever sits below it (hint text, or the
-              manual-entry input row) are both shrink-0 so neither ever gets
-              visually compressed to make room for the other; digitFontSize
-              is measured against the card's actual rendered height (see
-              useFittedFontSize) rather than guessed viewport-relative
-              units, so it can't overflow regardless of screen size.
-              overflow-y-auto stays as a last-resort fallback. */}
-          {entryMode === 'keyboard' ? (
-            <div
-              ref={timerCardRef}
-              className="card relative flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
-              style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
-              onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.press(); }}
-              onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.release(); }}
-            >
-              <div
-                className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
-                style={{ fontSize: digitFontSize }}
-              >
-                {display}
-              </div>
-              <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
-              {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
-            </div>
+          {isFmc ? (
+            // No scramble shown at all before Start — it should stay hidden
+            // until the attempt genuinely begins, same as a real WCA FMC
+            // round (see FmcStartPanel). Clicking Start flips fmcEngine's
+            // status to 'running', which is caught by the early return
+            // above and swaps to FmcAttemptView entirely.
+            <FmcStartPanel inputBlocked={inputBlocked} start={fmcEngine.start} />
           ) : (
-            <div
-              ref={timerCardRef}
-              className="card relative flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
-              style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
-            >
-              <div
-                className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
-                style={{ fontSize: digitFontSize }}
-              >
-                {entryDisplay}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <input
-                  ref={typedInputRef}
-                  className="input font-mono text-center text-xl w-40"
-                  placeholder="10.00"
-                  value={typed}
-                  onChange={(e) => setTyped(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addTyped()}
-                  disabled={inputBlocked}
-                  autoFocus
-                />
-                <button className="btn-primary" onClick={addTyped} disabled={inputBlocked}>Add solve</button>
-              </div>
-              {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
-            </div>
+            <>
+              {/* Scramble panel — sized to its own content per event (a short
+                  3x3 scramble and a 7-line megaminx one legitimately need
+                  different amounts of room). Its diagram shrinks (never crops —
+                  see useDiagramFit) to fit scrambleMaxHeight, a budget computed
+                  above from the column height minus the timer card's protected
+                  minimum, so the panel can never squeeze the timer away. On
+                  mobile scrambleMaxHeight is undefined (the whole page scrolls
+                  instead), so the diagram just renders at its preferred size. */}
+              <ScramblePanel
+                eventId={event}
+                scramble={scr.scramble}
+                loading={scr.loading}
+                onRefresh={() => scr.refresh()}
+                onGoBack={scr.goBack}
+                canGoBack={canGoBack}
+                maxHeight={scrambleMaxHeight}
+                className="overflow-hidden"
+              />
+
+              {/* Timer card — has a protected minimum height (md:min-h-[...])
+                  so the scramble panel above can never squeeze it away; beyond
+                  that minimum it grows to fill whatever's left (flex-1). The
+                  digit display and whatever sits below it (hint text, or the
+                  manual-entry input row) are both shrink-0 so neither ever gets
+                  visually compressed to make room for the other; digitFontSize
+                  is measured against the card's actual rendered height (see
+                  useFittedFontSize) rather than guessed viewport-relative
+                  units, so it can't overflow regardless of screen size.
+                  overflow-y-auto stays as a last-resort fallback. */}
+              {entryMode === 'keyboard' ? (
+                <div
+                  ref={timerCardRef}
+                  className="card relative flex-1 min-h-0 overflow-y-auto select-none touch-none flex flex-col items-center justify-center cursor-pointer"
+                  style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
+                  onTouchStart={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.press(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); if (!anyModalOpen && !inputBlocked) engine.release(); }}
+                >
+                  <div
+                    className={clsx('font-mono font-bold tabular-nums transition-colors leading-none w-full text-center px-8 shrink-0', colorClass)}
+                    style={{ fontSize: digitFontSize }}
+                  >
+                    {display}
+                  </div>
+                  <p className="text-muted text-sm mt-6 text-center px-4 shrink-0">{hintText}</p>
+                  {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
+                </div>
+              ) : (
+                <div
+                  ref={timerCardRef}
+                  className="card relative flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-6"
+                  style={{ minHeight: isDesktop ? TIMER_MIN_HEIGHT : undefined }}
+                >
+                  <div
+                    className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', entryColorClass)}
+                    style={{ fontSize: digitFontSize }}
+                  >
+                    {entryDisplay}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <input
+                      ref={typedInputRef}
+                      className="input font-mono text-center text-xl w-40"
+                      placeholder="10.00"
+                      value={typed}
+                      onChange={(e) => setTyped(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addTyped()}
+                      disabled={inputBlocked}
+                      autoFocus
+                    />
+                    <button className="btn-primary" onClick={addTyped} disabled={inputBlocked}>Add solve</button>
+                  </div>
+                  {inputBlocked && <TimerLoadingOverlay message={data.solvesLoading ? 'Loading solves…' : 'Scrambling…'} />}
+                </div>
+              )}
+            </>
           )}
 
-          {/* Last solve + penalty */}
+          {/* Last solve + penalty — FMC never carries a +2 (no time-based
+              penalty concept), but the OK/DNF toggle itself is always
+              available same as every other event: every FMC result now
+              comes from the same solution checker or an explicit give-up/
+              expiry, so there's no longer a "was this actually verified"
+              distinction to gate the toggle on. */}
           {newest && (
             <div ref={lastSolveRef} className="card p-4 shrink-0 flex items-center justify-between gap-3 flex-wrap">
               <span className="text-sm text-muted">
-                Last solve: <span className="font-mono text-gray-900 dark:text-gray-100">{formatTime(newest.time, newest.penalty, solvePrecision)}</span>
+                Last solve:{' '}
+                <span className="font-mono text-gray-900 dark:text-gray-100">
+                  {isFmc
+                    ? `${formatMoveCount(newest.time, newest.penalty)}${newest.penalty !== 'DNF' ? ' moves' : ''}`
+                    : formatTime(newest.time, newest.penalty, solvePrecision)}
+                </span>
               </span>
-              <PenaltyButtons penalty={newest.penalty} onChange={(p) => data.updatePenalty(newest.id, p)} size="sm" />
+              <PenaltyButtons
+                penalty={newest.penalty}
+                onChange={(p) => data.updatePenalty(newest.id, p)}
+                size="sm"
+                hidePlus2={isFmc}
+              />
             </div>
           )}
         </div>
@@ -441,7 +502,7 @@ export default function TimerPage() {
                 <span className="font-mono text-gray-900 dark:text-gray-100">{stats.count}</span> solves
               </div>
             </div>
-            <StatsTable solves={data.solves} onOpenSolve={(i) => setDetailIndex(i)} onOpenAverage={openAverage} />
+            <StatsTable solves={data.solves} event={event} onOpenSolve={(i) => setDetailIndex(i)} onOpenAverage={openAverage} />
           </div>
 
           {/* Solves list — fills remaining vertical space, scrolls internally */}
@@ -524,7 +585,7 @@ export default function TimerPage() {
         />
       )}
       {avgView && <AverageDetail view={avgView} event={event} onClose={() => setAvgView(null)} />}
-      {pbHits && <PbCelebration hits={pbHits} precision={solvePrecision} onDone={() => setPbHits(null)} />}
+      {pbHits && <PbCelebration hits={pbHits} precision={solvePrecision} isFmc={isFmc} onDone={() => setPbHits(null)} />}
     </div>
   );
 }

@@ -79,9 +79,13 @@ model Solve {
   id        String   @id @default(cuid())
   sessionId String
   userId    String
-  time      Int // milliseconds
+  time      Int // milliseconds (or, for FMC, a move count)
   penalty   Penalty  @default(NONE)
   scramble  String
+  // FMC only: the actual move sequence submitted, so a past attempt can be
+  // reviewed later — null for every other event, and for an FMC solve that
+  // was given up on or timed out before anything was submitted.
+  solution  String?
   createdAt DateTime @default(now())
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)

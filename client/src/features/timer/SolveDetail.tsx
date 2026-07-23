@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import clsx from 'clsx';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
 import { ScrambleImage } from '../../components/ScrambleImage';
 import { PenaltyButtons } from './PenaltyButtons';
-import { formatTime, type Penalty, type SolveDTO } from '@scc/shared';
+import { formatTime, formatMoveCount, type Penalty, type SolveDTO } from '@scc/shared';
 import { useSettings } from '../../store/settings';
 import { formatScrambleForCopy } from '../../lib/scramble';
 import { copyText, formatSolveCopy } from './copy';
@@ -20,6 +21,15 @@ function parseEditTime(raw: string): number | null {
     ms = parseFloat(s) * 1000;
   }
   return isNaN(ms) || ms <= 0 ? null : Math.round(ms);
+}
+
+// FMC's stored `time` is a move count, not milliseconds — editing it needs
+// a plain whole number, not the mm:ss.cc parsing every other event uses.
+function parseEditMoveCount(raw: string): number | null {
+  const s = raw.trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = parseInt(s, 10);
+  return n > 0 ? n : null;
 }
 
 export function SolveDetail({
@@ -44,23 +54,25 @@ export function SolveDetail({
   onOpenAverage: (view: SolveAverage) => void;
 }) {
   const { solvePrecision } = useSettings();
+  const isFmc = event === '333fm';
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [showSolution, setShowSolution] = useState(false);
 
   const solve = solves[index];
   if (!solve) return null;
 
   const total = solves.length;
   const averages = averagesForSolve(solves, index);
-  const editValid = parseEditTime(editValue) !== null;
+  const editValid = (isFmc ? parseEditMoveCount(editValue) : parseEditTime(editValue)) !== null;
 
   function startEdit() {
-    setEditValue(formatTime(solve.time, 'NONE', solvePrecision));
+    setEditValue(isFmc ? formatMoveCount(solve.time) : formatTime(solve.time, 'NONE', solvePrecision));
     setEditing(true);
   }
 
   function saveEdit() {
-    const parsed = parseEditTime(editValue);
+    const parsed = isFmc ? parseEditMoveCount(editValue) : parseEditTime(editValue);
     if (parsed === null) return;
     onUpdateTime!(solve.id, parsed);
     setEditing(false);
@@ -106,7 +118,10 @@ export function SolveDetail({
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2">
-            <div className="font-mono text-5xl font-bold">{formatTime(solve.time, solve.penalty, solvePrecision)}</div>
+            <div className="font-mono text-5xl font-bold">
+              {isFmc ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, solvePrecision)}
+              {isFmc && solve.penalty !== 'DNF' && <span className="text-lg font-normal text-muted ml-1">moves</span>}
+            </div>
             {onUpdateTime && (
               <button
                 onClick={startEdit}
@@ -118,11 +133,30 @@ export function SolveDetail({
             )}
           </div>
         )}
+        {/* FMC's plain move-count/DNF display above reads unambiguously on
+            its own, but a small explicit status pill removes any doubt at a
+            glance, matching how other pass/fail states are badged elsewhere
+            in the app (e.g. relay participant readiness). */}
+        {isFmc && !editing && (
+          <span
+            className={clsx(
+              'inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full',
+              solve.penalty === 'DNF' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400',
+            )}
+          >
+            {solve.penalty === 'DNF' ? 'DNF' : 'OK'}
+          </span>
+        )}
         <div className="text-xs text-muted mt-1">{new Date(solve.createdAt).toLocaleString()}</div>
       </div>
 
+      {/* FMC never gets a +2 (no time-based penalty concept), but the
+          OK/DNF toggle itself stays — every FMC result now comes from the
+          same solution checker or an explicit give-up/expiry, so there's no
+          "was this actually verified" distinction left to gate on the way
+          an earlier version of this feature needed to. */}
       <div className="flex justify-center mb-5">
-        <PenaltyButtons penalty={solve.penalty} onChange={(p) => onUpdatePenalty(solve.id, p)} />
+        <PenaltyButtons penalty={solve.penalty} onChange={(p) => onUpdatePenalty(solve.id, p)} hidePlus2={isFmc} />
       </div>
 
       <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-center mb-5">
@@ -145,6 +179,31 @@ export function SolveDetail({
         </div>
       </div>
 
+      {isFmc && (
+        <div className="mb-5">
+          <div className="label flex items-center justify-between">
+            Solution
+            {showSolution && solve.solution && (
+              <button
+                className="text-accent hover:underline inline-flex items-center gap-1"
+                onClick={() => copyText(solve.solution!, 'Solution copied')}
+              >
+                <Icon name="copy" size={12} /> copy
+              </button>
+            )}
+          </div>
+          {showSolution ? (
+            <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words whitespace-pre-wrap">
+              {solve.solution || 'No solution was recorded for this attempt (gave up or ran out of time).'}
+            </div>
+          ) : (
+            <button className="btn-ghost text-sm" onClick={() => setShowSolution(true)}>
+              View solution
+            </button>
+          )}
+        </div>
+      )}
+
       {averages.length > 0 && (
         <div className="mb-4">
           <div className="label">Averages at this solve</div>
@@ -157,7 +216,13 @@ export function SolveDetail({
               >
                 <span className="text-muted">{a.size === 3 ? 'mo3' : `ao${a.size}`}: </span>
                 <span className="font-mono">
-                  {a.value === null ? '—' : !isFinite(a.value) ? 'DNF' : formatTime(Math.round(a.value), 'NONE', solvePrecision)}
+                  {a.value === null
+                    ? '—'
+                    : !isFinite(a.value)
+                      ? 'DNF'
+                      : isFmc
+                        ? formatMoveCount(a.value, 'NONE', 2)
+                        : formatTime(Math.round(a.value), 'NONE', solvePrecision)}
                 </span>
               </button>
             ))}

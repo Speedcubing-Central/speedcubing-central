@@ -66,6 +66,6 @@ export const F2L_SET: AlgSet = {
   id: 'F2L',
   name: 'F2L',
   kind: 'f2l',
-  description: 'First Two Layers — all 41 standard pair-insertion cases.',
+  description: 'First Two Layers: all 41 standard pair-insertion cases.',
   cases: f2lCases,
 };

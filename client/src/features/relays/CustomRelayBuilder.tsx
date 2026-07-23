@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '@cubing/icons';
 import type { CustomRelayEventEntry, CustomRelayDTO } from '@scc/shared';
-import { expandToLegs, getEvent } from '@scc/shared';
+import { expandToLegs, getEvent, TIMER_ONLY_EVENT_IDS } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
@@ -92,7 +92,7 @@ export default function CustomRelayBuilder({
         onSaved?.(data);
       } else {
         const relay = guestRelayStore.saveCustomRelay(relayName, events);
-        toast.success('Saved locally — log in to get a shareable link');
+        toast.success('Saved locally. Log in to get a shareable link.');
         onSaved?.(relay);
       }
       handleClose();
@@ -114,7 +114,7 @@ export default function CustomRelayBuilder({
         <div>
           <label className="label mb-1 block">Add event</label>
           <div className="flex gap-2">
-            <EventSelector value={addEventId} onChange={setAddEventId} className="flex-1 max-w-none" />
+            <EventSelector value={addEventId} onChange={setAddEventId} className="flex-1 max-w-none" excludeIds={TIMER_ONLY_EVENT_IDS} />
             <button className="btn-primary px-4 flex items-center gap-1.5" onClick={addEvent}>
               <Icon name="plus" size={16} /> Add
             </button>

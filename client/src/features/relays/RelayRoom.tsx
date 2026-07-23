@@ -214,7 +214,7 @@ function MyRelayPanel({
             <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
               {me?.isDone
                 ? 'Waiting for everyone else to finish…'
-                : `Press Space (or tap) when you finish your events — ${doneCount}/${room.participants.length} done`}
+                : `Press Space (or tap) when you finish your events (${doneCount}/${room.participants.length} done)`}
             </p>
           </>
         ) : !scramblesReady ? (
@@ -222,7 +222,7 @@ function MyRelayPanel({
             <div className="h-10 w-10 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
             <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
               {genWaitingLong
-                ? "Still generating a couple of scrambles — retrying in the background, won't be much longer…"
+                ? "Still generating a couple of scrambles, retrying in the background. Won't be much longer…"
                 : 'Generating scrambles…'}
             </p>
           </>
@@ -236,15 +236,15 @@ function MyRelayPanel({
             </div>
             <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
               {holding.length === room.participants.length
-                ? 'Everyone is holding — let go to start!'
-                : 'Hold spacebar (or tap and hold) — starts the instant everyone is holding and the first person lets go'}
+                ? 'Everyone is holding. Let go to start!'
+                : 'Hold spacebar (or tap and hold). Starts the instant everyone is holding and the first person lets go.'}
             </p>
           </>
         )}
       </div>
 
       <div ref={tilesRef} className="shrink-0 flex flex-col gap-1.5">
-        <div className="label mb-0">Your Events — click one to view its scramble</div>
+        <div className="label mb-0">Your Events (click one to view its scramble)</div>
         <div className="flex flex-wrap gap-1.5">
           {myLegs.map((l, i) => (
             <button
@@ -547,7 +547,7 @@ export default function RelayRoom() {
                   participant boxes below are where "as big as possible"
                   actually matters. */}
               <div className="shrink-0">
-                <div className="label mb-2">Unassigned Events — drag onto a person</div>
+                <div className="label mb-2">Unassigned Events (drag onto a person)</div>
                 <DropZone
                   id={UNASSIGNED}
                   className="card p-4 grid content-start gap-3 overflow-y-auto"

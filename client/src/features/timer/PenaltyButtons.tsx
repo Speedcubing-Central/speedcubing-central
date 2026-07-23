@@ -6,10 +6,17 @@ export function PenaltyButtons({
   penalty,
   onChange,
   size = 'md',
+  hidePlus2,
 }: {
   penalty: Penalty;
   onChange: (p: Penalty) => void;
   size?: 'sm' | 'md';
+  // FMC has no time-based penalty concept — a result is either a move
+  // count (NONE) or a DNF, never "+2 moves". Used for FMC solves that were
+  // entered as a plain move count rather than a verified solution (see
+  // TimerPage's "Last solve" card) — a manual OK/DNF correction still makes
+  // sense there since nothing verified the result, it just can never be +2.
+  hidePlus2?: boolean;
 }) {
   const base = clsx(
     'font-semibold rounded-lg border transition-colors',
@@ -23,9 +30,11 @@ export function PenaltyButtons({
       <button className={opt('NONE', 'OK', 'border-green-500 bg-green-500/15 text-green-400')} onClick={() => onChange('NONE')}>
         OK
       </button>
-      <button className={opt('PLUS2', '+2', 'border-yellow-500 bg-yellow-500/15 text-yellow-400')} onClick={() => onChange('PLUS2')}>
-        +2
-      </button>
+      {!hidePlus2 && (
+        <button className={opt('PLUS2', '+2', 'border-yellow-500 bg-yellow-500/15 text-yellow-400')} onClick={() => onChange('PLUS2')}>
+          +2
+        </button>
+      )}
       <button className={opt('DNF', 'DNF', 'border-red-500 bg-red-500/15 text-red-400')} onClick={() => onChange('DNF')}>
         DNF
       </button>

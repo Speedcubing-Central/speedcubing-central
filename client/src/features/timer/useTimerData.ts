@@ -149,14 +149,14 @@ export function useTimerData(eventId: string) {
   );
 
   const addSolve = useCallback(
-    async (time: number, penalty: Penalty, scramble: string, sessionId?: string) => {
+    async (time: number, penalty: Penalty, scramble: string, sessionId?: string, solution?: string) => {
       const id = sessionId ?? currentId;
       if (!id) return;
       let solve: SolveDTO;
       if (isGuest) {
-        solve = guestStore.addSolve(id, time, penalty, scramble);
+        solve = guestStore.addSolve(id, time, penalty, scramble, solution);
       } else {
-        solve = (await api.post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, scramble })).data;
+        solve = (await api.post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, scramble, solution })).data;
       }
       setSolves((prev) => [solve, ...prev]);
       setSessions((prev) =>

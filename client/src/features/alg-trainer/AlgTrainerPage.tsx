@@ -396,7 +396,7 @@ function CaseModal({
         ) : allAlgs.filter((a) => a !== displayAlg).length > 0 ? (
           <div>
             <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-              Alternates{isAuthed ? ' — click to set as main' : ''}
+              Alternates{isAuthed ? ' (click to set as main)' : ''}
             </div>
             <div className="flex flex-col gap-2">
               {allAlgs.filter((a) => a !== displayAlg).map((a, i) => (
@@ -1079,7 +1079,7 @@ function TrainingLeftColumn({
         {/* Move reveal */}
         <div className="card p-4 w-full shrink-0">
           <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 flex items-center justify-between">
-            <span>Solution — <kbd className="kbd">←</kbd><kbd className="kbd">→</kbd> to reveal</span>
+            <span>Solution (<kbd className="kbd">←</kbd><kbd className="kbd">→</kbd> to reveal)</span>
             <span className="text-accent">{revealed}/{moves.length}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">

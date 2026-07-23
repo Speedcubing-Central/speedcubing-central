@@ -69,6 +69,6 @@ export const COLL_SET: AlgSet = {
   id: 'COLL',
   name: 'COLL',
   kind: 'coll',
-  description: 'Corners of the Last Layer — orient and permute corners in one step (edges oriented).',
+  description: 'Corners of the Last Layer: orient and permute corners in one step (edges already oriented).',
   cases: collCases,
 };

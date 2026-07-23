@@ -64,7 +64,7 @@ export function ImportCstimerModal({ open, onClose, data, event }: { open: boole
       if (parsed.length === 0) throw new Error('No importable solves found in this file.');
       setAllSessions(parsed);
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Couldn't read this file — is it a cstimer export?");
+      setParseError(e instanceof Error ? e.message : "Couldn't read this file. Is it a cstimer export?");
     }
   }
 
