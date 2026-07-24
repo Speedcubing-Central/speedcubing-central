@@ -6,10 +6,13 @@ import { ScrambleText } from '../../components/ScrambleText';
 // the size used whenever there's room for it.
 const PREFERRED_DIAGRAM = 250;
 const MIN_DIAGRAM = 90;
-// p-6 (24px top + 24px bottom) plus the one gap-4 between the diagram and
-// the text-and-bullets block below it — must stay in sync with the
-// classNames below, same convention as useDiagramFit's own FIXED_OVERHEAD.
-const FIXED_OVERHEAD = 48 + 16;
+// pt-3 (12px) + pb-6 (24px) — deliberately less padding above the diagram
+// than below the bullets, since the diagram already reads as having margin
+// of its own (its bounding box isn't fully filled by the drawn cube net) —
+// plus the one gap-4 between the diagram and the text-and-bullets block
+// below it. Must stay in sync with the classNames below, same convention
+// as useDiagramFit's own FIXED_OVERHEAD.
+const FIXED_OVERHEAD = 12 + 24 + 16;
 
 // FMC-only — deliberately not a reuse of the shared ScramblePanel. That
 // component anchors its content to the bottom (`justify-end`), which makes
@@ -53,15 +56,14 @@ export function FmcScramblePanel({ scramble }: { scramble: string }) {
     // short window) — MIN_DIAGRAM keeps the diagram legible rather than
     // shrinking it to nothing to force a fit, so on a genuinely cramped
     // viewport a small, harmless scrollbar is the correct outcome, not a bug.
-    <div ref={panelRef} className="card h-full p-6 flex flex-col items-center gap-4 overflow-y-auto">
+    <div ref={panelRef} className="card h-full pt-3 pb-6 px-6 flex flex-col items-center gap-4 overflow-y-auto">
       <ScrambleImage eventId="333fm" scramble={scramble} size={diagramSize} />
       <div ref={belowRef} className="w-full shrink-0">
         <div className="font-mono tracking-wide leading-snug w-full text-center text-2xl">
           <ScrambleText scramble={scramble} eventId="333fm" />
         </div>
-        <ul className="text-sm text-muted space-y-2 list-disc pl-5 w-full max-w-lg mx-auto mt-4">
+        <ul className="text-sm text-muted space-y-2 list-disc pl-5 w-full max-w-lg mx-auto mt-8">
           <li>You have 60 minutes to find and write a solution.</li>
-          <li>Write 1 move per bar. To delete a move, clearly blacken it.</li>
           <li>Your solution must not be directly derived from any part of the scrambling algorithm.</li>
           <li>Your solution must be at most 80 moves, including rotations.</li>
           <li>Your result will be counted in OBTM.</li>
