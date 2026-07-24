@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
@@ -32,6 +32,22 @@ function parseEditMoveCount(raw: string): number | null {
   return n > 0 ? n : null;
 }
 
+// The scramble diagram shrinks (never crops) to whatever's left once
+// everything else in the modal (time, penalty, solution, comment, averages)
+// has taken what it needs — same shrink-to-fit convention as
+// FmcScramblePanel's own diagram, so a deep session history (many average
+// brackets) or an expanded FMC solution/comment never forces the modal to
+// scroll, while an ordinary solve with little else to show still gets a
+// nice big diagram instead of one shrunk for a worst case that isn't this one.
+const PREFERRED_DIAGRAM = 220;
+const MIN_DIAGRAM = 90;
+// Modal's own header + its p-5 body padding + the outer backdrop's p-8
+// aren't measurable from here (Modal owns that DOM, not exposed via ref) —
+// measured empirically at ~153px combined; rounded up for a small safety
+// margin, since a little unused slack is harmless but an overflowing modal
+// isn't.
+const MODAL_CHROME = 160;
+
 export function SolveDetail({
   open,
   onClose,
@@ -62,13 +78,42 @@ export function SolveDetail({
   const [showSolution, setShowSolution] = useState(false);
   const [editingComment, setEditingComment] = useState(false);
   const [commentValue, setCommentValue] = useState('');
+  const [diagramSize, setDiagramSize] = useState(PREFERRED_DIAGRAM);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const gridRowRef = useRef<HTMLDivElement>(null);
+  const textColRef = useRef<HTMLDivElement>(null);
 
   const solve = solves[index];
-  if (!solve) return null;
-
   const total = solves.length;
-  const averages = averagesForSolve(solves, index);
+  const averages = solve ? averagesForSolve(solves, index) : [];
   const editValid = (isFmc ? parseEditMoveCount(editValue) : parseEditTime(editValue)) !== null;
+
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const row = gridRowRef.current;
+    const textCol = textColRef.current;
+    if (!body || !row || !textCol) return;
+    const recompute = () => {
+      const textColHeight = textCol.getBoundingClientRect().height;
+      const rowHeight = row.getBoundingClientRect().height;
+      const otherHeight = body.scrollHeight - rowHeight;
+      const budgetForRow = window.innerHeight - MODAL_CHROME - otherHeight;
+      const next = Math.round(
+        Math.max(MIN_DIAGRAM, Math.min(PREFERRED_DIAGRAM, Math.max(textColHeight, budgetForRow))),
+      );
+      setDiagramSize((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(body);
+    window.addEventListener('resize', recompute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', recompute);
+    };
+  }, [solve?.id, showSolution, editingComment, solve?.comment, averages.length]);
+
+  if (!solve) return null;
 
   function startEdit() {
     setEditValue(isFmc ? formatMoveCount(solve.time) : formatTime(solve.time, 'NONE', solvePrecision));
@@ -100,8 +145,9 @@ export function SolveDetail({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Solve #${total - index}`} size="md">
-      <div className="text-center mb-4">
+    <Modal open={open} onClose={onClose} title={`Solve #${total - index}`} size="lg">
+      <div ref={bodyRef}>
+      <div className="text-center mb-3">
         {editing ? (
           <div className="flex items-center justify-center gap-2">
             <input
@@ -132,7 +178,7 @@ export function SolveDetail({
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2">
-            <div className="font-mono text-5xl font-bold">
+            <div className="font-mono text-4xl font-bold">
               {isFmc ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, solvePrecision)}
               {isFmc && solve.penalty !== 'DNF' && <span className="text-lg font-normal text-muted ml-1">moves</span>}
             </div>
@@ -169,12 +215,12 @@ export function SolveDetail({
           same solution checker or an explicit give-up/expiry, so there's no
           "was this actually verified" distinction left to gate on the way
           an earlier version of this feature needed to. */}
-      <div className="flex justify-center mb-5">
+      <div className="flex justify-center mb-4">
         <PenaltyButtons penalty={solve.penalty} onChange={(p) => onUpdatePenalty(solve.id, p)} hidePlus2={isFmc} />
       </div>
 
-      <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-center mb-5">
-        <div>
+      <div ref={gridRowRef} className="grid sm:grid-cols-[1fr_auto] gap-4 items-center mb-4">
+        <div ref={textColRef}>
           <div className="label flex items-center justify-between">
             Scramble
             <button
@@ -189,12 +235,12 @@ export function SolveDetail({
           </div>
         </div>
         <div className="justify-self-center">
-          <ScrambleImage eventId={event} scramble={solve.scramble} />
+          <ScrambleImage eventId={event} scramble={solve.scramble} size={diagramSize} />
         </div>
       </div>
 
       {isFmc && (
-        <div className="mb-5">
+        <div className="mb-4">
           <div className="label flex items-center justify-between">
             Solution
             {showSolution && solve.solution && (
@@ -207,7 +253,7 @@ export function SolveDetail({
             )}
           </div>
           {showSolution ? (
-            <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words whitespace-pre-wrap">
+            <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-2.5 break-words whitespace-pre-wrap">
               {solve.solution || 'No solution was recorded for this attempt (gave up or ran out of time).'}
             </div>
           ) : (
@@ -218,12 +264,12 @@ export function SolveDetail({
         </div>
       )}
 
-      <div className="mb-5">
+      <div className="mb-4">
         {editingComment ? (
           <div>
             <div className="label">Comment</div>
             <textarea
-              className="input font-mono text-sm w-full min-h-[80px] resize-none"
+              className="input font-mono text-sm w-full min-h-[60px] resize-none"
               value={commentValue}
               onChange={(e) => setCommentValue(e.target.value)}
               onKeyDown={(e) => {
@@ -249,29 +295,28 @@ export function SolveDetail({
               </button>
             </div>
           </div>
-        ) : (
+        ) : solve.comment ? (
           <div>
             <div className="label flex items-center justify-between">
               Comment
-              {solve.comment && (
-                <button
-                  className="text-accent hover:underline inline-flex items-center gap-1"
-                  onClick={startEditComment}
-                >
-                  <Icon name="pencil" size={12} /> edit
-                </button>
-              )}
-            </div>
-            {solve.comment ? (
-              <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words whitespace-pre-wrap">
-                {solve.comment}
-              </div>
-            ) : (
-              <button className="btn-ghost text-sm" onClick={startEditComment}>
-                Add comment
+              <button
+                className="text-accent hover:underline inline-flex items-center gap-1"
+                onClick={startEditComment}
+              >
+                <Icon name="pencil" size={12} /> edit
               </button>
-            )}
+            </div>
+            <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-2.5 break-words whitespace-pre-wrap">
+              {solve.comment}
+            </div>
           </div>
+        ) : (
+          <button
+            className="text-muted hover:text-accent transition-colors inline-flex items-center gap-1 text-sm"
+            onClick={startEditComment}
+          >
+            <Icon name="pencil" size={12} /> Add comment
+          </button>
         )}
       </div>
 
@@ -283,7 +328,7 @@ export function SolveDetail({
               <button
                 key={a.size}
                 onClick={() => onOpenAverage(a)}
-                className="rounded-lg border border-gray-200 dark:border-border px-3 py-1.5 text-sm hover:border-accent"
+                className="rounded-lg border border-gray-200 dark:border-border px-3 py-0.5 text-sm hover:border-accent"
               >
                 <span className="text-muted">{a.size === 3 ? 'mo3' : `ao${a.size}`}: </span>
                 <span className="font-mono">
@@ -301,13 +346,14 @@ export function SolveDetail({
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-gray-200 dark:border-border pt-3">
+      <div className="flex items-center justify-between border-t border-gray-200 dark:border-border pt-2">
         <button className="btn-ghost" onClick={() => copyText(formatSolveCopy(solve, event, solvePrecision), 'Solve copied')}>
           <Icon name="copy" size={15} /> Copy solve
         </button>
         <button className="btn-ghost text-red-400 hover:text-red-300" onClick={del}>
           <Icon name="trash" size={15} /> Delete solve
         </button>
+      </div>
       </div>
     </Modal>
   );
