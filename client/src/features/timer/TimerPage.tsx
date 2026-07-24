@@ -580,6 +580,7 @@ export default function TimerPage() {
           event={event}
           onUpdatePenalty={data.updatePenalty}
           onUpdateTime={data.updateTime}
+          onUpdateComment={data.updateComment}
           onDelete={data.deleteSolve}
           onOpenAverage={(v) => setAvgView(v)}
         />

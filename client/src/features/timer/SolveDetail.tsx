@@ -40,6 +40,7 @@ export function SolveDetail({
   event,
   onUpdatePenalty,
   onUpdateTime,
+  onUpdateComment,
   onDelete,
   onOpenAverage,
 }: {
@@ -50,6 +51,7 @@ export function SolveDetail({
   event: string;
   onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
   onUpdateTime?: (solveId: string, time: number) => void;
+  onUpdateComment: (solveId: string, comment: string) => void;
   onDelete: (solveId: string) => void;
   onOpenAverage: (view: SolveAverage) => void;
 }) {
@@ -58,6 +60,8 @@ export function SolveDetail({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [showSolution, setShowSolution] = useState(false);
+  const [editingComment, setEditingComment] = useState(false);
+  const [commentValue, setCommentValue] = useState('');
 
   const solve = solves[index];
   if (!solve) return null;
@@ -76,6 +80,16 @@ export function SolveDetail({
     if (parsed === null) return;
     onUpdateTime!(solve.id, parsed);
     setEditing(false);
+  }
+
+  function startEditComment() {
+    setCommentValue(solve.comment ?? '');
+    setEditingComment(true);
+  }
+
+  function saveComment() {
+    onUpdateComment(solve.id, commentValue);
+    setEditingComment(false);
   }
 
   function del() {
@@ -203,6 +217,63 @@ export function SolveDetail({
           )}
         </div>
       )}
+
+      <div className="mb-5">
+        {editingComment ? (
+          <div>
+            <div className="label">Comment</div>
+            <textarea
+              className="input font-mono text-sm w-full min-h-[80px] resize-none"
+              value={commentValue}
+              onChange={(e) => setCommentValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setEditingComment(false);
+              }}
+              maxLength={2000}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                onClick={saveComment}
+                className="text-green-500 hover:text-green-400 transition-colors"
+                title="Save"
+              >
+                <Icon name="check" size={18} />
+              </button>
+              <button
+                onClick={() => setEditingComment(false)}
+                className="text-muted hover:text-primary transition-colors"
+                title="Cancel"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="label flex items-center justify-between">
+              Comment
+              {solve.comment && (
+                <button
+                  className="text-accent hover:underline inline-flex items-center gap-1"
+                  onClick={startEditComment}
+                >
+                  <Icon name="pencil" size={12} /> edit
+                </button>
+              )}
+            </div>
+            {solve.comment ? (
+              <div className="font-mono text-sm bg-gray-50 dark:bg-bg border border-gray-200 dark:border-border rounded-lg p-3 break-words whitespace-pre-wrap">
+                {solve.comment}
+              </div>
+            ) : (
+              <button className="btn-ghost text-sm" onClick={startEditComment}>
+                Add comment
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {averages.length > 0 && (
         <div className="mb-4">

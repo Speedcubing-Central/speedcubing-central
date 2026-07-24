@@ -32,6 +32,7 @@ export function toSolveDTO(s: Solve): SolveDTO {
     penalty: s.penalty,
     scramble: s.scramble,
     solution: s.solution ?? undefined,
+    comment: s.comment ?? undefined,
     createdAt: s.createdAt.toISOString(),
   };
 }

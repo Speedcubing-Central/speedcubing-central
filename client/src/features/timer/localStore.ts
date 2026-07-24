@@ -90,6 +90,12 @@ export const guestStore = {
     if (solve) solve.time = time;
     write(data);
   },
+  updateComment(sessionId: string, solveId: string, comment: string) {
+    const data = read();
+    const solve = data.solves[sessionId]?.find((x) => x.id === solveId);
+    if (solve) solve.comment = comment.trim() || undefined;
+    write(data);
+  },
   // Bulk insert (e.g. an import) — unlike addSolve, entries may predate or
   // postdate existing solves, so the merged list is re-sorted by actual
   // timestamp rather than assumed to already be newest-first.

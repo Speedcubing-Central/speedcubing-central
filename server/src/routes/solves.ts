@@ -10,11 +10,14 @@ router.use(requireAuth);
 const patchSchema = z.object({
   penalty: z.enum(['NONE', 'PLUS2', 'DNF']).optional(),
   time: z.number().int().positive().optional(),
+  // A blank/whitespace-only comment clears it back to no comment at all
+  // (stored as null) rather than persisting an empty string.
+  comment: z.string().max(2000).optional(),
 });
 
 const bulkDeleteSchema = z.object({ ids: z.array(z.string()).min(1).max(2000) });
 
-// PATCH /api/solves/:id — update penalty and/or time
+// PATCH /api/solves/:id — update penalty, time, and/or comment
 router.patch('/:id', async (req, res, next) => {
   try {
     const solve = await prisma.solve.findUnique({ where: { id: req.params.id } });
@@ -22,8 +25,11 @@ router.patch('/:id', async (req, res, next) => {
       res.status(404).json({ error: 'Solve not found' });
       return;
     }
-    const patch = patchSchema.parse(req.body);
-    const updated = await prisma.solve.update({ where: { id: solve.id }, data: patch });
+    const { comment, ...rest } = patchSchema.parse(req.body);
+    const updated = await prisma.solve.update({
+      where: { id: solve.id },
+      data: { ...rest, ...(comment !== undefined ? { comment: comment.trim() || null } : {}) },
+    });
     res.json(toSolveDTO(updated));
   } catch (e) {
     next(e);

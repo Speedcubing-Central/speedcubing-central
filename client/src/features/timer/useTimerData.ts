@@ -188,6 +188,17 @@ export function useTimerData(eventId: string) {
     [currentId, isGuest],
   );
 
+  const updateComment = useCallback(
+    async (solveId: string, comment: string) => {
+      if (!currentId) return;
+      if (isGuest) guestStore.updateComment(currentId, solveId, comment);
+      else await api.patch(`/solves/${solveId}`, { comment });
+      const trimmed = comment.trim() || undefined;
+      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, comment: trimmed } : s)));
+    },
+    [currentId, isGuest],
+  );
+
   const deleteSolve = useCallback(
     async (solveId: string) => {
       if (!currentId) return;
@@ -266,6 +277,7 @@ export function useTimerData(eventId: string) {
     addSolve,
     updatePenalty,
     updateTime,
+    updateComment,
     deleteSolve,
     deleteSolves,
     importSolves,

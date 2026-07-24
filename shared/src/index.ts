@@ -106,6 +106,9 @@ export interface SolveDTO {
   // every other event, and for an FMC solve that was given up on or timed
   // out before a solution was ever submitted.
   solution?: string;
+  // Free-text note a user can attach after the fact, any event. Undefined
+  // until they add one.
+  comment?: string;
   createdAt: string;
 }
 
