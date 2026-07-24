@@ -157,35 +157,56 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 // here is exhausted).
 const SCRAMBLE_RETRY_ROUNDS = 3;
 const SCRAMBLE_RETRY_DELAY_MS = 2_000;
+// Guards against a real race: relay_toggle_ready calls this on every toggle
+// (see below), and two participants readying up within moments of each
+// other both independently observe "everyone's ready now" via their own
+// fetchRoom — without this lock, both would kick off a full, unconditional
+// regeneration of every leg. Since getScramble is genuinely slow (a cold
+// WASM worker can take a couple of seconds — see scramble.ts), the two runs
+// don't fail fast or short-circuit against each other; they race to
+// completion and each writes+broadcasts its own results. The first run's
+// scrambles show up, then the second run's *different* scrambles land a few
+// seconds later and silently replace them — the exact bug reported ("we saw
+// the scrambles, then they changed a few seconds later"). A call arriving
+// while a run for this code is already in flight is a no-op: that run
+// already covers the same "everyone ready" condition, so there's nothing
+// left for a second one to do.
+const generatingRooms = new Set<string>();
 async function generateScramblesIfReady(code: string, onProgress?: () => Promise<void>): Promise<void> {
-  const room = await fetchRoom(code);
-  if (!room || room.legs.length === 0) return;
-  if (!room.legs.every((l) => l.assignedToId) || !room.participants.every((p) => p.isReady)) return;
+  if (generatingRooms.has(code)) return;
+  generatingRooms.add(code);
+  try {
+    const room = await fetchRoom(code);
+    if (!room || room.legs.length === 0) return;
+    if (!room.legs.every((l) => l.assignedToId) || !room.participants.every((p) => p.isReady)) return;
 
-  let pending = room.legs;
-  for (let round = 1; round <= SCRAMBLE_RETRY_ROUNDS && pending.length > 0; round++) {
-    const results = await Promise.all(pending.map(async (l) => ({ leg: l, scramble: await getScramble(l.eventId) })));
-    const succeeded = results.filter((r) => r.scramble);
-    if (succeeded.length > 0) {
-      await prisma.$transaction(
-        succeeded.map((r) => prisma.relayRoomLeg.update({ where: { id: r.leg.id }, data: { scramble: r.scramble } })),
+    let pending = room.legs;
+    for (let round = 1; round <= SCRAMBLE_RETRY_ROUNDS && pending.length > 0; round++) {
+      const results = await Promise.all(pending.map(async (l) => ({ leg: l, scramble: await getScramble(l.eventId) })));
+      const succeeded = results.filter((r) => r.scramble);
+      if (succeeded.length > 0) {
+        await prisma.$transaction(
+          succeeded.map((r) => prisma.relayRoomLeg.update({ where: { id: r.leg.id }, data: { scramble: r.scramble } })),
+        );
+        await onProgress?.();
+      }
+      pending = results.filter((r) => !r.scramble).map((r) => r.leg);
+      if (pending.length > 0 && round < SCRAMBLE_RETRY_ROUNDS) {
+        console.warn('[relaySocket] retrying scramble generation for', code, '—', pending.map((l) => l.eventId).join(', '), `(round ${round + 1}/${SCRAMBLE_RETRY_ROUNDS})`);
+        await new Promise((r) => setTimeout(r, SCRAMBLE_RETRY_DELAY_MS));
+      }
+    }
+    if (pending.length > 0) {
+      console.error(
+        '[relaySocket] gave up generating scrambles for',
+        code,
+        '—',
+        pending.map((l) => l.eventId).join(', '),
+        `after ${SCRAMBLE_RETRY_ROUNDS} rounds; will retry on the next ready-toggle or "run again"`,
       );
-      await onProgress?.();
     }
-    pending = results.filter((r) => !r.scramble).map((r) => r.leg);
-    if (pending.length > 0 && round < SCRAMBLE_RETRY_ROUNDS) {
-      console.warn('[relaySocket] retrying scramble generation for', code, '—', pending.map((l) => l.eventId).join(', '), `(round ${round + 1}/${SCRAMBLE_RETRY_ROUNDS})`);
-      await new Promise((r) => setTimeout(r, SCRAMBLE_RETRY_DELAY_MS));
-    }
-  }
-  if (pending.length > 0) {
-    console.error(
-      '[relaySocket] gave up generating scrambles for',
-      code,
-      '—',
-      pending.map((l) => l.eventId).join(', '),
-      `after ${SCRAMBLE_RETRY_ROUNDS} rounds; will retry on the next ready-toggle or "run again"`,
-    );
+  } finally {
+    generatingRooms.delete(code);
   }
 }
 
