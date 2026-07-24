@@ -31,6 +31,13 @@ function getKPuzzle(): Promise<KPuzzle> {
 // wide-move variant) — confirmed directly against cubing.js's Alg parser.
 const ROTATION_FAMILIES = new Set(['x', 'y', 'z']);
 
+// WCA Regulation E2d1: a solution over 80 moves is disqualified outright,
+// even if it would otherwise have solved the cube — checked separately
+// from (and before) the actual solved-state check below. Unlike the scored
+// OBTM count, this cap is measured in Execution Turn Metric, which DOES
+// count rotations (they're free for scoring, but not for the length cap).
+const MAX_ETM_MOVES = 80;
+
 export interface FmcVerifyResult {
   ok: boolean;
   // Always the real scored-move count when parsing/application succeeded,
@@ -52,8 +59,18 @@ export async function verifyFmcSolution(scramble: string, solutionText: string):
     return { ok: false, moveCount: 0, error: e instanceof Error ? e.message : 'Could not parse that solution' };
   }
 
-  const moveCount = [...solutionAlg.experimentalLeafMoves()].filter((m) => !ROTATION_FAMILIES.has(m.family)).length;
+  const leafMoves = [...solutionAlg.experimentalLeafMoves()];
+  const moveCount = leafMoves.filter((m) => !ROTATION_FAMILIES.has(m.family)).length;
   if (moveCount === 0) return { ok: false, moveCount: 0, error: 'Solution has no scoring moves' };
+
+  const etmCount = leafMoves.length;
+  if (etmCount > MAX_ETM_MOVES) {
+    return {
+      ok: false,
+      moveCount,
+      error: `That solution is ${etmCount} moves including rotations, over the ${MAX_ETM_MOVES}-move limit.`,
+    };
+  }
 
   const kpuzzle = await getKPuzzle();
   let solved: boolean;

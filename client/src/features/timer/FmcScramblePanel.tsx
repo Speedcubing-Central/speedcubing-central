@@ -63,7 +63,7 @@ export function FmcScramblePanel({ scramble }: { scramble: string }) {
           <ScrambleText scramble={scramble} eventId="333fm" />
         </div>
         <ul className="text-sm text-muted space-y-2 list-disc pl-5 w-full max-w-lg mx-auto mt-8">
-          <li>You have 60 minutes to find and write a solution.</li>
+          <li>You have 60 minutes to find and type a solution.</li>
           <li>Your solution must not be directly derived from any part of the scrambling algorithm.</li>
           <li>Your solution must be at most 80 moves, including rotations.</li>
           <li>Your result will be counted in OBTM.</li>
