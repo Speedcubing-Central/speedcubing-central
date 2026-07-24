@@ -15,7 +15,6 @@ import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
 import { useTimerKeybinds } from './useTimerKeybinds';
 import { KeybindsHelp } from './KeybindsHelp';
 import { useFmcEngine } from './useFmcEngine';
-import { IS_BETA_SITE } from '../../lib/betaSite';
 import { FmcStartPanel } from './FmcStartPanel';
 import { FmcAttemptView } from './FmcAttemptView';
 import { useTimerData } from './useTimerData';
@@ -287,12 +286,8 @@ export default function TimerPage() {
     return () => document.removeEventListener('keydown', handler);
   }, [entryMode, anyModalOpen, inputBlocked, engine.phase, scr.loading, scr.advance, addTyped]);
 
-  // Not on the beta site — see IS_BETA_SITE's own doc comment; this keeps
-  // beta focused on whatever it's actually testing rather than picking up
-  // every unrelated feature that happens to land in the same codebase.
   useTimerKeybinds({
     enabled:
-      !IS_BETA_SITE &&
       !anyModalOpen &&
       !inputBlocked &&
       (engine.phase === 'idle' || engine.phase === 'stopped'),
@@ -382,11 +377,9 @@ export default function TimerPage() {
         <button className={clsx(tool, 'px-2.5')} onClick={() => setShowSettings(true)} title="Timer Settings">
           <Icon name="gear" size={16} />
         </button>
-        {!IS_BETA_SITE && (
-          <button className={clsx(tool, 'px-2.5')} onClick={() => setShowKeybindsHelp(true)} title="Keyboard shortcuts">
-            <Icon name="keyboard" size={16} />
-          </button>
-        )}
+        <button className={clsx(tool, 'px-2.5')} onClick={() => setShowKeybindsHelp(true)} title="Keyboard shortcuts">
+          <Icon name="keyboard" size={16} />
+        </button>
         <button className={clsx(tool, 'ml-auto')} onClick={toggleFullscreen} title="Fullscreen">
           <Icon name={isFullscreen ? 'x' : 'plus'} size={16} />
           {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
