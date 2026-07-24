@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import '@cubing/icons';
-import { RELAY_PRESETS, expandToLegs, type CustomRelayDTO, type RelayAttemptDTO } from '@scc/shared';
+import { RELAY_PRESETS, expandToLegs, type CustomRelayDTO } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toast';
 import { api, apiError } from '../../lib/api';
 import { eventIconClass } from '../../lib/eventIcons';
 import { Icon } from '../../components/Icon';
 import CustomRelayBuilder from './CustomRelayBuilder';
-import { RelayAttemptRow } from './RelayAttemptRow';
 import { guestRelayStore } from './relayLocalStore';
 
 function EventIconRow({ events }: { events: string[] }) {
@@ -100,11 +99,6 @@ export default function RelaysPage() {
     queryFn: () => (user ? api.get('/relays/custom').then((r) => r.data) : Promise.resolve(guestRelayStore.listCustomRelays())),
   });
 
-  const { data: attempts = [] } = useQuery<RelayAttemptDTO[]>({
-    queryKey: ['relays-attempts'],
-    queryFn: () => (user ? api.get('/relays/attempts').then((r) => r.data) : Promise.resolve(guestRelayStore.listAttempts())),
-  });
-
   function runPreset(presetId: string) {
     const preset = RELAY_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
@@ -139,34 +133,6 @@ export default function RelaysPage() {
       () => toast.success('Share link copied'),
       () => toast.error('Failed to copy link'),
     );
-  }
-
-  async function updateAttempt(attempt: RelayAttemptDTO, totalTimeMs: number) {
-    if (user) {
-      try {
-        await api.patch(`/relays/attempts/${attempt.id}`, { totalTimeMs });
-      } catch (e) {
-        toast.error(apiError(e, 'Failed to update attempt'));
-        return;
-      }
-    } else {
-      guestRelayStore.updateAttempt(attempt.id, totalTimeMs);
-    }
-    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
-  }
-
-  async function deleteAttempt(attempt: RelayAttemptDTO) {
-    if (user) {
-      try {
-        await api.delete(`/relays/attempts/${attempt.id}`);
-      } catch (e) {
-        toast.error(apiError(e, 'Failed to delete attempt'));
-        return;
-      }
-    } else {
-      guestRelayStore.deleteAttempt(attempt.id);
-    }
-    queryClient.invalidateQueries({ queryKey: ['relays-attempts'] });
   }
 
   const quickPresets = RELAY_PRESETS.filter((p) => p.group === 'quick');
@@ -218,27 +184,6 @@ export default function RelaysPage() {
                 onRun={() => runCustom(r)}
                 onShare={() => copyShareLink(r)}
                 onDelete={() => deleteCustom(r)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {attempts.length > 0 && (
-        <div>
-          <div className="label mb-3">Recent Attempts</div>
-          <div className="space-y-1.5">
-            {attempts.slice(0, 10).map((a) => (
-              <RelayAttemptRow
-                key={a.id}
-                totalTimeMs={a.totalTimeMs}
-                leading={
-                  <span>
-                    {a.relayName} <span className="text-muted">· {a.legs.length} events</span>
-                  </span>
-                }
-                onSave={(newTimeMs) => updateAttempt(a, newTimeMs)}
-                onDelete={() => deleteAttempt(a)}
               />
             ))}
           </div>
