@@ -33,6 +33,9 @@ export const env = {
   WCA_REDIRECT_URI: process.env.WCA_REDIRECT_URI ?? 'http://localhost:3001/api/auth/wca/callback',
   FRONTEND_URL: process.env.FRONTEND_URL ?? 'http://localhost:5173',
   REDIS_URL: process.env.REDIS_URL ?? '',
+  // True only on the beta-hosted deployment (beta.speedcubingcentral.com) —
+  // see server/src/auth/betaGate.ts and CLAUDE.md's "Beta site" note.
+  BETA_SITE: process.env.BETA_SITE === 'true',
   WCA_BASE: 'https://www.worldcubeassociation.org',
   WCA_API_BASE: 'https://www.worldcubeassociation.org/api/v0',
 };

@@ -46,6 +46,12 @@ model User {
   // tokens for this user — a refresh token's embedded tokenVersion must
   // match this value or it's rejected. See server/src/routes/auth.ts.
   tokenVersion Int      @default(0)
+  // Grants access to the beta deployment (beta.speedcubingcentral.com) —
+  // enforced by server/src/auth/betaGate.ts whenever that deployment's
+  // BETA_SITE env var is set. Toggled manually per-account (e.g. via
+  // `npm run prisma:studio`) — there's no admin UI for this, matching the
+  // "no admin role" convention below.
+  betaAccess   Boolean  @default(false)
 
   sessions      Session[]
   solves        Solve[]

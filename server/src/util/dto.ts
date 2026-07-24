@@ -19,6 +19,7 @@ export function toPublicUser(u: User): PublicUser {
     country: u.country,
     avatarUrl: u.avatarUrl,
     role: u.role,
+    betaAccess: u.betaAccess,
     createdAt: u.createdAt.toISOString(),
   };
 }

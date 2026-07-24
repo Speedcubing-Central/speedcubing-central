@@ -125,13 +125,26 @@ export function attachSocket(server: HttpServer): IOServer {
   // Vite proxy, prod via the single server). An invalid/missing/expired
   // token just means "not logged in" — guests must still be allowed to
   // connect and join rooms, so this never blocks the handshake.
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = readCookie(socket.request.headers.cookie, 'access_token');
     if (token) {
       try {
         socket.data.userId = verifyAccessToken(token).sub;
       } catch {
         /* invalid/expired token — treat as guest */
+      }
+    }
+    // On the beta deployment, every socket connection (Battle and Relay
+    // alike) requires beta access, same as the REST API gate in app.ts —
+    // "only certain users have access to the site" applies here too, not
+    // just to relay specifically. A no-op on the main deployment.
+    if (env.BETA_SITE) {
+      const user = socket.data.userId
+        ? await prisma.user.findUnique({ where: { id: socket.data.userId }, select: { betaAccess: true } })
+        : null;
+      if (!user?.betaAccess) {
+        next(new Error('Beta access required'));
+        return;
       }
     }
     next();
@@ -635,7 +648,7 @@ export function attachSocket(server: HttpServer): IOServer {
   // independent of this file's myCode/myParticipantId), so a user can be in
   // a Battle room and a Relay room at the same time without the two
   // features' state colliding.
-  registerRelayHandlers(io);
+  if (env.BETA_SITE) registerRelayHandlers(io);
 
   return io;
 }

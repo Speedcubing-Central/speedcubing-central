@@ -9,6 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { env, isProd } from './env.js';
+import { optionalAuth } from './auth/middleware.js';
+import { requireBetaAccess } from './auth/betaGate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +73,11 @@ export function createApp() {
   app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
   app.use('/api/auth', authRouter);
+  // Everything mounted below this line requires beta access whenever this
+  // deployment is the beta site — /api/health and /api/auth stay reachable
+  // unconditionally (registered above) so the platform's health check and
+  // login itself always work. See CLAUDE.md's "Beta site" note.
+  if (env.BETA_SITE) app.use('/api', optionalAuth, requireBetaAccess);
   app.use('/api/sessions', sessionsRouter);
   app.use('/api/solves', solvesRouter);
   app.use('/api/wca', wcaRouter);
@@ -81,7 +88,9 @@ export function createApp() {
   app.use('/api/scramble', scrambleRouter);
   app.use('/api/reconstructions', reconstructionsRouter);
   app.use('/api/cc', ccRouter);
-  app.use('/api/relays', relaysRouter);
+  // Relay is beta-only — entirely absent from the main deployment (falls
+  // through to the /api 404 below).
+  if (env.BETA_SITE) app.use('/api/relays', relaysRouter);
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => {

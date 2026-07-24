@@ -36,7 +36,7 @@ This is an **npm workspaces monorepo** with three packages: `shared`, `server`, 
 │       └── main.tsx
 ├── server/                 # Express API + Socket.io
 │   └── src/
-│       ├── auth/           # jwt helpers, requireAuth/optionalAuth
+│       ├── auth/           # jwt helpers, requireAuth/optionalAuth, betaGate
 │       ├── routes/         # auth, sessions, solves, wca, profile, battle, alg, algSolves,
 │       │                   # scramble, reconstructions, cubingContests
 │       ├── util/dto.ts     # Prisma model -> DTO mappers
@@ -121,6 +121,7 @@ There is no admin account or admin role — see Roles below.
 | `/results`, `/results/:wcaId`                                | WCA competitor lookup + results history + official/unofficial (CubingContests) results |
 | `/settings`                                                  | Appearance (light/dark, color themes, accent), Account, password change, session |
 | `/login`                                                     | WCA OAuth + email/password                                        |
+| `/relays`, `/relays/run`, `/relays/team`, `/relays/team/:code`, `/relays/share/:id` | Multi-event relays (solo or real-time team, Socket.io) — **beta-only**, see Beta site below |
 
 ## Conventions & notes
 
@@ -172,6 +173,27 @@ There is no admin account or admin role — see Roles below.
   thresholds the engine uses internally when the solve actually starts.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
+- **Beta site**: `beta.speedcubingcentral.com` is a second hosted instance of
+  this exact app (same repo/branch, `npm run build && npm start`), sharing the
+  main site's production database — not a separate deployment pipeline or a
+  divergent branch, deliberately, since this repo's `start` script runs
+  `prisma db push --accept-data-loss` on every boot and two branches with
+  different schemas pointed at one database could silently drop each other's
+  tables/columns. Two flags gate everything instead: `BETA_SITE` (server env
+  var, `server/src/env.ts`) / `VITE_BETA_SITE` (matching client build-time
+  var, read via `client/src/lib/betaSite.ts`'s `IS_BETA_SITE`) is true only
+  on the beta-hosted service and controls which features exist there at all
+  (currently: Relay — its router, Socket.io handlers, routes, and nav entry
+  are all absent unless this is set). `User.betaAccess` (Prisma boolean)
+  controls *who* can use the beta site once reached — checked fresh from the
+  database on every request (`server/src/auth/betaGate.ts`, applied globally
+  in `app.ts` right after the `/api/auth` mount, plus inside Socket.io's
+  shared `io.use()`) rather than trusted from the JWT, so revoking access is
+  immediate. Gating is whole-site, not per-feature, matching "only certain
+  users have access to the beta site" — `/login` stays reachable either way.
+  There's no admin UI for granting `betaAccess`; toggle it per-account via
+  `npm run prisma:studio` against the shared database, same as any other
+  manual admin-less edit in this project.
 - **No BLD trainer, daily challenge, or goals/rankings pages.** These existed as backend
   scaffolding (`bld.ts`, `daily.ts`, `UserGoal`, WCA `/rankings` + `/competitions` proxy
   endpoints) with no client UI ever calling them, and have been removed. `profile.ts` now
@@ -183,3 +205,5 @@ There is no admin account or admin role — see Roles below.
 
 See `.env.example`. `WCA_CLIENT_ID` / `WCA_CLIENT_SECRET` are only needed for WCA OAuth —
 email/password auth and all client-side tools work without them. `REDIS_URL` is optional.
+`BETA_SITE` / `VITE_BETA_SITE` should only ever be set (to `true`) on the beta-hosted
+service — see Beta site above.

@@ -5,6 +5,7 @@ import { useAuth } from '../store/auth';
 import { useUi } from '../store/ui';
 import { Icon, type IconName } from './Icon';
 import { Logo } from './Logo';
+import { IS_BETA_SITE } from '../lib/betaSite';
 
 function DiscordIcon({ size = 20 }: { size?: number }) {
   return (
@@ -27,7 +28,7 @@ const NAV: NavItem[] = [
   { to: '/calculator', label: 'Calculator', icon: 'calculator' },
   { to: '/algorithms', label: 'Algorithms', icon: 'cube' },
   { to: '/battle', label: 'Battle', icon: 'swords' },
-  { to: '/relays', label: 'Relays', icon: 'skipForward' },
+  ...(IS_BETA_SITE ? [{ to: '/relays', label: 'Relays', icon: 'skipForward' as const }] : []),
   { to: '/reconstruction', label: 'Reconstruction', icon: 'film' },
   { to: '/results', label: 'Results', icon: 'trophy' },
   { to: '/settings', label: 'Settings', icon: 'gear' },

@@ -92,6 +92,9 @@ export interface PublicUser {
   country?: string | null;
   avatarUrl?: string | null;
   role: Role;
+  // Whether this account has access to the beta deployment
+  // (beta.speedcubingcentral.com) — irrelevant on the main site.
+  betaAccess: boolean;
   createdAt: string;
 }
 
