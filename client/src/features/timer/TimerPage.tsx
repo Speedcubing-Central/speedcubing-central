@@ -12,7 +12,10 @@ import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
+import { useTimerKeybinds } from './useTimerKeybinds';
+import { KeybindsHelp } from './KeybindsHelp';
 import { useFmcEngine } from './useFmcEngine';
+import { IS_BETA_SITE } from '../../lib/betaSite';
 import { FmcStartPanel } from './FmcStartPanel';
 import { FmcAttemptView } from './FmcAttemptView';
 import { useTimerData } from './useTimerData';
@@ -48,6 +51,7 @@ export default function TimerPage() {
   const [showSessions, setShowSessions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showKeybindsHelp, setShowKeybindsHelp] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [avgView, setAvgView] = useState<SolveAverage | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -93,7 +97,7 @@ export default function TimerPage() {
     setSelectMode(false);
   }
 
-  const anyModalOpen = showSessions || showSettings || showImport || detailIndex !== null || avgView !== null;
+  const anyModalOpen = showSessions || showSettings || showImport || showKeybindsHelp || detailIndex !== null || avgView !== null;
 
   // Keyboard mode only reserves room for the hint line below the digits;
   // manual mode also needs the input + button row, so it gets less headroom.
@@ -283,6 +287,23 @@ export default function TimerPage() {
     return () => document.removeEventListener('keydown', handler);
   }, [entryMode, anyModalOpen, inputBlocked, engine.phase, scr.loading, scr.advance, addTyped]);
 
+  // Not on the beta site — see IS_BETA_SITE's own doc comment; this keeps
+  // beta focused on whatever it's actually testing rather than picking up
+  // every unrelated feature that happens to land in the same codebase.
+  useTimerKeybinds({
+    enabled:
+      !IS_BETA_SITE &&
+      !anyModalOpen &&
+      !inputBlocked &&
+      (engine.phase === 'idle' || engine.phase === 'stopped'),
+    newest,
+    isFmc,
+    manualEntryRef: typedInputRef,
+    onUpdatePenalty: data.updatePenalty,
+    onDelete: data.deleteSolve,
+    onShowHelp: () => setShowKeybindsHelp(true),
+  });
+
   const openAverage = useCallback(
     (size: AvgSize, startIndex: number) => {
       const view = makeAverageView(data.solves, startIndex, size);
@@ -361,6 +382,11 @@ export default function TimerPage() {
         <button className={clsx(tool, 'px-2.5')} onClick={() => setShowSettings(true)} title="Timer Settings">
           <Icon name="gear" size={16} />
         </button>
+        {!IS_BETA_SITE && (
+          <button className={clsx(tool, 'px-2.5')} onClick={() => setShowKeybindsHelp(true)} title="Keyboard shortcuts">
+            <Icon name="keyboard" size={16} />
+          </button>
+        )}
         <button className={clsx(tool, 'ml-auto')} onClick={toggleFullscreen} title="Fullscreen">
           <Icon name={isFullscreen ? 'x' : 'plus'} size={16} />
           {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
@@ -571,6 +597,7 @@ export default function TimerPage() {
       <SessionManager open={showSessions} onClose={() => setShowSessions(false)} data={data} event={event} />
       <ImportCstimerModal open={showImport} onClose={() => setShowImport(false)} data={data} event={event} />
       <TimerSettings open={showSettings} onClose={() => setShowSettings(false)} />
+      <KeybindsHelp open={showKeybindsHelp} onClose={() => setShowKeybindsHelp(false)} />
       {detailIndex !== null && (
         <SolveDetail
           open

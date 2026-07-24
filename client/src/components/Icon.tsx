@@ -42,7 +42,8 @@ export type IconName =
   | 'copy'
   | 'pencil'
   | 'upload'
-  | 'info';
+  | 'info'
+  | 'keyboard';
 
 const PATHS: Record<IconName, JSX.Element> = {
   home: (
@@ -232,6 +233,12 @@ const PATHS: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 11v5.5" />
       <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2" />
+      <path d="M6 9.5h.01M9.5 9.5h.01M13 9.5h.01M16.5 9.5h.01M6 13h.01M9.5 13h5M16.5 13h.01" />
     </>
   ),
 };
