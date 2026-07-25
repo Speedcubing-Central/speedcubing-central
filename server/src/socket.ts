@@ -193,83 +193,137 @@ export function attachSocket(server: HttpServer): IOServer {
     if (dto) io.to(code).emit('room_state', dto);
   }
 
+  // Guards against a real race, the same shape as relaySocket.ts's
+  // generateScramblesIfReady lock: join_room's auto-start and change_event
+  // can both independently decide "we've got ≥2 players, start the round"
+  // for the same room within moments of each other (two people joining
+  // together, or a host changing the event right as a second player
+  // joins). Without this, both calls would generate their own scramble and
+  // broadcast their own round_start — whichever database write lands last
+  // silently wins, so some connected clients end up holding a round_start
+  // scramble that doesn't match what the server (and everyone who got the
+  // *other* broadcast) actually has on record.
+  //
+  // A call arriving while a start for this room is already in flight still
+  // broadcasts room_state (just skips redundantly generating a scramble and
+  // starting the round again) — join_room has no broadcast of its own
+  // outside of this function, so a losing call here would otherwise be the
+  // *only* place its caller's own just-created participant (already
+  // committed to the DB by this point) ever gets announced to the room. A
+  // plain no-op here is a plausible cause of "some users can't see certain
+  // users in the room" — this specific gap wasn't independently reproduced
+  // (the winning call's own scramble-generation delay tends to give a
+  // losing call's fast INSERT time to land before that broadcast fires
+  // anyway, masking it in a low-latency test), but it's real by inspection
+  // and cheap to close regardless.
+  const startingRound = new Set<string>();
   async function startRound(roomId: string, code: string, eventId: string, algSetId: string | null, currentRoundNumber: number) {
-    const scramble = await getRoundScramble(eventId, algSetId);
-    const roundNumber = currentRoundNumber + 1;
-    await prisma.battleRoom.update({
-      where: { id: roomId },
-      data: { status: 'ACTIVE', scramble, roundNumber },
-    });
-    io.to(code).emit('round_start', { scramble, roundNumber });
-    await emitRoomState(code);
+    if (startingRound.has(code)) {
+      await emitRoomState(code);
+      return;
+    }
+    startingRound.add(code);
+    try {
+      const scramble = await getRoundScramble(eventId, algSetId);
+      const roundNumber = currentRoundNumber + 1;
+      await prisma.battleRoom.update({
+        where: { id: roomId },
+        data: { status: 'ACTIVE', scramble, roundNumber },
+      });
+      io.to(code).emit('round_start', { scramble, roundNumber });
+      await emitRoomState(code);
+    } finally {
+      startingRound.delete(code);
+    }
   }
 
+  // Guards against a real race: solve_complete calls this on every
+  // submission (one per finishing participant), and when the last two
+  // participants finish within moments of each other, both of their calls
+  // can independently see "everyone's finished" via their own DB read
+  // before either one has actually scored the round yet — reproduced
+  // directly, this fires on the large majority of close-timing
+  // submissions. Without this lock, both calls independently score the
+  // round: everyone's points get incremented twice, round_result is
+  // broadcast twice (duplicating the round in the client's history panel —
+  // the exact bug reported: "I see the same time... and double the
+  // points"), and two separate 5-second "start the next round" timers get
+  // scheduled. A call arriving while a check for this room is already in
+  // flight is a no-op — the in-flight call already covers the same
+  // "did everyone finish" condition.
+  const checkingRoundCompletion = new Set<string>();
   async function checkRoundCompletion(code: string): Promise<void> {
-    const room = await prisma.battleRoom.findUnique({
-      where: { code },
-      include: { participants: { orderBy: { id: 'asc' } } },
-    });
-    if (!room || room.status !== 'ACTIVE') return;
+    if (checkingRoundCompletion.has(code)) return;
+    checkingRoundCompletion.add(code);
+    try {
+      const room = await prisma.battleRoom.findUnique({
+        where: { code },
+        include: { participants: { orderBy: { id: 'asc' } } },
+      });
+      if (!room || room.status !== 'ACTIVE') return;
 
-    const participants = room.participants;
-    if (participants.length < 2) return;
-    if (!participants.every((p) => p.finishedAt !== null)) return;
+      const participants = room.participants;
+      if (participants.length < 2) return;
+      if (!participants.every((p) => p.finishedAt !== null)) return;
 
-    const ranked = [...participants].sort(
-      (a, b) =>
-        effectiveTime(a.time ?? Infinity, a.penalty ?? 'NONE') -
-        effectiveTime(b.time ?? Infinity, b.penalty ?? 'NONE'),
-    );
+      const ranked = [...participants].sort(
+        (a, b) =>
+          effectiveTime(a.time ?? Infinity, a.penalty ?? 'NONE') -
+          effectiveTime(b.time ?? Infinity, b.penalty ?? 'NONE'),
+      );
 
-    const results: BattleRoundResultEntry[] = [];
-    for (let i = 0; i < ranked.length; i++) {
-      const p = ranked[i];
-      const et = effectiveTime(p.time ?? Infinity, p.penalty ?? 'NONE');
-      const isDNF = !isFinite(et);
-      const pointsEarned = isDNF ? 0 : rankPoints(i + 1);
+      const results: BattleRoundResultEntry[] = [];
+      for (let i = 0; i < ranked.length; i++) {
+        const p = ranked[i];
+        const et = effectiveTime(p.time ?? Infinity, p.penalty ?? 'NONE');
+        const isDNF = !isFinite(et);
+        const pointsEarned = isDNF ? 0 : rankPoints(i + 1);
 
-      await prisma.battleParticipant.update({
-        where: { id: p.id },
-        data: { points: { increment: pointsEarned } },
+        await prisma.battleParticipant.update({
+          where: { id: p.id },
+          data: { points: { increment: pointsEarned } },
+        });
+
+        results.push({
+          participantId: p.id,
+          name: p.guestName ?? 'Player',
+          time: p.time,
+          penalty: p.penalty,
+          rank: i + 1,
+          pointsEarned,
+          totalPoints: p.points + pointsEarned,
+        });
+      }
+
+      await prisma.battleParticipant.updateMany({
+        where: { roomId: room.id },
+        data: { time: null, penalty: null, finishedAt: null },
+      });
+      await prisma.battleRoom.update({
+        where: { id: room.id },
+        data: { status: 'WAITING' },
       });
 
-      results.push({
-        participantId: p.id,
-        name: p.guestName ?? 'Player',
-        time: p.time,
-        penalty: p.penalty,
-        rank: i + 1,
-        pointsEarned,
-        totalPoints: p.points + pointsEarned,
-      });
+      io.to(code).emit('round_result', { results, roundNumber: room.roundNumber });
+
+      // Auto-start next round after 5 seconds if ≥2 players remain.
+      setTimeout(() => {
+        void (async () => {
+          try {
+            const fresh = await prisma.battleRoom.findUnique({
+              where: { code },
+              include: { participants: { select: { id: true } } },
+            });
+            if (!fresh || fresh.participants.length < 2) return;
+            await startRound(fresh.id, code, fresh.eventId, fresh.algSetId, fresh.roundNumber);
+          } catch {
+            /* room may be gone */
+          }
+        })();
+      }, 5000);
+    } finally {
+      checkingRoundCompletion.delete(code);
     }
-
-    await prisma.battleParticipant.updateMany({
-      where: { roomId: room.id },
-      data: { time: null, penalty: null, finishedAt: null },
-    });
-    await prisma.battleRoom.update({
-      where: { id: room.id },
-      data: { status: 'WAITING' },
-    });
-
-    io.to(code).emit('round_result', { results, roundNumber: room.roundNumber });
-
-    // Auto-start next round after 5 seconds if ≥2 players remain.
-    setTimeout(() => {
-      void (async () => {
-        try {
-          const fresh = await prisma.battleRoom.findUnique({
-            where: { code },
-            include: { participants: { select: { id: true } } },
-          });
-          if (!fresh || fresh.participants.length < 2) return;
-          await startRound(fresh.id, code, fresh.eventId, fresh.algSetId, fresh.roundNumber);
-        } catch {
-          /* room may be gone */
-        }
-      })();
-    }, 5000);
   }
 
   // Remove a participant from their room, handling in-progress round cleanup.
