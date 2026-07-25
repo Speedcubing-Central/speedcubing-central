@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { useIsDesktop } from '../../components/useLayoutHelpers';
 
 // WCA/SiGN face-turn letters (always stored uppercase) vs. cube-rotation
 // letters (always stored lowercase) — kept as two sets since a rotation
@@ -45,6 +46,87 @@ function ensureTrailingEmpty(arr: string[]): string[] {
   return arr.length === 0 || arr[arr.length - 1] !== '' ? [...arr, ''] : arr;
 }
 
+type MoveResult = { next: string[]; focus: number };
+
+// Standalone token-handling functions, shared by the physical-keyboard
+// handler (handleKeyDown) and the on-screen touch pad — each takes an
+// explicit token/index rather than reading from a keyboard event, so
+// either input source can drive the exact same move-array mutation.
+
+// `letter` must already be normalized (see normalizeLetter): an uppercase
+// face letter or a lowercase rotation letter.
+function applyLetter(arr: string[], letter: string, index: number): MoveResult {
+  const next = [...arr];
+  if (!next[index]) {
+    next[index] = letter;
+    return { next, focus: index };
+  }
+  // Box already has a move — leave it as-is and insert a fresh box right
+  // after it for the new letter, rather than overwriting whatever box
+  // already happened to be next. At the true end of the list that's a
+  // no-op difference (the "next" box is just the trailing empty one either
+  // way), but it's what makes continuing to type safe immediately after a
+  // mid-sequence insertion (see insertBoxAfter) — without this, applying a
+  // second letter right after a just-inserted one would clobber the real
+  // move that used to follow it instead of making room for both.
+  const target = index + 1;
+  next.splice(target, 0, letter);
+  return { next, focus: target };
+}
+
+function applyWideSuffix(arr: string[], index: number): MoveResult {
+  const next = [...arr];
+  const cur = next[index] ?? '';
+  if (canTakeWide(cur)) next[index] = cur + 'w';
+  return { next, focus: index };
+}
+
+// `mod` is `'` or `2`.
+function applyModifier(arr: string[], mod: string, index: number): MoveResult {
+  const next = [...arr];
+  const cur = next[index] ?? '';
+  // A bare letter or a wide move (no modifier yet) can take one — WCA
+  // notation never stacks modifiers (no "R'2", no "Rw'2").
+  if (canTakeModifier(cur)) next[index] = cur + mod;
+  return { next, focus: index };
+}
+
+// Inserts a fresh empty box right after this one and focuses it — the way
+// to add a move you forgot in the middle of the sequence without retyping
+// everything after it. Works the same regardless of whether the current
+// box is empty or already has a move.
+function insertBoxAfter(arr: string[], index: number): MoveResult {
+  const next = [...arr];
+  const target = index + 1;
+  next.splice(target, 0, '');
+  return { next, focus: target };
+}
+
+function handleBackspace(arr: string[], index: number): MoveResult {
+  const next = [...arr];
+  const cur = next[index] ?? '';
+  if (cur.length > 0) {
+    next[index] = cur.slice(0, -1);
+    return { next, focus: index };
+  }
+  if (index > 0) {
+    // The box itself is already empty — remove it outright rather than
+    // clearing whatever's in the previous box. Focus lands back on the
+    // previous box with its content left exactly as it was (see the focus
+    // effect below, which places the cursor at the end of it), the same
+    // way backspacing into an empty line in a text editor removes that
+    // line without touching the one above.
+    next.splice(index, 1);
+    return { next, focus: index - 1 };
+  }
+  return { next, focus: index };
+}
+
+// Face letters, then rotations, then modifiers — the order the touch pad
+// renders them in.
+const PAD_FACE_LETTERS = ['U', 'D', 'L', 'R', 'F', 'B'];
+const PAD_ROTATION_LETTERS = ['x', 'y', 'z'];
+
 export function FmcMoveInput({
   moves,
   onChange,
@@ -60,6 +142,12 @@ export function FmcMoveInput({
   // sometimes doesn't exist in the DOM yet until `moves` (and thus the
   // rendered box list) actually updates.
   const pendingFocus = useRef<number | null>(null);
+  // The box the touch pad acts on. Kept in sync with real DOM focus (every
+  // box's onFocus updates it, covering taps and physical-keyboard/arrow-key
+  // focus alike) so the pad always operates on whichever box last had
+  // focus, without needing its own separate notion of "current position".
+  const [activeIndex, setActiveIndex] = useState(0);
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     if (pendingFocus.current !== null) {
@@ -76,9 +164,10 @@ export function FmcMoveInput({
     }
   });
 
-  function setMoves(mutate: (arr: string[]) => { next: string[]; focus: number }) {
-    const { next, focus } = mutate([...moves]);
+  function setMoves(mutate: (arr: string[]) => MoveResult) {
+    const { next, focus } = mutate(moves);
     pendingFocus.current = focus;
+    setActiveIndex(focus);
     onChange(ensureTrailingEmpty(next));
   }
 
@@ -88,83 +177,31 @@ export function FmcMoveInput({
     const letter = normalizeLetter(key);
     if (letter && key.length === 1) {
       e.preventDefault();
-      setMoves((next) => {
-        if (!next[index]) {
-          next[index] = letter;
-          return { next, focus: index };
-        }
-        // Box already has a move — leave it as-is and insert a fresh box
-        // right after it for the new letter, rather than overwriting
-        // whatever box already happened to be next. At the true end of the
-        // list that's a no-op difference (the "next" box is just the
-        // trailing empty one either way), but it's what makes continuing
-        // to type safe immediately after a mid-sequence insertion (see the
-        // Space handler below) — without this, typing a second move right
-        // after a just-inserted one would clobber the real move that used
-        // to follow it instead of making room for both.
-        const target = index + 1;
-        next.splice(target, 0, letter);
-        return { next, focus: target };
-      });
+      setMoves((next) => applyLetter(next, letter, index));
       return;
     }
 
     if (key === 'w' || key === 'W') {
       e.preventDefault();
-      setMoves((next) => {
-        const cur = next[index] ?? '';
-        if (canTakeWide(cur)) next[index] = cur + 'w';
-        return { next, focus: index };
-      });
+      setMoves((next) => applyWideSuffix(next, index));
       return;
     }
 
     if (key === "'" || key === '2') {
       e.preventDefault();
-      setMoves((next) => {
-        const cur = next[index] ?? '';
-        // A bare letter or a wide move (no modifier yet) can take one —
-        // WCA notation never stacks modifiers (no "R'2", no "Rw'2").
-        if (canTakeModifier(cur)) next[index] = cur + key;
-        return { next, focus: index };
-      });
+      setMoves((next) => applyModifier(next, key, index));
       return;
     }
 
-    // Inserts a fresh empty box right after this one and focuses it —
-    // the way to add a move you forgot in the middle of the sequence
-    // without retyping everything after it. Works the same regardless of
-    // whether the current box is empty or already has a move.
     if (key === ' ') {
       e.preventDefault();
-      setMoves((next) => {
-        const target = index + 1;
-        next.splice(target, 0, '');
-        return { next, focus: target };
-      });
+      setMoves((next) => insertBoxAfter(next, index));
       return;
     }
 
     if (key === 'Backspace') {
       e.preventDefault();
-      setMoves((next) => {
-        const cur = next[index] ?? '';
-        if (cur.length > 0) {
-          next[index] = cur.slice(0, -1);
-          return { next, focus: index };
-        }
-        if (index > 0) {
-          // The box itself is already empty — remove it outright rather
-          // than clearing whatever's in the previous box. Focus lands back
-          // on the previous box with its content left exactly as it was
-          // (see the focus effect below, which places the cursor at the
-          // end of it), the same way backspacing into an empty line in a
-          // text editor removes that line without touching the one above.
-          next.splice(index, 1);
-          return { next, focus: index - 1 };
-        }
-        return { next, focus: index };
-      });
+      setMoves((next) => handleBackspace(next, index));
       return;
     }
 
@@ -188,29 +225,80 @@ export function FmcMoveInput({
     }
   }
 
+  // Shared style/handler for every touch-pad button — a plain <button>
+  // acting on move-array state, never a text input, so none of these ever
+  // has a reason to summon a native keyboard.
+  function padButton(label: string, onPress: () => void, extraClassName?: string) {
+    return (
+      <button
+        key={label}
+        type="button"
+        disabled={disabled}
+        // Touch pad clicks would otherwise steal focus from the move box
+        // an instant before onPress runs, which is harmless here since
+        // every apply* function takes activeIndex explicitly rather than
+        // reading focus — but preventing default keeps the box's own
+        // focus (and caret) visibly undisturbed while typing via the pad.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onPress}
+        className={clsx(
+          'rounded-lg border border-gray-200 dark:border-border bg-card-hover font-mono font-bold text-sm py-2 transition-colors hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed',
+          extraClassName,
+        )}
+      >
+        {label}
+      </button>
+    );
+  }
+
   return (
-    <div className="flex flex-wrap gap-1.5 justify-center">
-      {moves.map((m, i) => (
-        <input
-          key={i}
-          ref={(el) => { boxRefs.current[i] = el; }}
-          className={clsx(
-            'input w-12 h-11 text-center font-mono text-base font-bold p-0',
-            ROTATION_RE.test(m) && 'text-muted italic font-normal',
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-1.5 justify-center">
+        {moves.map((m, i) => (
+          <input
+            key={i}
+            ref={(el) => { boxRefs.current[i] = el; }}
+            className={clsx(
+              'input w-12 h-11 text-center font-mono text-base font-bold p-0',
+              ROTATION_RE.test(m) && 'text-muted italic font-normal',
+            )}
+            value={m}
+            onChange={() => {
+              /* all real mutation happens in onKeyDown; this just satisfies
+                 React's controlled-input requirement */
+            }}
+            onKeyDown={(e) => handleKeyDown(e, i)}
+            onFocus={() => setActiveIndex(i)}
+            disabled={disabled}
+            maxLength={3}
+            inputMode="none"
+            autoComplete="off"
+            autoFocus={i === 0}
+          />
+        ))}
+      </div>
+
+      {/* Touch-only on-screen input — physical keyboards already have
+          every one of these keys, so this would just be visual clutter on
+          desktop (see useIsDesktop's own doc comment for why that's the
+          established width-based signal in this codebase rather than
+          feature-detecting touch). Boxes keep inputMode="none" regardless,
+          so this pad is the only way to enter a solution on mobile. */}
+      {!isDesktop && (
+        <div className="sticky bottom-0 bg-card pt-1 grid grid-cols-6 gap-1.5">
+          {PAD_FACE_LETTERS.map((letter) =>
+            padButton(letter, () => setMoves((next) => applyLetter(next, letter, activeIndex))),
           )}
-          value={m}
-          onChange={() => {
-            /* all real mutation happens in onKeyDown; this just satisfies
-               React's controlled-input requirement */
-          }}
-          onKeyDown={(e) => handleKeyDown(e, i)}
-          disabled={disabled}
-          maxLength={3}
-          inputMode="none"
-          autoComplete="off"
-          autoFocus={i === 0}
-        />
-      ))}
+          {PAD_ROTATION_LETTERS.map((letter) =>
+            padButton(letter, () => setMoves((next) => applyLetter(next, letter, activeIndex)), 'text-muted italic font-normal'),
+          )}
+          {padButton("'", () => setMoves((next) => applyModifier(next, "'", activeIndex)))}
+          {padButton('2', () => setMoves((next) => applyModifier(next, '2', activeIndex)))}
+          {padButton('w', () => setMoves((next) => applyWideSuffix(next, activeIndex)))}
+          {padButton('New box', () => setMoves((next) => insertBoxAfter(next, activeIndex)), 'col-span-3 text-xs')}
+          {padButton('⌫', () => setMoves((next) => handleBackspace(next, activeIndex)), 'col-span-3 text-base')}
+        </div>
+      )}
     </div>
   );
 }
