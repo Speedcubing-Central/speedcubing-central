@@ -52,7 +52,7 @@ export function StatsTable({
   const bestSingleIdx = useMemo(() => bestSingleIndex(solves), [solves]);
   const colSpanExtra = (showBPA ? 1 : 0) + (showWPA ? 1 : 0) + (showTarget ? 1 : 0);
 
-  const currentSingle = solves.length ? effectiveTime(solves[0].time, solves[0].penalty) : null;
+  const currentSingle = solves.length ? effectiveTime(solves[0].time, solves[0].penalty, solves[0].plusTwoCount) : null;
 
   return (
     <div className="overflow-x-auto">

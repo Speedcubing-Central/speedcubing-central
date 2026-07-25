@@ -65,7 +65,7 @@ export function SolveDetail({
   solves: SolveDTO[];
   index: number;
   event: string;
-  onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
+  onUpdatePenalty: (solveId: string, penalty: Penalty, plusTwoCount: number) => void;
   onUpdateTime?: (solveId: string, time: number) => void;
   onUpdateComment: (solveId: string, comment: string) => void;
   onDelete: (solveId: string) => void;
@@ -179,7 +179,7 @@ export function SolveDetail({
         ) : (
           <div className="flex items-center justify-center gap-2">
             <div className="font-mono text-4xl font-bold">
-              {isFmc ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, solvePrecision)}
+              {isFmc ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, solvePrecision, solve.plusTwoCount)}
               {isFmc && solve.penalty !== 'DNF' && <span className="text-lg font-normal text-muted ml-1">moves</span>}
             </div>
             {onUpdateTime && (
@@ -216,7 +216,12 @@ export function SolveDetail({
           "was this actually verified" distinction left to gate on the way
           an earlier version of this feature needed to. */}
       <div className="flex justify-center mb-4">
-        <PenaltyButtons penalty={solve.penalty} onChange={(p) => onUpdatePenalty(solve.id, p)} hidePlus2={isFmc} />
+        <PenaltyButtons
+          penalty={solve.penalty}
+          plusTwoCount={solve.plusTwoCount}
+          onChange={(p, c) => onUpdatePenalty(solve.id, p, c)}
+          hidePlus2={isFmc}
+        />
       </div>
 
       <div ref={gridRowRef} className="grid sm:grid-cols-[1fr_auto] gap-4 items-center mb-4">

@@ -6,10 +6,11 @@ type Mode = 'ao5' | 'mo3';
 function parseInput(s: string): TimedSolve | null {
   const t = s.trim();
   if (!t) return null;
-  if (/^dnf$/i.test(t)) return { time: 0, penalty: 'DNF' };
-  let penalty: Penalty = 'NONE';
+  if (/^dnf$/i.test(t)) return { time: 0, penalty: 'DNF', plusTwoCount: 0 };
+  const penalty: Penalty = 'NONE';
   let raw = t;
-  if (raw.endsWith('+')) { penalty = 'PLUS2'; raw = raw.slice(0, -1); }
+  let plusTwoCount = 0;
+  while (raw.endsWith('+')) { plusTwoCount++; raw = raw.slice(0, -1); }
   let ms: number;
   if (raw.includes(':')) {
     const [min, sec] = raw.split(':');
@@ -18,12 +19,12 @@ function parseInput(s: string): TimedSolve | null {
     ms = parseFloat(raw) * 1000;
   }
   if (isNaN(ms) || ms < 0) return null;
-  return { time: Math.round(ms), penalty };
+  return { time: Math.round(ms), penalty, plusTwoCount };
 }
 
 function effMs(s: TimedSolve): number {
   if (s.penalty === 'DNF') return Infinity;
-  return s.time + (s.penalty === 'PLUS2' ? 2000 : 0);
+  return s.time + (s.plusTwoCount ?? 0) * 2000;
 }
 
 function fmtTime(ms: number | null, isDNF: boolean): string {
@@ -164,7 +165,7 @@ export default function CalculatorPage() {
       {/* Input card */}
       <div className="card p-5 mb-4">
         <p className="text-xs text-muted mb-4">
-          Supports <span className="font-mono">12.34</span>, <span className="font-mono">1:23.45</span>, <span className="font-mono">DNF</span>, <span className="font-mono">12.34+</span> (for +2).
+          Supports <span className="font-mono">12.34</span>, <span className="font-mono">1:23.45</span>, <span className="font-mono">DNF</span>, <span className="font-mono">12.34+</span> (for +2, repeat + to stack more).
           Press Enter to advance.
         </p>
 

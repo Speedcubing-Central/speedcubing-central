@@ -29,7 +29,7 @@ export const guestAlgStore = {
   listSolves(setId: string): AlgSolveDTO[] {
     return read()[setId] ?? [];
   },
-  addSolve(setId: string, caseId: string, time: number, penalty: Penalty, scramble: string): AlgSolveDTO {
+  addSolve(setId: string, caseId: string, time: number, penalty: Penalty, plusTwoCount: number, scramble: string): AlgSolveDTO {
     const data = read();
     const solve: AlgSolveDTO = {
       id: uid(),
@@ -38,6 +38,7 @@ export const guestAlgStore = {
       caseId,
       time,
       penalty,
+      plusTwoCount: penalty === 'DNF' ? 0 : plusTwoCount,
       scramble,
       createdAt: new Date().toISOString(),
     };
@@ -45,10 +46,13 @@ export const guestAlgStore = {
     write(data);
     return solve;
   },
-  updatePenalty(setId: string, solveId: string, penalty: Penalty) {
+  updatePenalty(setId: string, solveId: string, penalty: Penalty, plusTwoCount: number) {
     const data = read();
     const solve = data[setId]?.find((x) => x.id === solveId);
-    if (solve) solve.penalty = penalty;
+    if (solve) {
+      solve.penalty = penalty;
+      solve.plusTwoCount = penalty === 'DNF' ? 0 : plusTwoCount;
+    }
     write(data);
   },
   updateTime(setId: string, solveId: string, time: number) {

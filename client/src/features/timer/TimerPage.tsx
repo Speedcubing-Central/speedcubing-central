@@ -111,7 +111,7 @@ export default function TimerPage() {
   }, []);
 
   const onComplete = useCallback(
-    async (timeMs: number, penalty: Penalty, solution?: string) => {
+    async (timeMs: number, penalty: Penalty, plusTwoCount: number, solution?: string) => {
       setSubmitting(true);
       try {
         let sessionId = data.currentId;
@@ -120,7 +120,7 @@ export default function TimerPage() {
           sessionId = created.id;
         }
         const prevSolves = data.solves;
-        const solve = await data.addSolve(timeMs, penalty, scr.scramble, sessionId, solution);
+        const solve = await data.addSolve(timeMs, penalty, plusTwoCount, scr.scramble, sessionId, solution);
         scr.advance();
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
@@ -152,7 +152,7 @@ export default function TimerPage() {
   // hidden until Start is clicked and Stats/Solves/the controls bar are
   // genuinely unmounted for the duration of the attempt, not just hidden.
   const isFmc = event === '333fm';
-  const fmcEngine = useFmcEngine(scr.scramble, () => onComplete(0, 'DNF'));
+  const fmcEngine = useFmcEngine(scr.scramble, () => onComplete(0, 'DNF', 0));
 
   // Keeps the manual-entry input focused across everything that would
   // otherwise silently steal it: clicking "new scramble"/"previous
@@ -228,7 +228,7 @@ export default function TimerPage() {
     if (p === 'running') return runningStr(engine.elapsed);
     if (p === 'stopped') return formatTime(Math.round(engine.elapsed), 'NONE', solvePrecision);
     if ((p === 'holding' || p === 'ready') && !inspection) return formatTime(0, 'NONE', solvePrecision);
-    if (newest) return formatTime(newest.time, newest.penalty, solvePrecision);
+    if (newest) return formatTime(newest.time, newest.penalty, solvePrecision, newest.plusTwoCount);
     return formatTime(0, 'NONE', solvePrecision);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine.phase, engine.elapsed, engine.inspectionElapsed, engine.inspectionRemaining, newest, inspection, inspectionDirection, timerUpdate, solvePrecision]);
@@ -253,7 +253,7 @@ export default function TimerPage() {
     }
     const parsed = parseTimeInput(typed, solvePrecision);
     if (!parsed) return;
-    onComplete(parsed.time, parsed.penalty);
+    onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
     setTyped('');
   }, [typed, solvePrecision, onComplete, scr.advance]);
 
@@ -324,7 +324,7 @@ export default function TimerPage() {
   const typedParsed = useMemo(() => parseTimeInput(typed, solvePrecision), [typed, solvePrecision]);
   const entryDisplay = typed
     ? typedParsed
-      ? formatTime(typedParsed.time, typedParsed.penalty, solvePrecision)
+      ? formatTime(typedParsed.time, typedParsed.penalty, solvePrecision, typedParsed.plusTwoCount)
       : typed
     : formatTime(0, 'NONE', solvePrecision);
   const entryColorClass = typed
@@ -497,12 +497,13 @@ export default function TimerPage() {
                 <span className="font-mono text-gray-900 dark:text-gray-100">
                   {isFmc
                     ? `${formatMoveCount(newest.time, newest.penalty)}${newest.penalty !== 'DNF' ? ' moves' : ''}`
-                    : formatTime(newest.time, newest.penalty, solvePrecision)}
+                    : formatTime(newest.time, newest.penalty, solvePrecision, newest.plusTwoCount)}
                 </span>
               </span>
               <PenaltyButtons
                 penalty={newest.penalty}
-                onChange={(p) => data.updatePenalty(newest.id, p)}
+                plusTwoCount={newest.plusTwoCount}
+                onChange={(p, c) => data.updatePenalty(newest.id, p, c)}
                 size="sm"
                 hidePlus2={isFmc}
               />

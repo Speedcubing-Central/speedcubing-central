@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import type { Penalty, SolveDTO } from '@scc/shared';
+import { MAX_PLUS_TWO_COUNT, type Penalty, type SolveDTO } from '@scc/shared';
 
 function isTextTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
@@ -8,7 +8,9 @@ function isTextTarget(t: EventTarget | null): boolean {
 
 // Ctrl+Shift+1/2/3 mark the last solve OK/+2/DNF (matching PenaltyButtons'
 // own left-to-right order), Ctrl+Shift+Backspace removes it, and ? opens
-// the help modal.
+// the help modal. Digit2 stacks another +2 each time it's pressed (same as
+// tapping the +2 button — up to MAX_PLUS_TWO_COUNT), rather than always
+// setting the count to exactly 1.
 //
 // 1/2/3 match on e.code ('Digit1'/'Digit2'/'Digit3' — the physical key
 // position) rather than e.key. This matters: holding Shift changes what
@@ -39,7 +41,7 @@ export function useTimerKeybinds({
   newest: SolveDTO | undefined;
   isFmc: boolean;
   manualEntryRef: RefObject<HTMLElement>;
-  onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
+  onUpdatePenalty: (solveId: string, penalty: Penalty, plusTwoCount: number) => void;
   onDelete: (solveId: string) => void;
   onShowHelp: () => void;
 }) {
@@ -56,13 +58,14 @@ export function useTimerKeybinds({
       if (!e.ctrlKey || !e.shiftKey || !newest) return;
       if (e.code === 'Digit1') {
         e.preventDefault();
-        onUpdatePenalty(newest.id, 'NONE');
+        onUpdatePenalty(newest.id, 'NONE', 0);
       } else if (e.code === 'Digit2' && !isFmc) {
         e.preventDefault();
-        onUpdatePenalty(newest.id, 'PLUS2');
+        const nextCount = newest.penalty === 'DNF' ? 1 : Math.min(MAX_PLUS_TWO_COUNT, newest.plusTwoCount + 1);
+        onUpdatePenalty(newest.id, 'NONE', nextCount);
       } else if (e.code === 'Digit3') {
         e.preventDefault();
-        onUpdatePenalty(newest.id, 'DNF');
+        onUpdatePenalty(newest.id, 'DNF', 0);
       } else if (e.code === 'Backspace') {
         e.preventDefault();
         if (confirm('Delete this solve? This cannot be undone.')) onDelete(newest.id);

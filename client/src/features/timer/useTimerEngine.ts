@@ -20,7 +20,7 @@ interface Options {
   holdDuration: number; // ms
   enabled: boolean;
   startSound?: boolean;
-  onComplete: (timeMs: number, penalty: Penalty) => void;
+  onComplete: (timeMs: number, penalty: Penalty, plusTwoCount: number) => void;
 }
 
 // Speak a short WCA inspection call (e.g. "8 seconds").
@@ -65,7 +65,7 @@ export function useTimerEngine(opts: Options) {
   const holdTimer = useRef<number | null>(null);
   const inspectionStart = useRef(0);
   const inspectionRaf = useRef(0);
-  const inspectionPenaltyRef = useRef<Penalty>('NONE');
+  const inspectionPenaltyRef = useRef<{ penalty: Penalty; plusTwoCount: number }>({ penalty: 'NONE', plusTwoCount: 0 });
   const spoken = useRef({ eight: false, twelve: false });
   const phaseRef = useRef<TimerPhase>('idle');
   phaseRef.current = phase;
@@ -83,12 +83,12 @@ export function useTimerEngine(opts: Options) {
   }, []);
 
   // Inspection penalty based on the moment the solve STARTS (WCA rules).
-  function inspectionPenaltyAtStart(): Penalty {
-    if (!optsRef.current.inspection) return 'NONE';
+  function inspectionPenaltyAtStart(): { penalty: Penalty; plusTwoCount: number } {
+    if (!optsRef.current.inspection) return { penalty: 'NONE', plusTwoCount: 0 };
     const used = performance.now() - inspectionStart.current;
-    if (used > 17000) return 'DNF';
-    if (used > 15000) return 'PLUS2';
-    return 'NONE';
+    if (used > 17000) return { penalty: 'DNF', plusTwoCount: 0 };
+    if (used > 15000) return { penalty: 'NONE', plusTwoCount: 1 };
+    return { penalty: 'NONE', plusTwoCount: 0 };
   }
 
   const stopRunning = useCallback(() => {
@@ -96,7 +96,7 @@ export function useTimerEngine(opts: Options) {
     const finalMs = performance.now() - startRef.current;
     setElapsed(finalMs);
     setPhase('stopped');
-    onComplete(Math.round(finalMs), inspectionPenaltyRef.current);
+    onComplete(Math.round(finalMs), inspectionPenaltyRef.current.penalty, inspectionPenaltyRef.current.plusTwoCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onComplete]);
 

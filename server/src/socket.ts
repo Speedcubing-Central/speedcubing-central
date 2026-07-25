@@ -14,6 +14,7 @@ import {
   EVENT_IDS,
   ALG_SET_IDS,
   getAlgSet,
+  MAX_PLUS_TWO_COUNT,
   type ClientToServerEvents,
   type ServerToClientEvents,
   type BattleRoomDTO,
@@ -70,6 +71,7 @@ async function buildRoomDTO(code: string): Promise<BattleRoomDTO | null> {
       points: p.points,
       time: p.time,
       penalty: p.penalty,
+      plusTwoCount: p.plusTwoCount,
       finishedAt: p.finishedAt?.toISOString() ?? null,
       isHost: p.id === room.hostParticipantId,
     })),
@@ -175,7 +177,8 @@ export function attachSocket(server: HttpServer): IOServer {
   const solveCompleteSchema = z.object({
     code: z.string().min(1).max(20),
     time: z.number().int().nonnegative().max(24 * 60 * 60 * 1000),
-    penalty: z.enum(['NONE', 'PLUS2', 'DNF']),
+    penalty: z.enum(['NONE', 'DNF']),
+    plusTwoCount: z.number().int().min(0).max(MAX_PLUS_TWO_COUNT),
   });
   const leaveRoomSchema = z.object({ code: z.string().min(1).max(20) });
   const changeEventSchema = z.object({
@@ -268,14 +271,14 @@ export function attachSocket(server: HttpServer): IOServer {
 
       const ranked = [...participants].sort(
         (a, b) =>
-          effectiveTime(a.time ?? Infinity, a.penalty ?? 'NONE') -
-          effectiveTime(b.time ?? Infinity, b.penalty ?? 'NONE'),
+          effectiveTime(a.time ?? Infinity, a.penalty ?? 'NONE', a.plusTwoCount) -
+          effectiveTime(b.time ?? Infinity, b.penalty ?? 'NONE', b.plusTwoCount),
       );
 
       const results: BattleRoundResultEntry[] = [];
       for (let i = 0; i < ranked.length; i++) {
         const p = ranked[i];
-        const et = effectiveTime(p.time ?? Infinity, p.penalty ?? 'NONE');
+        const et = effectiveTime(p.time ?? Infinity, p.penalty ?? 'NONE', p.plusTwoCount);
         const isDNF = !isFinite(et);
         const pointsEarned = isDNF ? 0 : rankPoints(i + 1);
 
@@ -289,6 +292,7 @@ export function attachSocket(server: HttpServer): IOServer {
           name: p.guestName ?? 'Player',
           time: p.time,
           penalty: p.penalty,
+          plusTwoCount: p.plusTwoCount,
           rank: i + 1,
           pointsEarned,
           totalPoints: p.points + pointsEarned,
@@ -297,7 +301,7 @@ export function attachSocket(server: HttpServer): IOServer {
 
       await prisma.battleParticipant.updateMany({
         where: { roomId: room.id },
-        data: { time: null, penalty: null, finishedAt: null },
+        data: { time: null, penalty: null, plusTwoCount: 0, finishedAt: null },
       });
       await prisma.battleRoom.update({
         where: { id: room.id },
@@ -338,7 +342,7 @@ export function attachSocket(server: HttpServer): IOServer {
       if (me && !me.finishedAt) {
         await prisma.battleParticipant.update({
           where: { id: participantId },
-          data: { finishedAt: new Date(), penalty: 'DNF', time: null },
+          data: { finishedAt: new Date(), penalty: 'DNF', plusTwoCount: 0, time: null },
         });
       }
     }
@@ -368,7 +372,7 @@ export function attachSocket(server: HttpServer): IOServer {
         await prisma.battleRoom.update({ where: { id: room.id }, data: { status: 'WAITING' } });
         await prisma.battleParticipant.updateMany({
           where: { roomId: room.id },
-          data: { time: null, penalty: null, finishedAt: null },
+          data: { time: null, penalty: null, plusTwoCount: 0, finishedAt: null },
         });
       } else {
         await checkRoundCompletion(code);
@@ -532,6 +536,10 @@ export function attachSocket(server: HttpServer): IOServer {
         const parsed = solveCompleteSchema.safeParse(raw);
         if (!parsed.success) return;
         const { time, penalty } = parsed.data;
+        // A DNF never carries stacked +2s — silently zero plusTwoCount
+        // rather than rejecting the request, since the client only ever
+        // sends one or the other (see PenaltyButtons.tsx).
+        const plusTwoCount = penalty === 'DNF' ? 0 : parsed.data.plusTwoCount;
         const code = parsed.data.code.toUpperCase();
         if (!myParticipantId) return;
         const room = await prisma.battleRoom.findUnique({
@@ -552,7 +560,7 @@ export function attachSocket(server: HttpServer): IOServer {
 
         await prisma.battleParticipant.update({
           where: { id: myParticipantId },
-          data: { time, penalty, finishedAt: new Date() },
+          data: { time, penalty, plusTwoCount, finishedAt: new Date() },
         });
 
         socket.to(code).emit('participant_finished', {
@@ -560,6 +568,7 @@ export function attachSocket(server: HttpServer): IOServer {
           name: me.guestName ?? 'Player',
           time,
           penalty,
+          plusTwoCount,
         });
 
         await checkRoundCompletion(code);
@@ -628,7 +637,7 @@ export function attachSocket(server: HttpServer): IOServer {
         });
         await prisma.battleParticipant.updateMany({
           where: { roomId: room.id },
-          data: { points: 0, time: null, penalty: null, finishedAt: null },
+          data: { points: 0, time: null, penalty: null, plusTwoCount: 0, finishedAt: null },
         });
 
         // Mirrors join_room's own auto-start: if ≥2 players are already

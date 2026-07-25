@@ -15,7 +15,6 @@ enum Role {
 
 enum Penalty {
   NONE
-  PLUS2
   DNF
 }
 
@@ -87,6 +86,9 @@ model Solve {
   userId    String
   time      Int // milliseconds (or, for FMC, a move count)
   penalty   Penalty  @default(NONE)
+  // Number of stacked +2s (0-8), only meaningful when penalty is NONE — a
+  // DNF always has this at 0 (see server/src/routes/solves.ts's zeroing).
+  plusTwoCount Int   @default(0)
   scramble  String
   // FMC only: the actual move sequence submitted, so a past attempt can be
   // reviewed later — null for every other event, and for an FMC solve that
@@ -116,6 +118,9 @@ model AlgSolve {
   caseId    String
   time      Int // milliseconds
   penalty   Penalty  @default(NONE)
+  // Number of stacked +2s (0-8), only meaningful when penalty is NONE —
+  // see Solve.plusTwoCount above.
+  plusTwoCount Int   @default(0)
   scramble  String
   createdAt DateTime @default(now())
 
@@ -161,6 +166,9 @@ model BattleParticipant {
   points     Int       @default(0)
   time       Int?
   penalty    Penalty?
+  // Number of stacked +2s (0-8), only meaningful when penalty is NONE —
+  // see Solve.plusTwoCount above.
+  plusTwoCount Int     @default(0)
   finishedAt DateTime?
 
   room BattleRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)

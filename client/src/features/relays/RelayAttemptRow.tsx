@@ -32,7 +32,7 @@ export function RelayAttemptRow({
   function save() {
     // No penalty concept for a relay total — plain time only.
     const parsed = parseTimeInput(value, 2);
-    if (!parsed || parsed.penalty !== 'NONE') return;
+    if (!parsed || parsed.penalty !== 'NONE' || parsed.plusTwoCount > 0) return;
     onSave(parsed.time);
     setEditing(false);
   }

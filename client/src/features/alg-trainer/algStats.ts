@@ -35,8 +35,8 @@ export function statsByCase(solves: AlgSolveDTO[]): Map<string, CaseStats> {
       map.set(key, entry);
     }
     entry.count += 1;
-    const eff = effectiveTime(s.time, s.penalty);
-    if (eff < (entry.pb ? effectiveTime(entry.pb.time, entry.pb.penalty) : Infinity)) {
+    const eff = effectiveTime(s.time, s.penalty, s.plusTwoCount);
+    if (eff < (entry.pb ? effectiveTime(entry.pb.time, entry.pb.penalty, entry.pb.plusTwoCount) : Infinity)) {
       entry.pb = s;
     }
   }

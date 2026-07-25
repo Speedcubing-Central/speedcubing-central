@@ -3,6 +3,9 @@ import type { Penalty } from '@scc/shared';
 export interface CstimerSolveEntry {
   time: number; // ms
   penalty: Penalty;
+  // cstimer's own format has no notion of stacked +2s — a "+2" entry always
+  // imports as plusTwoCount: 1 (see the parse loop below).
+  plusTwoCount: number;
   scramble: string;
   createdAt: string; // ISO
 }
@@ -87,8 +90,11 @@ function enforceDocumentOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] 
 // Each solve entry is [[penaltyCode, timeMs], scramble, comment, unixSeconds];
 // penaltyCode is 0 (OK), 2000 (+2, timeMs already excludes the penalty), or
 // -1 (DNF, timeMs is the raw recorded time) — mirrors this app's own
-// Penalty/time convention (effectiveTime adds the 2000ms for PLUS2), so no
-// adjustment is needed either way.
+// Penalty/time convention (effectiveTime adds 2000ms per stacked +2), so no
+// time adjustment is needed either way. cstimer has no concept of *stacked*
+// +2s, so a 2000 entry always imports as plusTwoCount: 1 — this is a known
+// limitation of the import, not a lossy reduction of anything cstimer itself
+// could represent.
 export function parseCstimerExport(raw: string): CstimerParsedSession[] {
   let data: Record<string, unknown>;
   try {
@@ -124,12 +130,14 @@ export function parseCstimerExport(raw: string): CstimerParsedSession[] {
     for (const entry of rawSolves as unknown[]) {
       if (!Array.isArray(entry) || !Array.isArray(entry[0])) continue;
       const [code, timeMs] = entry[0] as [number, number];
-      const penalty: Penalty = code === -1 ? 'DNF' : code === 2000 ? 'PLUS2' : 'NONE';
+      const penalty: Penalty = code === -1 ? 'DNF' : 'NONE';
+      const plusTwoCount = code === 2000 ? 1 : 0;
       const scramble = typeof entry[1] === 'string' ? entry[1] : '';
       const seconds = typeof entry[3] === 'number' ? entry[3] : Date.now() / 1000;
       solves.push({
         time: Math.max(0, Math.round(timeMs)),
         penalty,
+        plusTwoCount,
         scramble,
         createdAt: new Date(seconds * 1000).toISOString(),
       });

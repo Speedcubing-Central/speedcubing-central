@@ -4,13 +4,15 @@ import type { Penalty } from './index.js';
 export interface TimedSolve {
   time: number; // milliseconds (raw, before penalty)
   penalty: Penalty;
+  // Number of stacked +2s (0-8), only meaningful when penalty is 'NONE'.
+  // Optional so a plain hypothetical (e.g. a BPA/WPA probe) can omit it.
+  plusTwoCount?: number;
 }
 
-// Effective value for averaging: Infinity for DNF, time+2000 for +2.
+// Effective value for averaging: Infinity for DNF, time+2000*plusTwoCount otherwise.
 function eff(s: TimedSolve): number {
   if (s.penalty === 'DNF') return Infinity;
-  if (s.penalty === 'PLUS2') return s.time + 2000;
-  return s.time;
+  return s.time + (s.plusTwoCount ?? 0) * 2000;
 }
 
 export interface AverageResult {

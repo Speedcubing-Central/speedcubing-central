@@ -49,14 +49,15 @@ export function SessionManager({ open, onClose, data, event }: { open: boolean; 
       toast.error('That session has no solves to export');
       return;
     }
-    const rows: string[][] = [['No.', 'Time (ms)', 'Penalty', 'Result', 'Scramble', 'Date']];
+    const rows: string[][] = [['No.', 'Time (ms)', 'Penalty', 'Plus2Count', 'Result', 'Scramble', 'Date']];
     const ordered = [...solves].reverse(); // oldest first
     ordered.forEach((s, i) => {
       rows.push([
         String(i + 1),
         String(s.time),
         s.penalty,
-        formatTime(s.time, s.penalty),
+        String(s.plusTwoCount),
+        formatTime(s.time, s.penalty, 2, s.plusTwoCount),
         s.scramble,
         new Date(s.createdAt).toISOString(),
       ]);

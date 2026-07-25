@@ -1,19 +1,22 @@
-import type { Penalty } from '@scc/shared';
+import { MAX_PLUS_TWO_COUNT, type Penalty } from '@scc/shared';
 
 // Parse a time string. For pure-digit inputs (no . or :), use precision to
 // interpret: the last `precision` digits are the fractional part.
 // e.g. precision=2, "1258" → 12.58s; "12684" → 1:26.84
-export function parseTimeInput(raw: string, precision: number): { time: number; penalty: Penalty } | null {
+// A trailing "+" stacks a +2 — repeat it ("12.58++") to stack more than one,
+// up to MAX_PLUS_TWO_COUNT.
+export function parseTimeInput(raw: string, precision: number): { time: number; penalty: Penalty; plusTwoCount: number } | null {
   const t = raw.trim();
   if (!t) return null;
-  if (/^dnf$/i.test(t)) return { time: 0, penalty: 'DNF' };
+  if (/^dnf$/i.test(t)) return { time: 0, penalty: 'DNF', plusTwoCount: 0 };
 
-  let penalty: Penalty = 'NONE';
+  let plusTwoCount = 0;
   let s = t;
-  if (s.endsWith('+')) {
-    penalty = 'PLUS2';
+  while (s.endsWith('+') && plusTwoCount < MAX_PLUS_TWO_COUNT) {
+    plusTwoCount++;
     s = s.slice(0, -1);
   }
+  const penalty: Penalty = 'NONE';
 
   let ms: number;
 
@@ -34,5 +37,5 @@ export function parseTimeInput(raw: string, precision: number): { time: number; 
   }
 
   if (isNaN(ms) || ms < 0) return null;
-  return { time: Math.round(ms), penalty };
+  return { time: Math.round(ms), penalty, plusTwoCount };
 }

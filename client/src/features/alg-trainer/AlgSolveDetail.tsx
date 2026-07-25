@@ -23,7 +23,7 @@ export function AlgSolveDetail({
   onClose: () => void;
   solves: AlgSolveDTO[];
   index: number;
-  onUpdatePenalty: (solveId: string, penalty: Penalty) => void;
+  onUpdatePenalty: (solveId: string, penalty: Penalty, plusTwoCount: number) => void;
   onUpdateTime: (solveId: string, time: number) => void;
   onDelete: (solveId: string) => void;
 }) {
@@ -92,7 +92,7 @@ export function AlgSolveDetail({
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2">
-            <div className="font-mono text-5xl font-bold">{formatTime(solve.time, solve.penalty, solvePrecision)}</div>
+            <div className="font-mono text-5xl font-bold">{formatTime(solve.time, solve.penalty, solvePrecision, solve.plusTwoCount)}</div>
             <button
               onClick={startEdit}
               className="text-muted hover:text-accent transition-colors self-start mt-2"
@@ -110,7 +110,11 @@ export function AlgSolveDetail({
       </div>
 
       <div className="flex justify-center mb-5">
-        <PenaltyButtons penalty={solve.penalty} onChange={(p) => onUpdatePenalty(solve.id, p)} />
+        <PenaltyButtons
+          penalty={solve.penalty}
+          plusTwoCount={solve.plusTwoCount}
+          onChange={(p, c) => onUpdatePenalty(solve.id, p, c)}
+        />
       </div>
 
       <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-center mb-5">
@@ -143,7 +147,7 @@ export function AlgSolveDetail({
       <div className="flex items-center justify-between border-t border-gray-200 dark:border-border pt-3">
         <button
           className="btn-ghost"
-          onClick={() => copyText(`${formatTime(solve.time, solve.penalty, solvePrecision)}   ${solve.scramble}`, 'Solve copied')}
+          onClick={() => copyText(`${formatTime(solve.time, solve.penalty, solvePrecision, solve.plusTwoCount)}   ${solve.scramble}`, 'Solve copied')}
         >
           <Icon name="copy" size={15} /> Copy solve
         </button>

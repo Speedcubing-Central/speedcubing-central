@@ -961,9 +961,9 @@ function TrainingSession({
     holdToStart: s.holdToStart,
     holdDuration: s.holdDuration,
     enabled: s.entryMode === 'keyboard' && !anyModalOpen,
-    onComplete: (timeMs, penalty) => {
+    onComplete: (timeMs, penalty, plusTwoCount) => {
       flashSolved(currentCase);
-      data.addSolve(currentSetId, currentCase.id, timeMs, penalty, scramble);
+      data.addSolve(currentSetId, currentCase.id, timeMs, penalty, plusTwoCount, scramble);
       nextCase();
     },
   });
@@ -1000,7 +1000,7 @@ function TrainingSession({
     const parsed = parseTimeInput(manualInput, s.solvePrecision);
     if (!parsed) return;
     flashSolved(currentCase);
-    data.addSolve(currentSetId, currentCase.id, parsed.time, parsed.penalty, scramble);
+    data.addSolve(currentSetId, currentCase.id, parsed.time, parsed.penalty, parsed.plusTwoCount, scramble);
     nextCase();
   };
 
@@ -1334,10 +1334,10 @@ function TrainerSolveRow({
         onClick={onOpen}
         className={clsx('font-mono text-sm font-semibold hover:text-accent text-right', solve.penalty === 'DNF' && 'text-red-400')}
       >
-        {fmtTime(solve.time, solve.penalty, precision)}
+        {fmtTime(solve.time, solve.penalty, precision, solve.plusTwoCount)}
       </button>
       <button
-        onClick={() => copyText(fmtTime(solve.time, solve.penalty, precision), 'Time copied')}
+        onClick={() => copyText(fmtTime(solve.time, solve.penalty, precision, solve.plusTwoCount), 'Time copied')}
         title="Copy time"
         className="text-muted hover:text-accent justify-self-end"
       >

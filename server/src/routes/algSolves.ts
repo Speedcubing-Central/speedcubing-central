@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toAlgSolveDTO } from '../util/dto.js';
-import { getAlgSet } from '@scc/shared';
+import { getAlgSet, MAX_PLUS_TWO_COUNT } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -13,13 +13,15 @@ const createSchema = z
     setId: z.string().min(1),
     caseId: z.string().min(1),
     time: z.number().int().nonnegative(),
-    penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
+    penalty: z.enum(['NONE', 'DNF']).default('NONE'),
+    plusTwoCount: z.number().int().min(0).max(MAX_PLUS_TWO_COUNT).default(0),
     scramble: z.string().max(2000).default(''),
   })
   .refine((d) => getAlgSet(d.setId)?.caseIds.includes(d.caseId), 'Invalid setId/caseId');
 
 const patchSchema = z.object({
-  penalty: z.enum(['NONE', 'PLUS2', 'DNF']).optional(),
+  penalty: z.enum(['NONE', 'DNF']).optional(),
+  plusTwoCount: z.number().int().min(0).max(MAX_PLUS_TWO_COUNT).optional(),
   time: z.number().int().positive().optional(),
 });
 
@@ -41,7 +43,7 @@ router.post('/', async (req, res, next) => {
   try {
     const data = createSchema.parse(req.body);
     const solve = await prisma.algSolve.create({
-      data: { ...data, userId: req.user!.sub },
+      data: { ...data, plusTwoCount: data.penalty === 'DNF' ? 0 : data.plusTwoCount, userId: req.user!.sub },
     });
     res.status(201).json(toAlgSolveDTO(solve));
   } catch (e) {
@@ -58,7 +60,12 @@ router.patch('/:id', async (req, res, next) => {
       return;
     }
     const patch = patchSchema.parse(req.body);
-    const updated = await prisma.algSolve.update({ where: { id: solve.id }, data: patch });
+    const nextPenalty = patch.penalty ?? solve.penalty;
+    // A DNF never carries stacked +2s — silently zero plusTwoCount rather
+    // than rejecting the request, since the client only ever sends one or
+    // the other.
+    const plusTwoCount = nextPenalty === 'DNF' ? 0 : patch.plusTwoCount ?? solve.plusTwoCount;
+    const updated = await prisma.algSolve.update({ where: { id: solve.id }, data: { ...patch, plusTwoCount } });
     res.json(toAlgSolveDTO(updated));
   } catch (e) {
     next(e);

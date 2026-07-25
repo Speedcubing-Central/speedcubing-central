@@ -31,6 +31,7 @@ export function toSolveDTO(s: Solve): SolveDTO {
     userId: s.userId,
     time: s.time,
     penalty: s.penalty,
+    plusTwoCount: s.plusTwoCount,
     scramble: s.scramble,
     solution: s.solution ?? undefined,
     comment: s.comment ?? undefined,
@@ -57,6 +58,7 @@ export function toAlgSolveDTO(s: AlgSolve): AlgSolveDTO {
     caseId: s.caseId,
     time: s.time,
     penalty: s.penalty,
+    plusTwoCount: s.plusTwoCount,
     scramble: s.scramble,
     createdAt: s.createdAt.toISOString(),
   };

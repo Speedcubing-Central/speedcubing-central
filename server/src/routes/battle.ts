@@ -107,6 +107,7 @@ router.get('/:code', async (req, res, next) => {
         points: p.points,
         time: p.time,
         penalty: p.penalty,
+        plusTwoCount: p.plusTwoCount,
         finishedAt: p.finishedAt?.toISOString() ?? null,
         isHost: p.id === room.hostParticipantId,
       })),

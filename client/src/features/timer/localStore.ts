@@ -60,7 +60,7 @@ export const guestStore = {
   listSolves(sessionId: string): SolveDTO[] {
     return read().solves[sessionId] ?? [];
   },
-  addSolve(sessionId: string, time: number, penalty: Penalty, scramble: string, solution?: string): SolveDTO {
+  addSolve(sessionId: string, time: number, penalty: Penalty, plusTwoCount: number, scramble: string, solution?: string): SolveDTO {
     const data = read();
     const solve: SolveDTO = {
       id: uid(),
@@ -68,6 +68,7 @@ export const guestStore = {
       userId: 'guest',
       time,
       penalty,
+      plusTwoCount: penalty === 'DNF' ? 0 : plusTwoCount,
       scramble,
       solution,
       createdAt: new Date().toISOString(),
@@ -78,10 +79,13 @@ export const guestStore = {
     write(data);
     return solve;
   },
-  updatePenalty(sessionId: string, solveId: string, penalty: Penalty) {
+  updatePenalty(sessionId: string, solveId: string, penalty: Penalty, plusTwoCount: number) {
     const data = read();
     const solve = data.solves[sessionId]?.find((x) => x.id === solveId);
-    if (solve) solve.penalty = penalty;
+    if (solve) {
+      solve.penalty = penalty;
+      solve.plusTwoCount = penalty === 'DNF' ? 0 : plusTwoCount;
+    }
     write(data);
   },
   updateTime(sessionId: string, solveId: string, time: number) {
@@ -101,7 +105,7 @@ export const guestStore = {
   // timestamp rather than assumed to already be newest-first.
   addSolvesBulk(
     sessionId: string,
-    entries: { time: number; penalty: Penalty; scramble: string; createdAt: string }[],
+    entries: { time: number; penalty: Penalty; plusTwoCount: number; scramble: string; createdAt: string }[],
   ): SolveDTO[] {
     const data = read();
     const newSolves: SolveDTO[] = entries.map((e) => ({
@@ -110,6 +114,7 @@ export const guestStore = {
       userId: 'guest',
       time: e.time,
       penalty: e.penalty,
+      plusTwoCount: e.penalty === 'DNF' ? 0 : e.plusTwoCount,
       scramble: e.scramble,
       createdAt: e.createdAt,
     }));

@@ -66,8 +66,12 @@ export function FmcAttemptView({
   finish: () => void;
   // `solution` is the exact text that was checked — omitted for a give-up,
   // since nothing was ever submitted to record. Persisted with the solve so
-  // SolveDetail can show a past attempt's actual solution later.
-  onSubmit: (moveCount: number, penalty: Penalty, solution?: string) => void;
+  // SolveDetail can show a past attempt's actual solution later. FMC never
+  // carries a +2 (no time-based penalty concept — see plusTwoCount's doc
+  // comment in shared/src/index.ts), so plusTwoCount is always 0 here; it's
+  // still a required param purely to match useTimerEngine's onComplete shape
+  // (TimerPage passes the same onComplete callback to both).
+  onSubmit: (moveCount: number, penalty: Penalty, plusTwoCount: number, solution?: string) => void;
 }) {
   const [moves, setMoves] = useState<string[]>(['']);
   const [phase, setPhase] = useState<Phase>('entering');
@@ -100,13 +104,13 @@ export function FmcAttemptView({
 
   function handleGiveUp() {
     finish();
-    onSubmit(0, 'DNF');
+    onSubmit(0, 'DNF', 0);
   }
 
   function handleContinue() {
     if (!result) return;
     finish();
-    onSubmit(result.moveCount, result.ok ? 'NONE' : 'DNF', submittedSolutionText);
+    onSubmit(result.moveCount, result.ok ? 'NONE' : 'DNF', 0, submittedSolutionText);
   }
 
   return (

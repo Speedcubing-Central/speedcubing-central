@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toSolveDTO } from '../util/dto.js';
+import { MAX_PLUS_TWO_COUNT } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
 
 const patchSchema = z.object({
-  penalty: z.enum(['NONE', 'PLUS2', 'DNF']).optional(),
+  penalty: z.enum(['NONE', 'DNF']).optional(),
+  plusTwoCount: z.number().int().min(0).max(MAX_PLUS_TWO_COUNT).optional(),
   time: z.number().int().positive().optional(),
   // A blank/whitespace-only comment clears it back to no comment at all
   // (stored as null) rather than persisting an empty string.
@@ -26,9 +28,14 @@ router.patch('/:id', async (req, res, next) => {
       return;
     }
     const { comment, ...rest } = patchSchema.parse(req.body);
+    const nextPenalty = rest.penalty ?? solve.penalty;
+    // A DNF never carries stacked +2s — silently zero plusTwoCount rather
+    // than rejecting the request, since the client only ever sends one or
+    // the other (see PenaltyButtons.tsx).
+    const plusTwoCount = nextPenalty === 'DNF' ? 0 : rest.plusTwoCount ?? solve.plusTwoCount;
     const updated = await prisma.solve.update({
       where: { id: solve.id },
-      data: { ...rest, ...(comment !== undefined ? { comment: comment.trim() || null } : {}) },
+      data: { ...rest, plusTwoCount, ...(comment !== undefined ? { comment: comment.trim() || null } : {}) },
     });
     res.json(toSolveDTO(updated));
   } catch (e) {

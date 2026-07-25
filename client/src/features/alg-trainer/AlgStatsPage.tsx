@@ -94,7 +94,7 @@ export default function AlgStatsPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="font-mono text-sm font-semibold text-accent">
-                    {stats.pb ? formatTime(stats.pb.time, stats.pb.penalty, solvePrecision) : 'DNF'}
+                    {stats.pb ? formatTime(stats.pb.time, stats.pb.penalty, solvePrecision, stats.pb.plusTwoCount) : 'DNF'}
                   </div>
                   <div className="text-xs text-muted">PB</div>
                 </div>

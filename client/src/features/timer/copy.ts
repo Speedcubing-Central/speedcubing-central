@@ -8,7 +8,7 @@ export { copyText } from '../../lib/clipboard';
 // separated per row for megaminx — see formatScrambleForCopy). FMC copies
 // as a bare move count ("38") instead, matching how it's displayed everywhere else.
 export function formatSolveCopy(solve: SolveDTO, eventId: string, precision: number): string {
-  const t = eventId === '333fm' ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, precision);
+  const t = eventId === '333fm' ? formatMoveCount(solve.time, solve.penalty) : formatTime(solve.time, solve.penalty, precision, solve.plusTwoCount);
   return `${t}   ${formatScrambleForCopy(solve.scramble, eventId)}`;
 }
 
@@ -23,7 +23,7 @@ export function formatAverageCopy(view: SolveAverage, eventId: string, precision
   const lines = [`${label}: ${value} (${evName})`, ''];
   view.window.forEach((s, i) => {
     const dropped = view.droppedIndices.includes(i);
-    const t = isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, precision);
+    const t = isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, precision, s.plusTwoCount);
     const shown = dropped ? `(${t})` : t;
     lines.push(`${i + 1}. ${shown}\t${formatScrambleForCopy(s.scramble, eventId)}`);
   });

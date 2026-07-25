@@ -4,7 +4,7 @@ import { trimmedAverage, mean, effectiveTime, type TimedSolve } from '@scc/share
 export const AVERAGE_SIZES = [3, 5, 12, 50, 100, 1000] as const;
 export type AvgSize = (typeof AVERAGE_SIZES)[number];
 
-const toTimed = (s: SolveDTO): TimedSolve => ({ time: s.time, penalty: s.penalty });
+const toTimed = (s: SolveDTO): TimedSolve => ({ time: s.time, penalty: s.penalty, plusTwoCount: s.plusTwoCount });
 
 // Infinity is used to represent a DNF average (sorts last, formats as "DNF").
 function avgValue(window: TimedSolve[]): number | null {
@@ -20,7 +20,7 @@ export interface SingleStats {
 }
 
 export function singleStats(solves: SolveDTO[]): SingleStats {
-  const finite = solves.map((s) => effectiveTime(s.time, s.penalty)).filter((v) => isFinite(v));
+  const finite = solves.map((s) => effectiveTime(s.time, s.penalty, s.plusTwoCount)).filter((v) => isFinite(v));
   return {
     count: solves.length,
     best: finite.length ? Math.min(...finite) : null,
@@ -86,7 +86,7 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
   const n = solves.length;
   if (n < size) return { value: null, index: null };
 
-  const eff = (s: SolveDTO) => effectiveTime(s.time, s.penalty);
+  const eff = (s: SolveDTO) => effectiveTime(s.time, s.penalty, s.plusTwoCount);
 
   if (size === 3) {
     // Mo3: mean of all 3, no trimming — any DNF makes the whole thing DNF.
@@ -159,7 +159,7 @@ export function bestSingleIndex(solves: SolveDTO[]): number | null {
   let best: number | null = null;
   let idx: number | null = null;
   solves.forEach((s, i) => {
-    const t = effectiveTime(s.time, s.penalty);
+    const t = effectiveTime(s.time, s.penalty, s.plusTwoCount);
     if (isFinite(t) && (best === null || t < best)) {
       best = t;
       idx = i;
@@ -294,7 +294,7 @@ export function sortedSolveIndices(solves: SolveDTO[], sortBy: SolveSortBy): num
   if (sortBy === 'date') return indices;
   const valueAt = (i: number): number => {
     if (sortBy === 'single') {
-      const t = effectiveTime(solves[i].time, solves[i].penalty);
+      const t = effectiveTime(solves[i].time, solves[i].penalty, solves[i].plusTwoCount);
       return isFinite(t) ? t : Infinity;
     }
     const view = makeAverageView(solves, i, sortBy === 'ao5' ? 5 : 12);

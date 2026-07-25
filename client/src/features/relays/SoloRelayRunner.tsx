@@ -209,7 +209,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
     // field) — plain time only, so a stray "+"/"DNF" is rejected rather
     // than silently mis-recorded.
     const parsed = parseTimeInput(typed, 2);
-    if (!parsed || parsed.penalty !== 'NONE') {
+    if (!parsed || parsed.penalty !== 'NONE' || parsed.plusTwoCount > 0) {
       toast.error('Enter a plain time, e.g. 1:23.45');
       return;
     }

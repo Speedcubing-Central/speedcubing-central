@@ -89,7 +89,7 @@ export function AverageDetail({ view, event, onClose }: { view: SolveAverage; ev
                 <span className="text-muted text-xs">{index + 1}.</span>
                 <span className="font-mono">
                   {dropped ? '(' : ''}
-                  {isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, solvePrecision)}
+                  {isFmc ? formatMoveCount(s.time, s.penalty) : formatTime(s.time, s.penalty, solvePrecision, s.plusTwoCount)}
                   {dropped ? ')' : ''}
                 </span>
                 <span className="font-mono text-xs text-muted break-words">{formatScrambleForCopy(s.scramble, event) || '—'}</span>

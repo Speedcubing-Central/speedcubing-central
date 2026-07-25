@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toSessionDTO, toSolveDTO } from '../util/dto.js';
-import { EVENT_IDS } from '@scc/shared';
+import { EVENT_IDS, MAX_PLUS_TWO_COUNT } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -17,7 +17,10 @@ const renameSchema = z.object({ name: z.string().min(1).max(60) });
 
 const solveSchema = z.object({
   time: z.number().int().nonnegative(),
-  penalty: z.enum(['NONE', 'PLUS2', 'DNF']).default('NONE'),
+  penalty: z.enum(['NONE', 'DNF']).default('NONE'),
+  // Only meaningful when penalty is 'NONE' — zeroed for DNF below rather
+  // than rejected, since a client only ever sends one or the other.
+  plusTwoCount: z.number().int().min(0).max(MAX_PLUS_TWO_COUNT).default(0),
   scramble: z.string().max(2000).default(''),
   // FMC only — an 80-move solution written in this app's box notation
   // (single letter + optional modifier, space-separated) comfortably fits
@@ -127,6 +130,7 @@ router.post('/:id/solves', async (req, res, next) => {
         userId: req.user!.sub,
         time: data.time,
         penalty: data.penalty,
+        plusTwoCount: data.penalty === 'DNF' ? 0 : data.plusTwoCount,
         scramble: data.scramble,
         solution: data.solution ?? null,
       },
@@ -152,6 +156,7 @@ router.post('/:id/solves/bulk', async (req, res, next) => {
         userId: req.user!.sub,
         time: s.time,
         penalty: s.penalty,
+        plusTwoCount: s.penalty === 'DNF' ? 0 : s.plusTwoCount,
         scramble: s.scramble,
         ...(s.createdAt ? { createdAt: new Date(s.createdAt) } : {}),
       })),

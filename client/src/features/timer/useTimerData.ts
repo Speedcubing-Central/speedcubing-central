@@ -149,14 +149,14 @@ export function useTimerData(eventId: string) {
   );
 
   const addSolve = useCallback(
-    async (time: number, penalty: Penalty, scramble: string, sessionId?: string, solution?: string) => {
+    async (time: number, penalty: Penalty, plusTwoCount: number, scramble: string, sessionId?: string, solution?: string) => {
       const id = sessionId ?? currentId;
       if (!id) return;
       let solve: SolveDTO;
       if (isGuest) {
-        solve = guestStore.addSolve(id, time, penalty, scramble, solution);
+        solve = guestStore.addSolve(id, time, penalty, plusTwoCount, scramble, solution);
       } else {
-        solve = (await api.post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, scramble, solution })).data;
+        solve = (await api.post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, plusTwoCount, scramble, solution })).data;
       }
       setSolves((prev) => [solve, ...prev]);
       setSessions((prev) =>
@@ -169,11 +169,12 @@ export function useTimerData(eventId: string) {
   );
 
   const updatePenalty = useCallback(
-    async (solveId: string, penalty: Penalty) => {
+    async (solveId: string, penalty: Penalty, plusTwoCount: number) => {
       if (!currentId) return;
-      if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty);
-      else await api.patch(`/solves/${solveId}`, { penalty });
-      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, penalty } : s)));
+      const count = penalty === 'DNF' ? 0 : plusTwoCount;
+      if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty, count);
+      else await api.patch(`/solves/${solveId}`, { penalty, plusTwoCount: count });
+      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, penalty, plusTwoCount: count } : s)));
     },
     [currentId, isGuest],
   );
@@ -238,7 +239,7 @@ export function useTimerData(eventId: string) {
   const importSolves = useCallback(
     async (
       sessionId: string,
-      entries: { time: number; penalty: Penalty; scramble: string; createdAt: string }[],
+      entries: { time: number; penalty: Penalty; plusTwoCount: number; scramble: string; createdAt: string }[],
       onProgress?: (done: number, total: number) => void,
     ) => {
       if (isGuest) {

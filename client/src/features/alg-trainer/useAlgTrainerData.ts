@@ -50,10 +50,10 @@ export function useAlgTrainerData(setIds: string[]) {
   }, [key, isGuest]);
 
   const addSolve = useCallback(
-    async (setId: string, caseId: string, time: number, penalty: Penalty, scramble: string) => {
+    async (setId: string, caseId: string, time: number, penalty: Penalty, plusTwoCount: number, scramble: string) => {
       const solve = isGuest
-        ? guestAlgStore.addSolve(setId, caseId, time, penalty, scramble)
-        : (await api.post<AlgSolveDTO>('/alg-solves', { setId, caseId, time, penalty, scramble })).data;
+        ? guestAlgStore.addSolve(setId, caseId, time, penalty, plusTwoCount, scramble)
+        : (await api.post<AlgSolveDTO>('/alg-solves', { setId, caseId, time, penalty, plusTwoCount, scramble })).data;
       setSolves((prev) => [solve, ...prev]);
       return solve;
     },
@@ -61,12 +61,13 @@ export function useAlgTrainerData(setIds: string[]) {
   );
 
   const updatePenalty = useCallback(
-    async (solveId: string, penalty: Penalty) => {
+    async (solveId: string, penalty: Penalty, plusTwoCount: number) => {
       const target = solves.find((s) => s.id === solveId);
       if (!target) return;
-      if (isGuest) guestAlgStore.updatePenalty(target.setId, solveId, penalty);
-      else await api.patch(`/alg-solves/${solveId}`, { penalty });
-      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, penalty } : s)));
+      const count = penalty === 'DNF' ? 0 : plusTwoCount;
+      if (isGuest) guestAlgStore.updatePenalty(target.setId, solveId, penalty, count);
+      else await api.patch(`/alg-solves/${solveId}`, { penalty, plusTwoCount: count });
+      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, penalty, plusTwoCount: count } : s)));
     },
     [isGuest, solves],
   );

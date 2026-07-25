@@ -19,6 +19,7 @@ export interface RoundResult {
 export interface PersonalSolve {
   time: number | null;
   penalty: Penalty | null;
+  plusTwoCount: number;
   rank: number;
   pointsEarned: number;
 }
@@ -77,14 +78,14 @@ export function useBattleSocket() {
       setRoom((prev) => (prev ? { ...prev, status: 'ACTIVE', scramble, roundNumber } : prev));
     });
 
-    socket.on('participant_finished', ({ participantId, time, penalty }) => {
+    socket.on('participant_finished', ({ participantId, time, penalty, plusTwoCount }) => {
       setRoom((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           participants: prev.participants.map((p) =>
             p.id === participantId
-              ? { ...p, time, penalty, finishedAt: new Date().toISOString() }
+              ? { ...p, time, penalty, plusTwoCount, finishedAt: new Date().toISOString() }
               : p,
           ),
         };
@@ -100,7 +101,7 @@ export function useBattleSocket() {
         if (mine) {
           setMyHistory((prev) => [
             ...prev,
-            { time: mine.time, penalty: mine.penalty, rank: mine.rank, pointsEarned: mine.pointsEarned },
+            { time: mine.time, penalty: mine.penalty, plusTwoCount: mine.plusTwoCount, rank: mine.rank, pointsEarned: mine.pointsEarned },
           ]);
         }
       }
@@ -134,8 +135,8 @@ export function useBattleSocket() {
     setMyParticipantIdState(id);
   }, []);
 
-  const solveComplete = useCallback((code: string, time: number, penalty: Penalty) => {
-    socketRef.current?.emit('solve_complete', { code, time, penalty });
+  const solveComplete = useCallback((code: string, time: number, penalty: Penalty, plusTwoCount: number) => {
+    socketRef.current?.emit('solve_complete', { code, time, penalty, plusTwoCount });
   }, []);
 
   const leaveRoom = useCallback((code: string) => {

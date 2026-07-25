@@ -7,8 +7,13 @@ export * from './relays.js';
 import type { RelayServerToClientEvents, RelayClientToServerEvents } from './relays.js';
 
 export type Role = 'GUEST' | 'USER';
-export type Penalty = 'NONE' | 'PLUS2' | 'DNF';
+export type Penalty = 'NONE' | 'DNF';
 export type BattleStatus = 'WAITING' | 'ACTIVE' | 'FINISHED';
+
+// Max number of stacked +2s a single result can carry (1-8, i.e. +2 through
+// +16) — only meaningful when penalty is 'NONE'; DNF and plusTwoCount are
+// mutually exclusive (see the DTOs below and server/src/routes/solves.ts).
+export const MAX_PLUS_TWO_COUNT = 8;
 
 export interface WcaEvent {
   id: string;
@@ -104,6 +109,8 @@ export interface SolveDTO {
   userId: string;
   time: number; // milliseconds
   penalty: Penalty;
+  // Number of stacked +2s (0-8), only meaningful when penalty is 'NONE'.
+  plusTwoCount: number;
   scramble: string;
   // FMC only: the move sequence that was actually submitted. Undefined for
   // every other event, and for an FMC solve that was given up on or timed
@@ -134,6 +141,8 @@ export interface AlgSolveDTO {
   caseId: string;
   time: number; // milliseconds
   penalty: Penalty;
+  // Number of stacked +2s (0-8), only meaningful when penalty is 'NONE'.
+  plusTwoCount: number;
   scramble: string;
   createdAt: string;
 }
@@ -156,6 +165,8 @@ export interface BattleParticipantDTO {
   points: number;
   time?: number | null;
   penalty?: Penalty | null;
+  // Number of stacked +2s (0-8), only meaningful when penalty is 'NONE'.
+  plusTwoCount: number;
   finishedAt?: string | null;
   // Whether this participant is the current room host — see BattleRoom's
   // hostParticipantId. Whoever created the room starts as host; if they
@@ -195,6 +206,8 @@ export interface BattleRoundResultEntry {
   name: string;
   time: number | null;
   penalty: Penalty | null;
+  // Number of stacked +2s (0-8), only meaningful when penalty is 'NONE'.
+  plusTwoCount: number;
   rank: number;
   pointsEarned: number;
   totalPoints: number;
@@ -212,7 +225,7 @@ export interface ChatMessageDTO {
 export interface ServerToClientEvents extends RelayServerToClientEvents {
   room_state: (room: BattleRoomDTO) => void;
   round_start: (payload: { scramble: string; roundNumber: number }) => void;
-  participant_finished: (payload: { participantId: string; name: string; time: number | null; penalty: Penalty | null }) => void;
+  participant_finished: (payload: { participantId: string; name: string; time: number | null; penalty: Penalty | null; plusTwoCount: number }) => void;
   round_result: (payload: { results: BattleRoundResultEntry[]; roundNumber: number }) => void;
   chat_message: (payload: ChatMessageDTO) => void;
   error_msg: (payload: { message: string }) => void;
@@ -223,7 +236,7 @@ export interface ClientToServerEvents extends RelayClientToServerEvents {
   // identity from the caller's verified access_token cookie (see
   // server/src/socket.ts), never from a client-supplied field.
   join_room: (payload: { code: string; name: string; password?: string }) => void;
-  solve_complete: (payload: { code: string; time: number; penalty: Penalty }) => void;
+  solve_complete: (payload: { code: string; time: number; penalty: Penalty; plusTwoCount: number }) => void;
   leave_room: (payload: { code: string }) => void;
   // Host-only: switch the room to a different event/algorithm set. Allowed
   // even mid-round — see server/src/socket.ts.
@@ -231,23 +244,33 @@ export interface ClientToServerEvents extends RelayClientToServerEvents {
   send_chat_message: (payload: { code: string; message: string }) => void;
 }
 
-// Effective solve time given a penalty. DNF returns Infinity.
-export function effectiveTime(time: number, penalty: Penalty): number {
+// Effective solve time given a penalty and any stacked +2s. DNF returns Infinity.
+export function effectiveTime(time: number, penalty: Penalty, plusTwoCount = 0): number {
   if (penalty === 'DNF') return Infinity;
-  if (penalty === 'PLUS2') return time + 2000;
-  return time;
+  return time + plusTwoCount * 2000;
+}
+
+// The "+2"/"+4"/"+6"/... suffix a stacked-+2 result is displayed with — a
+// bare "+" for a single +2 (matching the old PLUS2 enum's exact display
+// convention), otherwise the actual total seconds added.
+function plusTwoSuffix(plusTwoCount: number): string {
+  if (plusTwoCount <= 0) return '';
+  if (plusTwoCount === 1) return '+';
+  return `+${plusTwoCount * 2}`;
 }
 
 // Format milliseconds as a cube timer string, e.g. 12345 -> "12.35", 73210 -> "1:13.21".
 // `decimals` controls displayed precision (0 = whole seconds, 2 = centiseconds, 3 = milliseconds).
+// `plusTwoCount` (0-8 stacked +2s) is only meaningful when penalty is 'NONE'.
 export function formatTime(
   ms: number | null | undefined,
   penalty: Penalty = 'NONE',
   decimals = 2,
+  plusTwoCount = 0,
 ): string {
   if (penalty === 'DNF') return 'DNF';
   if (ms === null || ms === undefined || !isFinite(ms)) return 'DNF';
-  const withPenalty = penalty === 'PLUS2' ? ms + 2000 : ms;
+  const withPenalty = ms + plusTwoCount * 2000;
   // Round to the displayed precision in whole milliseconds *before* splitting
   // into minutes/seconds/fraction — rounding each piece independently (the
   // previous approach) let a value like 59.9996s at 2 decimals round its
@@ -264,7 +287,7 @@ export function formatTime(
   // came out "1:003" instead of "1:03".
   const frac = decimals > 0 ? `.${String(rounded % 1000).padStart(3, '0').slice(0, decimals)}` : '';
   const base = minutes > 0 ? `${minutes}:${String(secs).padStart(2, '0')}${frac}` : `${secs}${frac}`;
-  return penalty === 'PLUS2' ? `${base}+` : base;
+  return `${base}${plusTwoSuffix(plusTwoCount)}`;
 }
 
 // FMC results are a move count, not a time — SolveDTO's `time` field is
@@ -284,8 +307,14 @@ export function formatTime(
 // formatting a mean/average (mo3, ao5, ...) pass 2, matching WCA's own
 // convention of reporting FMC means to 2 decimal places even though no
 // individual solve ever has a fractional move count.
-export function formatMoveCount(moves: number | null | undefined, penalty: Penalty = 'NONE', decimals = 0): string {
+export function formatMoveCount(
+  moves: number | null | undefined,
+  penalty: Penalty = 'NONE',
+  decimals = 0,
+  plusTwoCount = 0,
+): string {
   if (penalty === 'DNF') return 'DNF';
   if (moves === null || moves === undefined || !isFinite(moves)) return 'DNF';
-  return decimals > 0 ? moves.toFixed(decimals) : String(Math.round(moves));
+  const base = decimals > 0 ? moves.toFixed(decimals) : String(Math.round(moves));
+  return `${base}${plusTwoSuffix(plusTwoCount)}`;
 }

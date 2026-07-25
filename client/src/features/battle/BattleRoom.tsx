@@ -13,6 +13,7 @@ import { ScramblePanel } from '../../components/ScramblePanel';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useFittedFontSize } from '../../components/useFittedFontSize';
 import { useTimerEngine, formatInspectionDisplay } from '../timer/useTimerEngine';
+import { PenaltyButtons } from '../timer/PenaltyButtons';
 import { useBattleSocket, type RoundResult } from './useBattleSocket';
 import { battleAlgSetLabel } from './algSetOptions';
 import { EventAndAlgSetSelect } from './EventPicker';
@@ -194,7 +195,7 @@ function RoundResultOverlay({ result, onDismiss }: { result: RoundResult; onDism
             <div key={r.participantId} className="flex items-center gap-3 text-sm">
               <span className="w-6 text-center">{MEDALS[i] ?? `${i + 1}.`}</span>
               <span className="flex-1 font-medium truncate">{r.name}</span>
-              <span className="text-muted font-mono">{formatTime(r.time, r.penalty ?? 'NONE')}</span>
+              <span className="text-muted font-mono">{formatTime(r.time, r.penalty ?? 'NONE', 2, r.plusTwoCount)}</span>
               <span className={clsx('text-xs font-semibold', r.pointsEarned > 0 ? 'text-green-400' : 'text-muted')}>
                 +{r.pointsEarned} pts
               </span>
@@ -258,6 +259,7 @@ export default function BattleRoom() {
   // Timer state
   const [submitted, setSubmitted] = useState(false);
   const [pendingPenalty, setPendingPenalty] = useState<Penalty>('NONE');
+  const [pendingPlusTwoCount, setPendingPlusTwoCount] = useState<number>(0);
   const [pendingTime, setPendingTime] = useState<number>(0);
   const [awaitingSubmit, setAwaitingSubmit] = useState(false);
   const [typingInput, setTypingInput] = useState('');
@@ -274,9 +276,10 @@ export default function BattleRoom() {
   const timerActive = room?.status === 'ACTIVE' && !submitted;
 
   const onTimerComplete = useCallback(
-    (timeMs: number, _penalty: Penalty) => {
+    (timeMs: number, _penalty: Penalty, _plusTwoCount: number) => {
       setPendingTime(timeMs);
       setPendingPenalty('NONE');
+      setPendingPlusTwoCount(0);
       setAwaitingSubmit(true);
     },
     [],
@@ -293,14 +296,17 @@ export default function BattleRoom() {
     onComplete: onTimerComplete,
   });
 
-  // `time` defaults to the already-set pendingTime (the normal confirm-screen
-  // path); the typing tile's DNF shortcut passes 0 explicitly so it doesn't
-  // have to wait a render for a just-called setPendingTime(0) to land.
-  function submitSolve(penalty: Penalty, time: number = pendingTime) {
+  // `time`/`plusTwoCount` default to the already-set pending values (the
+  // normal confirm-screen path); the typing tile's DNF shortcut passes 0
+  // explicitly so it doesn't have to wait a render for a just-called
+  // setPendingTime(0) to land.
+  function submitSolve(penalty: Penalty, time: number = pendingTime, plusTwoCount: number = pendingPlusTwoCount) {
     if (!code || !room) return;
-    solveComplete(code.toUpperCase(), time, penalty);
+    const count = penalty === 'DNF' ? 0 : plusTwoCount;
+    solveComplete(code.toUpperCase(), time, penalty, count);
     setPendingTime(time);
     setPendingPenalty(penalty);
+    setPendingPlusTwoCount(count);
     setSubmitted(true);
     setAwaitingSubmit(false);
     engine.cancel();
@@ -311,6 +317,7 @@ export default function BattleRoom() {
     if (!parsed) { toast.error('Invalid time format'); return; }
     setPendingTime(parsed.time);
     setPendingPenalty(parsed.penalty);
+    setPendingPlusTwoCount(parsed.plusTwoCount);
     setAwaitingSubmit(true);
     setTypingInput('');
   }
@@ -323,7 +330,7 @@ export default function BattleRoom() {
   function handleEditSubmit() {
     const parsed = parseTimeInput(editInput, settings.solvePrecision);
     if (!parsed) { toast.error('Invalid time format'); return; }
-    submitSolve(parsed.penalty, parsed.time);
+    submitSolve(parsed.penalty, parsed.time, parsed.plusTwoCount);
     setEditing(false);
   }
 
@@ -392,12 +399,12 @@ export default function BattleRoom() {
       if (e.key !== 'Enter') return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
-      submitSolve('NONE');
+      submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount);
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awaitingSubmit]);
+  }, [awaitingSubmit, pendingPenalty, pendingPlusTwoCount, pendingTime]);
 
   function handleLeave() {
     if (code) leaveRoom(code.toUpperCase());
@@ -445,9 +452,9 @@ export default function BattleRoom() {
     }
     // Show submitted time immediately for self before server room_state confirms.
     if (p.id === myId && submitted) {
-      return { label: formatTime(pendingTime, pendingPenalty, settings.solvePrecision), color: 'green' as const };
+      return { label: formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount), color: 'green' as const };
     }
-    if (p.finishedAt) return { label: formatTime(p.time, p.penalty ?? 'NONE'), color: 'green' as const };
+    if (p.finishedAt) return { label: formatTime(p.time, p.penalty ?? 'NONE', 2, p.plusTwoCount), color: 'green' as const };
     return { label: 'Solving…', color: 'yellow' as const };
   }
 
@@ -688,7 +695,7 @@ export default function BattleRoom() {
             /* Submitted — waiting for others, still editable until the round ends */
             <div className="flex flex-col items-center gap-2">
               <div className={clsx('font-mono font-bold leading-none', timerColor())} style={{ fontSize: digitFontSize }}>
-                {formatTime(pendingTime, pendingPenalty, settings.solvePrecision)}
+                {formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount)}
               </div>
               <div className="text-sm text-muted">Waiting for others…</div>
               <button className="text-xs text-accent hover:underline mt-1" onClick={openEdit}>
@@ -696,31 +703,34 @@ export default function BattleRoom() {
               </button>
             </div>
           ) : awaitingSubmit ? (
-            /* Stopped — choose penalty */
+            /* Stopped — choose penalty. OK/DNF submit immediately; +2 stacks
+               locally (tap again to add another) and needs an explicit
+               Confirm (or Enter) to actually submit, so multiple +2s can be
+               added before committing. */
             <div className="flex flex-col items-center gap-4">
               <div className={clsx('font-mono font-bold leading-none transition-colors', timerColor())} style={{ fontSize: digitFontSize }}>
                 {timerDisplay()}
               </div>
-              <div className="flex gap-2">
-                <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors"
-                  onClick={() => submitSolve('PLUS2')}
-                >
-                  +2
-                </button>
-                <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
-                  onClick={() => submitSolve('DNF')}
-                >
-                  DNF
-                </button>
+              <PenaltyButtons
+                penalty={pendingPenalty}
+                plusTwoCount={pendingPlusTwoCount}
+                onChange={(p, c) => {
+                  if (p === 'DNF' || c === 0) {
+                    submitSolve(p, pendingTime, c);
+                  } else {
+                    setPendingPenalty(p);
+                    setPendingPlusTwoCount(c);
+                  }
+                }}
+              />
+              {pendingPlusTwoCount > 0 && (
                 <button
                   className="px-6 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent/90 transition-colors"
-                  onClick={() => submitSolve('NONE')}
+                  onClick={() => submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount)}
                 >
-                  OK
+                  Confirm +{pendingPlusTwoCount * 2}
                 </button>
-              </div>
+              )}
             </div>
           ) : settings.entryMode === 'typing' ? (
             /* Typing mode */
@@ -901,7 +911,7 @@ export default function BattleRoom() {
                 <div key={i} className="flex items-center gap-2 text-xs text-muted font-mono">
                   <span className="w-4 text-right">{myHistory.length - i}.</span>
                   <span className={clsx('flex-1', s.penalty === 'DNF' && 'text-red-400')}>
-                    {formatTime(s.time, s.penalty ?? 'NONE', settings.solvePrecision)}
+                    {formatTime(s.time, s.penalty ?? 'NONE', settings.solvePrecision, s.plusTwoCount)}
                   </span>
                   <span>{s.rank === 1 ? '🥇' : `#${s.rank}`}</span>
                   <span className={clsx(s.pointsEarned > 0 ? 'text-green-400' : '')}>+{s.pointsEarned}</span>
