@@ -137,10 +137,22 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 // reaching "everyone ready" already guarantees the assignments are final:
 // any further reassignment resets ready state straight back to false (see
 // relay_assign_event), which would just re-trigger this same generation
-// once ready again. Always regenerates rather than only-if-empty, so "Run
-// it again" (which lands back in an all-ready ASSIGNING state without a
-// fresh per-person ready toggle) gets fresh scrambles instead of the
-// previous attempt's stale ones.
+// once ready again.
+//
+// `force` distinguishes two very different reasons this gets called.
+// relay_toggle_ready (force=false, the default) fires on *every* ready
+// toggle — including a participant un-readying and re-readying within the
+// same assignment session (a stray double-click, or "wait, let me check
+// something") — where the legs already generated for this session are
+// still exactly right and must NOT be silently swapped out, since a
+// teammate could already be staring at one of them mid hold-to-start. A
+// live reproduction confirmed this: everyone ready, scrambles land, one
+// participant un-readies and re-readies with no reassignment in between —
+// every leg's scramble changed a couple of seconds later. So force=false
+// skips straight past regeneration once every leg already has a scramble.
+// restartAssigning (force=true — "Run it again"/"Adjust distribution")
+// is a genuinely new attempt reusing the *previous* attempt's still-present
+// leg values, which really do need to be thrown away for fresh ones.
 //
 // getScramble() itself retries transient cubing.js failures once (see
 // scramble.ts), but a few events (444, kilominx, fto, redi_cube) have no
@@ -172,15 +184,16 @@ const SCRAMBLE_RETRY_DELAY_MS = 2_000;
 // already covers the same "everyone ready" condition, so there's nothing
 // left for a second one to do.
 const generatingRooms = new Set<string>();
-async function generateScramblesIfReady(code: string, onProgress?: () => Promise<void>): Promise<void> {
+async function generateScramblesIfReady(code: string, onProgress?: () => Promise<void>, force = false): Promise<void> {
   if (generatingRooms.has(code)) return;
   generatingRooms.add(code);
   try {
     const room = await fetchRoom(code);
     if (!room || room.legs.length === 0) return;
     if (!room.legs.every((l) => l.assignedToId) || !room.participants.every((p) => p.isReady)) return;
+    if (!force && room.legs.every((l) => l.scramble)) return;
 
-    let pending = room.legs;
+    let pending = force ? room.legs : room.legs.filter((l) => !l.scramble);
     for (let round = 1; round <= SCRAMBLE_RETRY_ROUNDS && pending.length > 0; round++) {
       const results = await Promise.all(pending.map(async (l) => ({ leg: l, scramble: await getScramble(l.eventId) })));
       const succeeded = results.filter((r) => r.scramble);
@@ -479,6 +492,27 @@ export function registerRelayHandlers(io: RelayIO): void {
         const parsed = codeSchema.safeParse(raw);
         if (!parsed.success || !myParticipantId) return;
         const code = parsed.data.code.toUpperCase();
+        let set = holding.get(code);
+        if (!set) {
+          set = new Set();
+          holding.set(code, set);
+        }
+        // Add synchronously, before the async validation below — a
+        // same-tick relay_release for this same participant checks
+        // set.has() synchronously too (JS's single-threaded event loop
+        // guarantees no other handler interleaves between two synchronous
+        // statements), so ordering between a fast press-then-release is
+        // always preserved exactly as received rather than decided by
+        // whichever one's own validation round trip happens to resolve
+        // first. Without this, a press still awaiting fetchHoldState below
+        // when its own release arrives moments later left that release
+        // seeing "not currently held" (a no-op, since the add hadn't
+        // landed yet) — and then the press's now-stale add landed anyway,
+        // stranding this participant shown as still holding even though
+        // they'd already let go. Reproduced directly with a fast tap —
+        // matches the reported "shows people pressing when they're not."
+        // Rolled back below if validation actually fails.
+        set.add(myParticipantId);
         const room = await fetchHoldState(code);
         // Only allowed once every leg is assigned, everyone has readied up,
         // AND every leg's background-generated scramble has actually
@@ -487,14 +521,15 @@ export function registerRelayHandlers(io: RelayIO): void {
         // not the same moment (see generateScramblesIfReady / fetchHoldState's
         // comment) — without it, a fast team could start holding before
         // generation finished.
-        if (!room || room.status !== 'ASSIGNING') return;
-        if (room.legs.some((l) => !l.assignedToId || !l.scramble) || room.participants.some((p) => !p.isReady)) return;
-        let set = holding.get(code);
-        if (!set) {
-          set = new Set();
-          holding.set(code, set);
+        const stillValid =
+          !!room &&
+          room.status === 'ASSIGNING' &&
+          room.legs.every((l) => l.assignedToId && l.scramble) &&
+          room.participants.every((p) => p.isReady);
+        if (!stillValid) {
+          set.delete(myParticipantId);
+          return;
         }
-        set.add(myParticipantId);
         io.to(roomName(code)).emit('relay_hold_state', { holding: [...set] });
       }),
     );
@@ -537,6 +572,16 @@ export function registerRelayHandlers(io: RelayIO): void {
         }
 
         holding.delete(code);
+        // Tell every client the hold set is now empty — without this, each
+        // client's own locally-cached `holding` array (see useRelaySocket)
+        // is simply never updated again after this point (the UI that
+        // reads it is hidden once the room goes ACTIVE, but the stale value
+        // itself lives on in memory). If this same room later returns to a
+        // fresh hold-to-start screen ("Run it again"), that stale "everyone
+        // was holding" snapshot is still sitting there and renders
+        // immediately, before anyone has pressed anything in the new
+        // attempt — the reported "shows people pressing when they're not."
+        io.to(roomName(code)).emit('relay_hold_state', { holding: [] });
         // Scrambles are guaranteed to exist by this point — both this
         // handler and relay_press independently check every leg has one
         // (see fetchHoldState's comment on why "ready" alone doesn't
@@ -635,6 +680,12 @@ export function registerRelayHandlers(io: RelayIO): void {
         prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ASSIGNING', startedAt: null, finishedAt: null } }),
         prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
       ]);
+      // Belt-and-suspenders alongside relay_release's own reset when a
+      // round actually starts (the normal path this should already be
+      // clear by) — a fresh attempt should never inherit a stale "everyone
+      // was holding" snapshot from whatever happened in the last one.
+      holding.delete(code);
+      io.to(roomName(code)).emit('relay_hold_state', { holding: [] });
       await emitRelayRoomState(code);
       // "Run it again" (keepReady) lands everyone back in an all-ready state
       // without going through relay_toggle_ready, so it has to trigger
@@ -643,8 +694,11 @@ export function registerRelayHandlers(io: RelayIO): void {
       // distribution" (keepReady=false leaves the room not-all-ready). Not
       // awaited, same reasoning as relay_toggle_ready: generation can take
       // several seconds and nothing about landing on the ASSIGNING screen
-      // depends on scrambles already existing.
-      generateScramblesIfReady(code, () => emitRelayRoomState(code))
+      // depends on scrambles already existing. force=true — unlike
+      // relay_toggle_ready's own call, the legs here still hold the
+      // *previous* attempt's scrambles (restartAssigning never clears
+      // them), which is exactly the stale data this needs to overwrite.
+      generateScramblesIfReady(code, () => emitRelayRoomState(code), true)
         .then(() => emitRelayRoomState(code))
         .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
     }
