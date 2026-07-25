@@ -65,6 +65,7 @@ interface SettingsState {
   // Algorithm Trainer settings
   trainerShowCaseName: boolean; // reveal the case name/group after stopping
   trainerRandomAUF: boolean; // random U/U'/U2/none before inverting the scramble
+  trainerNoRepeatUntilCycled: boolean; // shuffled-bag case order: show every case once before any repeat
 
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
@@ -103,6 +104,7 @@ export const useSettings = create<SettingsState>()(
 
       trainerShowCaseName: true,
       trainerRandomAUF: true,
+      trainerNoRepeatUntilCycled: true,
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),

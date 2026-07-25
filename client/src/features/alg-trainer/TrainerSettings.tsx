@@ -60,6 +60,10 @@ export function TrainerSettings({ open, onClose }: { open: boolean; onClose: () 
         <Row label="Random AUF" hint="Rotate the scramble's top layer randomly so the same case doesn't always look identical">
           <Toggle checked={s.trainerRandomAUF} onChange={(v) => s.set({ trainerRandomAUF: v })} />
         </Row>
+
+        <Row label="No repeats until all shown" hint="Show every selected case once before any repeats">
+          <Toggle checked={s.trainerNoRepeatUntilCycled} onChange={(v) => s.set({ trainerNoRepeatUntilCycled: v })} />
+        </Row>
       </div>
     </Modal>
   );

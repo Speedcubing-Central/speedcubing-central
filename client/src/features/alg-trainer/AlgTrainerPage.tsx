@@ -731,6 +731,30 @@ function runningDisplay(ms: number, timerUpdate: string): string {
   return fmtTime(Math.floor(ms / 10) * 10, 'NONE', 2);
 }
 
+// Fisher-Yates shuffle of [0, length) used by the "no repeats until all
+// shown" case order (trainerNoRepeatUntilCycled) — see buildCaseBag.
+function shuffledIndices(length: number): number[] {
+  const arr = Array.from({ length }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Builds a freshly shuffled queue of every case index, to be popped one at a
+// time until exhausted then rebuilt (a "shuffled bag"). `avoidFirst` is the
+// last index shown from the *previous* bag, so a fresh bag's first pick
+// can't immediately repeat it across the cycle boundary.
+function buildCaseBag(length: number, avoidFirst?: number): number[] {
+  const arr = shuffledIndices(length);
+  if (avoidFirst !== undefined && arr.length > 1 && arr[0] === avoidFirst) {
+    const swapWith = 1 + Math.floor(Math.random() * (arr.length - 1));
+    [arr[0], arr[swapWith]] = [arr[swapWith], arr[0]];
+  }
+  return arr;
+}
+
 function TrainingSession({
   cases, caseSetId, puzzle, prefs, onBack,
 }: {
@@ -784,7 +808,42 @@ function TrainingSession({
     ? fillHeight - headerHeight - COLUMN_GAP
     : undefined;
 
-  const [caseIndex, setCaseIndex] = useState(() => Math.floor(Math.random() * cases.length));
+  // Remaining not-yet-shown indices for the current shuffled-bag cycle, used
+  // only when trainerNoRepeatUntilCycled is on (see nextCase and the reset
+  // effect below, which rebuilds this whenever `cases` changes).
+  const caseBagRef = useRef<number[]>([]);
+  const casesForBagRef = useRef(cases);
+
+  const [caseIndex, setCaseIndex] = useState(() => {
+    if (s.trainerNoRepeatUntilCycled) {
+      const bag = buildCaseBag(cases.length);
+      const first = bag.shift()!;
+      caseBagRef.current = bag;
+      return first;
+    }
+    return Math.floor(Math.random() * cases.length);
+  });
+
+  // Rebuild the shuffled bag whenever the selected case set changes (a new
+  // training session), the same way caseIndex's own initial pick is chosen
+  // above. Guarded against firing on the very first render (casesForBagRef
+  // already points at this same `cases` array then), so the initial pick
+  // isn't immediately discarded and redrawn.
+  useEffect(() => {
+    if (casesForBagRef.current === cases) return;
+    casesForBagRef.current = cases;
+    if (s.trainerNoRepeatUntilCycled) {
+      const bag = buildCaseBag(cases.length);
+      const first = bag.shift()!;
+      caseBagRef.current = bag;
+      setCaseIndex(first);
+    } else {
+      caseBagRef.current = [];
+      setCaseIndex(Math.floor(Math.random() * cases.length));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cases]);
+
   const currentCase = cases[caseIndex];
   const currentSetId = caseSetId[currentCase.id];
   const currentSet = getSet(currentSetId)!;
@@ -875,13 +934,19 @@ function TrainingSession({
   const nextCase = useCallback(() => {
     setCaseIndex((prev) => {
       if (cases.length <= 1) return prev;
+      if (s.trainerNoRepeatUntilCycled) {
+        if (caseBagRef.current.length === 0) {
+          caseBagRef.current = buildCaseBag(cases.length, prev);
+        }
+        return caseBagRef.current.shift()!;
+      }
       let next = Math.floor(Math.random() * cases.length);
       while (next === prev) next = Math.floor(Math.random() * cases.length);
       return next;
     });
     setRevealed(0);
     setManualInput('');
-  }, [cases]);
+  }, [cases, s.trainerNoRepeatUntilCycled]);
 
   // Hold-to-start (shared with Timer/Battle's own engine, including the
   // user's holdToStart/holdDuration setting) — Space no longer starts a
