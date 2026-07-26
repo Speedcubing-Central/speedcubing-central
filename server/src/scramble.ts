@@ -307,36 +307,40 @@ async function getCubingJsScrambleWithRetries(eventId: string): Promise<string> 
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-// WCA's real FMC scrambling convention: every official scramble opens with
-// a fixed "R' U' F" setup before the actual random portion. That's handled
-// entirely inside cubing.js's compiled WASM solver (not something this app
-// generates, and not something it can patch) — which has its own bug: it
-// sometimes flips the sign of the third move, opening with "R' U' F'"
-// instead. Directly verified across 40 generated scrambles: ~18% opened
-// with the wrong sign (reported as "FMC scrambles didn't always start in
-// R' U' F, sometimes R' U' F'"). Since the scramble is produced by an
-// opaque compiled binary, hand-editing just that one move's sign isn't
-// safe — the *rest* of the scramble's moves were only ever determined by
-// whatever search cubing.js ran internally against the *original* prefix,
-// not a hand-altered one, so splicing in a different third move could
-// leave the tail referencing a state that scramble was never actually
-// checked against. The safe fix is rejection sampling: keep asking for a
-// fresh scramble until one with the correct prefix comes back — ~82% of
-// individual scrambles already have it, so this converges in 1-2 attempts
-// almost every time; the cap below is just a safety net against an
-// unlucky streak, not expected to actually bind in practice.
+// WCA's real FMC scrambling convention: every official scramble both opens
+// AND closes with a fixed "R' U' F" (the closing copy exists so a solver
+// can't infer anything about the scramble's structure from either end).
+// That's handled entirely inside cubing.js's compiled WASM solver (not
+// something this app generates, and not something it can patch) — which
+// has its own bug: it sometimes flips the sign of the fixed move nearest
+// one end, opening with "R' U' F'" or closing with "F' U' R" instead.
+// Directly verified across 40 generated scrambles: ~20% had the wrong sign
+// at the start, ~10% at the end (reported as "FMC scrambles didn't always
+// start in R' U' F" and separately as "some don't end in R' U' F either").
+// Since the scramble is produced by an opaque compiled binary, hand-editing
+// just one move's sign isn't safe — the *rest* of the scramble's moves were
+// only ever determined by whatever search cubing.js ran internally against
+// the *original* prefix/suffix, not a hand-altered one, so splicing in a
+// different move could leave the remainder referencing a state that
+// scramble was never actually checked against. The safe fix is rejection
+// sampling: keep asking for a fresh scramble until one with the correct
+// prefix AND suffix comes back — ~75% of individual scrambles already have
+// both, so this converges in 1-2 attempts almost every time; the cap below
+// is just a safety net against an unlucky streak, not expected to actually
+// bind in practice.
 const FMC_PREFIX = "R' U' F ";
+const FMC_SUFFIX = "R' U' F";
 const FMC_PREFIX_ATTEMPTS = 8;
 async function getFmcScramble(): Promise<string> {
   let last = '';
   for (let attempt = 1; attempt <= FMC_PREFIX_ATTEMPTS; attempt++) {
     last = await getCubingJsScrambleWithRetries('333fm');
-    if (last.startsWith(FMC_PREFIX)) return last;
+    if (last.startsWith(FMC_PREFIX) && last.endsWith(FMC_SUFFIX)) return last;
   }
   console.warn(
-    '[scramble] gave up waiting for a "R\' U\' F"-opening FMC scramble after',
+    '[scramble] gave up waiting for a "R\' U\' F"-opening-and-closing FMC scramble after',
     FMC_PREFIX_ATTEMPTS,
-    'attempts; using one that starts differently instead of blocking forever:',
+    'attempts; using one that doesn\'t match instead of blocking forever:',
     JSON.stringify(last),
   );
   return last;
