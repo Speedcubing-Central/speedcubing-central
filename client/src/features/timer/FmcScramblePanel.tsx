@@ -101,7 +101,7 @@ export function FmcScramblePanel({ scramble }: { scramble: string }) {
 
       <Modal open={notesOpen} onClose={() => setNotesOpen(false)} title="Notes" size="lg">
         <p className="text-xs text-muted mb-2">
-          Scratch space for this attempt only — not saved anywhere, and cleared on your next attempt.
+          Scratch space for this attempt only, not saved anywhere, and cleared on your next attempt.
         </p>
         <textarea
           className="input font-mono text-sm w-full resize-y"
