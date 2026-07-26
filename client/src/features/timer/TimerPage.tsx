@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { formatTime, formatMoveCount, getEvent, type Penalty } from '@scc/shared';
+import { formatTime, formatMoveCount, getEvent, SUBSET_EVENTS, type Penalty } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
@@ -37,6 +37,8 @@ import { SolvesList } from './SolvesList';
 const TIMER_MIN_HEIGHT = 160;
 const COLUMN_GAP = 12; // gap-3
 
+const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
+
 export default function TimerPage() {
   const settings = useSettings();
   const { inspection, inspectionDirection, inspectionVoice, holdToStart, holdDuration, entryMode, timerUpdate, solvePrecision, startSound, celebratePBs } = settings;
@@ -44,7 +46,13 @@ export default function TimerPage() {
   const { focusMode } = useUi();
   const event = settings.currentEvent;
   const data = useTimerData(event);
-  const scr = useScrambler(event, data.currentId);
+  // A session scoped to a 3x3 practice subset (LSLL/LL/CLS) pulls its
+  // scrambles from that subset's scramble type instead of the raw event —
+  // eventId itself stays '333' throughout (session creation, stats, the
+  // event dropdown), only the scramble source changes. See Session.subset.
+  const currentSession = data.sessions.find((s) => s.id === data.currentId);
+  const scrambleEventId = currentSession?.subset || event;
+  const scr = useScrambler(scrambleEventId, data.currentId);
 
   const [typed, setTyped] = useState('');
   const [showSessions, setShowSessions] = useState(false);
@@ -363,7 +371,7 @@ export default function TimerPage() {
           {data.sessions.length === 0 && <option value="">No sessions</option>}
           {data.sessions.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} ({s.solveCount ?? 0})
+              {s.name}{s.subset ? ` (${SUBSET_NAME[s.subset] ?? s.subset})` : ''} ({s.solveCount ?? 0})
             </option>
           ))}
         </select>

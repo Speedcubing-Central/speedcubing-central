@@ -74,7 +74,22 @@ export const UNOFFICIAL_EVENTS: WcaEvent[] = [
   { id: 'redi_cube', name: 'Redi Cube', scrambowType: '' },
 ];
 
-export const ALL_EVENTS: WcaEvent[] = [...WCA_EVENTS, ...UNOFFICIAL_EVENTS];
+// 3x3 practice subsets (LSLL/LL/CLS) — not a selectable top-level event
+// anywhere (Battle, Reconstruction, Relays, the main EventSelector all
+// iterate WCA_EVENTS/UNOFFICIAL_EVENTS directly and never see these). They
+// exist only so a Timer session can be scoped to one of these scramble
+// types (Session.subset) while eventId stays '333'. Folded into
+// ALL_EVENTS/EVENT_IDS only, so getEvent/getScramble resolve them.
+export const SUBSET_EVENTS: WcaEvent[] = [
+  { id: 'lsll', name: 'LSLL', scrambowType: 'lsll' },
+  { id: 'll', name: 'LL', scrambowType: 'll' },
+  { id: 'cls', name: 'CLS', scrambowType: 'cls' },
+];
+
+// Valid values for Session.subset — the id half of SUBSET_EVENTS.
+export const SESSION_SUBSETS = SUBSET_EVENTS.map((e) => e.id);
+
+export const ALL_EVENTS: WcaEvent[] = [...WCA_EVENTS, ...UNOFFICIAL_EVENTS, ...SUBSET_EVENTS];
 
 // Collapse any run of whitespace to a single space (some generators double-space).
 export function normalizeScramble(s: string): string {
@@ -127,6 +142,10 @@ export interface SessionDTO {
   userId: string;
   eventId: string;
   name: string;
+  // Optional 3x3 practice subset ('lsll' | 'll' | 'cls') — see
+  // SUBSET_EVENTS/SESSION_SUBSETS above. Undefined/null for an ordinary
+  // session. Immutable after creation, same as eventId.
+  subset?: string | null;
   createdAt: string;
   solveCount?: number;
 }

@@ -72,6 +72,12 @@ model Session {
   userId    String
   eventId   String
   name      String
+  // Optional 3x3 practice subset ('lsll' | 'll' | 'cls') — eventId is still
+  // always '333' for these; this narrows which scrambles the session's
+  // solves are generated from without making the subset a separate
+  // top-level event. Null for an ordinary session. Immutable after
+  // creation, same as eventId.
+  subset    String?
   createdAt DateTime @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)

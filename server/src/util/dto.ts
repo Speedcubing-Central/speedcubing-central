@@ -45,6 +45,7 @@ export function toSessionDTO(s: Session & { _count?: { solves: number } }): Sess
     userId: s.userId,
     eventId: s.eventId,
     name: s.name,
+    subset: s.subset,
     createdAt: s.createdAt.toISOString(),
     solveCount: s._count?.solves,
   };

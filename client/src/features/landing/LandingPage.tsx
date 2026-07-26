@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import '@cubing/icons';
-import { ALL_EVENTS } from '@scc/shared';
+import { WCA_EVENTS, UNOFFICIAL_EVENTS } from '@scc/shared';
 import { Icon } from '../../components/Icon';
 import { Logo } from '../../components/Logo';
 import { RotatingCaseDiagram } from '../../components/CubeDiagram';
@@ -31,6 +31,11 @@ const UNOFFICIAL_ICON_CLASS: Record<string, string> = {
   redi_cube: 'unofficial-redi',
 };
 
+// Deliberately WCA + unofficial only, not ALL_EVENTS — 3x3 practice
+// subsets (SUBSET_EVENTS) are Timer session scoping, not puzzles, and have
+// no @cubing/icons glyph of their own.
+const MARQUEE_EVENTS = [...WCA_EVENTS, ...UNOFFICIAL_EVENTS];
+
 // Puzzle-icon marquee: every event the site generates scrambles for, not
 // just the two most-used ones — this is the landing page's answer to "what
 // does it actually cover," shown rather than enumerated in prose (prose
@@ -50,7 +55,7 @@ function PuzzleChip({ eventId, name }: { eventId: string; name: string }) {
 function PuzzleMarquee() {
   const track = (
     <>
-      {ALL_EVENTS.map((e) => (
+      {MARQUEE_EVENTS.map((e) => (
         <PuzzleChip key={e.id} eventId={e.id} name={e.name} />
       ))}
     </>

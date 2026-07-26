@@ -2,11 +2,13 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
-import { formatTime, getEvent } from '@scc/shared';
+import { formatTime, getEvent, SUBSET_EVENTS } from '@scc/shared';
 import { toast } from '../../store/toast';
 import type { useTimerData } from './useTimerData';
 
 type Data = ReturnType<typeof useTimerData>;
+
+const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
 
 function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -21,13 +23,15 @@ function downloadCsv(filename: string, rows: string[][]) {
 
 export function SessionManager({ open, onClose, data, event }: { open: boolean; onClose: () => void; data: Data; event: string }) {
   const [newName, setNewName] = useState('');
+  const [newSubset, setNewSubset] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
   async function add() {
     const name = newName.trim() || `${getEvent(event)?.name ?? event} Session`;
-    await data.createSession(name);
+    await data.createSession(name, newSubset || undefined);
     setNewName('');
+    setNewSubset('');
     toast.success('Session created');
   }
 
@@ -70,12 +74,20 @@ export function SessionManager({ open, onClose, data, event }: { open: boolean; 
     <Modal open={open} onClose={onClose} title="Session Manager" size="md">
       <div className="flex gap-2 mb-4">
         <input
-          className="input"
+          className="input flex-1"
           placeholder={`New ${getEvent(event)?.name ?? event} session name…`}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
         />
+        {event === '333' && (
+          <select className="input max-w-[110px]" value={newSubset} onChange={(e) => setNewSubset(e.target.value)}>
+            <option value="">Normal</option>
+            {SUBSET_EVENTS.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
         <button className="btn-primary" onClick={add}>
           <Icon name="plus" size={16} /> Add
         </button>
@@ -113,7 +125,10 @@ export function SessionManager({ open, onClose, data, event }: { open: boolean; 
                     onClose();
                   }}
                 >
-                  <span className="font-medium truncate">{sess.name}</span>
+                  <span className="font-medium truncate">
+                    {sess.name}
+                    {sess.subset && <span className="text-accent"> ({SUBSET_NAME[sess.subset] ?? sess.subset})</span>}
+                  </span>
                   <span className="text-xs text-muted ml-2">{sess.solveCount ?? 0} solves</span>
                   {active && <span className="text-xs text-accent ml-2">active</span>}
                 </button>

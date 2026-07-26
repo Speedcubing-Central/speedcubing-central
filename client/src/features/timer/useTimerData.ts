@@ -115,12 +115,12 @@ export function useTimerData(eventId: string) {
   );
 
   const createSession = useCallback(
-    async (name: string) => {
+    async (name: string, subset?: string) => {
       let created: SessionDTO;
       if (isGuest) {
-        created = guestStore.createSession(name, eventId);
+        created = guestStore.createSession(name, eventId, subset);
       } else {
-        created = (await api.post<SessionDTO>('/sessions', { name, eventId })).data;
+        created = (await api.post<SessionDTO>('/sessions', { name, eventId, subset })).data;
       }
       setSessions((prev) => [created, ...prev]);
       setCurrentId(created.id);

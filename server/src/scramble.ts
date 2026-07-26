@@ -13,8 +13,17 @@ const { Scrambow } = pkg as unknown as { Scrambow: typeof import('scrambow').Scr
 // synchronous (avoids cubing.js's WASM cold-start/timeout risk — 666 isn't
 // in WARM_UP_EVENTS below) — see generateScramble's own doc comment for how
 // its one known defect (a redundant wide-move pair) is handled now that
-// this is the primary path rather than a rare fallback.
-const SCRAMBOW_PREFERRED = new Set(['222', 'clock', '666']);
+// this is the primary path rather than a rare fallback. lsll/ll/cls (3x3
+// practice subsets, see shared's SUBSET_EVENTS): scrambow is the only
+// generator that supports these scrambler types at all — there is no
+// cubing.js equivalent to fall back to, see NO_CUBING_JS_FALLBACK below.
+const SCRAMBOW_PREFERRED = new Set(['222', 'clock', '666', 'lsll', 'll', 'cls']);
+
+// Events in SCRAMBOW_PREFERRED with no cubing.js equivalent whatsoever —
+// getScramble must return '' directly on a scrambow failure for these
+// rather than attempting the normal cubing.js fallback, which would only
+// ever fail (cubing.js's event registry has no lsll/ll/cls puzzle type).
+const NO_CUBING_JS_FALLBACK = new Set(['lsll', 'll', 'cls']);
 
 // Detects the specific defect behind a real user report: scrambow's
 // move-picker for NxN cubes (444/555/666/777) has no live protection
@@ -360,6 +369,10 @@ export async function getScramble(eventId: string): Promise<string> {
   if (SCRAMBOW_PREFERRED.has(eventId)) {
     const s = generateScramble(eventId);
     if (s) return s;
+    if (NO_CUBING_JS_FALLBACK.has(eventId)) {
+      console.warn('[scramble] scrambow failed for', eventId, '— no cubing.js equivalent to fall back to');
+      return '';
+    }
     console.warn('[scramble] scrambow failed for', eventId, '— trying cubing.js');
     try { return await getCubingJsScrambleWithRetries(eventId); } catch (e) {
       console.warn('[scramble] cubing.js fallback also failed for', eventId, e instanceof Error ? e.message : e);

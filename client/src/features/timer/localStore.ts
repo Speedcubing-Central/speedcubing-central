@@ -30,13 +30,14 @@ export const guestStore = {
   listSessions(): SessionDTO[] {
     return read().sessions;
   },
-  createSession(name: string, eventId: string): SessionDTO {
+  createSession(name: string, eventId: string, subset?: string): SessionDTO {
     const data = read();
     const session: SessionDTO = {
       id: uid(),
       userId: 'guest',
       eventId,
       name,
+      subset: subset ?? null,
       createdAt: new Date().toISOString(),
       solveCount: 0,
     };

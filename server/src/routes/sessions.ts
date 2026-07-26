@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../auth/middleware.js';
 import { toSessionDTO, toSolveDTO } from '../util/dto.js';
-import { EVENT_IDS, MAX_PLUS_TWO_COUNT } from '@scc/shared';
+import { EVENT_IDS, SESSION_SUBSETS, MAX_PLUS_TWO_COUNT } from '@scc/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -11,6 +11,9 @@ router.use(requireAuth);
 const createSchema = z.object({
   name: z.string().min(1).max(60),
   eventId: z.string().refine((id) => EVENT_IDS.includes(id), 'Invalid event'),
+  // 3x3 practice subset (see shared's SESSION_SUBSETS) — immutable after
+  // creation, same as eventId, so there's no rename/PATCH path for it.
+  subset: z.enum(SESSION_SUBSETS as [string, ...string[]]).optional(),
 });
 
 const renameSchema = z.object({ name: z.string().min(1).max(60) });
@@ -52,9 +55,9 @@ router.get('/', async (req, res, next) => {
 // POST /api/sessions — create session
 router.post('/', async (req, res, next) => {
   try {
-    const { name, eventId } = createSchema.parse(req.body);
+    const { name, eventId, subset } = createSchema.parse(req.body);
     const session = await prisma.session.create({
-      data: { name, eventId, userId: req.user!.sub },
+      data: { name, eventId, subset: subset ?? null, userId: req.user!.sub },
     });
     res.status(201).json(toSessionDTO(session));
   } catch (e) {
