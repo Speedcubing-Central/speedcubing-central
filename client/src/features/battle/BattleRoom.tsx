@@ -502,7 +502,6 @@ export default function BattleRoom() {
   // comment above for why that indirect approach isn't safe.
   const leftColRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const timerCardRef = useRef<HTMLDivElement>(null);
   const participantsRef = useRef<HTMLDivElement>(null);
   const colHeight = useElementHeight(leftColRef);
   const isDesktop = useIsDesktop();
@@ -535,7 +534,7 @@ export default function BattleRoom() {
     if (engine.phase === 'idle' || isInspectionPhase) return 60;
     return 30;
   })();
-  const digitFontSize = useFittedFontSize(timerCardRef, reservedBelow);
+  const [timerCardRef, digitFontSize] = useFittedFontSize(reservedBelow);
 
   // ── Name prompt (guest opened link directly) ─────────────────────────────
   if (namePrompt) {

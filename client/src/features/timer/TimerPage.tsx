@@ -100,8 +100,7 @@ export default function TimerPage() {
 
   // Keyboard mode only reserves room for the hint line below the digits;
   // manual mode also needs the input + button row, so it gets less headroom.
-  const timerCardRef = useRef<HTMLDivElement>(null);
-  const digitFontSize = useFittedFontSize(timerCardRef, entryMode === 'keyboard' ? 68 : 96);
+  const [timerCardRef, digitFontSize] = useFittedFontSize(entryMode === 'keyboard' ? 68 : 96);
   const typedInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

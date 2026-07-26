@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useState, type RefCallback } from 'react';
 
 // Sizes text to whatever room is actually left in its container, instead of
 // guessing at viewport-relative units. `reservedBelow` is the pixel height
@@ -9,29 +9,46 @@ import { useLayoutEffect, useState, type RefObject } from 'react';
 // useLayoutEffect, not useEffect: the initial `size` state (144, the old
 // static max) is a placeholder for the one render before this can measure
 // the real container — useEffect runs *after* the browser paints, so that
-// placeholder was briefly visible on every mount (and on any prop change
-// that recreates the container, e.g. switching Timer's keyboard/typing
-// entry mode) before being corrected a frame or two later. Usually too
-// fast to notice, but not always — 144px plus the hint text below it is
-// taller than the card's own protected minimum height, so a slow paint
-// caught a real, reported "timer text way too big, panel has a scrollbar"
-// that then self-corrected. useLayoutEffect runs synchronously before
-// paint, so the browser never has anything but the correctly-fitted size
-// to show.
-export function useFittedFontSize(containerRef: RefObject<HTMLDivElement>, reservedBelow: number): number {
+// placeholder was briefly visible on every mount before being corrected a
+// frame or two later. Usually too fast to notice, but not always — 144px
+// plus the hint text below it is taller than the card's own protected
+// minimum height, so a slow paint caught a real, reported "timer text way
+// too big, panel has a scrollbar" that then self-corrected. useLayoutEffect
+// runs synchronously before paint, so the browser never has anything but
+// the correctly-fitted size to show.
+//
+// Returns a ref callback (attach it to the container) instead of accepting
+// a RefObject from the caller. TimerPage points one stable RefObject at
+// different physical <div>s depending on entry mode, and unmounts it
+// entirely while FMC is active — swapping which element a RefObject points
+// to doesn't change the RefObject's own identity, so a plain
+// `useEffect(..., [containerRef])` had nothing to key a re-subscription off
+// when the swap happened: the ResizeObserver kept watching the old,
+// detached element (or nothing at all, if it mounted for the first time
+// while `containerRef.current` was null), and `size` froze at a stale value
+// that then got applied to the new element's real dimensions — either
+// too small for it, or large enough to overflow and show a scrollbar. A
+// callback ref sidesteps this: React invokes it directly at commit time
+// with the outgoing node and then the incoming one on every swap, so
+// storing that in state and keying the ResizeObserver effect off it
+// reacts correctly every time, not just on first mount.
+export function useFittedFontSize(reservedBelow: number): [RefCallback<HTMLDivElement>, number] {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState(144); // 9rem, matches the old max
+  const ref = useCallback((el: HTMLDivElement | null) => setNode(el), []);
+
   useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+    if (!node) return;
     const recompute = () => {
-      const heightCap = el.clientHeight - reservedBelow;
-      const widthCap = el.clientWidth * 0.34;
+      const heightCap = node.clientHeight - reservedBelow;
+      const widthCap = node.clientWidth * 0.34;
       setSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
     };
     recompute();
     const ro = new ResizeObserver(recompute);
-    ro.observe(el);
+    ro.observe(node);
     return () => ro.disconnect();
-  }, [containerRef, reservedBelow]);
-  return size;
+  }, [node, reservedBelow]);
+
+  return [ref, size];
 }
