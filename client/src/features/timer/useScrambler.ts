@@ -109,6 +109,20 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     });
   }, []);
 
+  // Sets a user-supplied scramble as the active one (see ScramblePanel's
+  // edit button), bypassing the prefetch queue entirely: a deliberately
+  // typed-in scramble isn't something to draw from the queue or dedupe
+  // against, unlike advance()/refresh(). Still bumps reqId so any in-flight
+  // fetchFresh()/advance() from before this call can't clobber it once it
+  // resolves, and still remembers a "previous" for the back button, same as
+  // advance()/refresh() do.
+  const setCustom = useCallback((s: string) => {
+    reqId.current++;
+    setPrevious(scrambleRef.current);
+    setScramble(s);
+    setLoading(false);
+  }, []);
+
   // (Re)initialise whenever the event changes — a full context switch, so
   // any pending "go back" target is discarded rather than carried over from
   // a different puzzle type.
@@ -122,5 +136,5 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     setPrevious(null);
   }, [sessionId]);
 
-  return { scramble, previous, loading, refresh, advance, goBack };
+  return { scramble, previous, loading, refresh, advance, goBack, setCustom };
 }

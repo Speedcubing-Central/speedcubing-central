@@ -1,9 +1,11 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Icon } from './Icon';
+import { Modal } from './Modal';
 import { ScrambleImage } from './ScrambleImage';
 import { ScrambleText } from './ScrambleText';
 import { useDiagramFit } from './useDiagramFit';
+import { validateCustomScramble } from '../lib/customScramble';
 
 // Per-puzzle preferred diagram size, in px — the size used whenever there's
 // room for it. sq1's 3D render is legible small; megaminx's 2D net needs to
@@ -48,6 +50,7 @@ export function ScramblePanel({
   onRefresh,
   onGoBack,
   canGoBack = false,
+  onCustomScramble,
   maxHeight,
   className,
 }: {
@@ -60,16 +63,42 @@ export function ScramblePanel({
   // simply omits them and only the "new scramble" button renders.
   onGoBack?: () => void;
   canGoBack?: boolean;
+  // Also optional and independent of onRefresh/onGoBack, same opt-in
+  // pattern: Battle Mode never passes this either, so it never gets the
+  // edit button.
+  onCustomScramble?: (scramble: string) => void;
   maxHeight?: number;
   className?: string;
 }) {
   const textRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const [validating, setValidating] = useState(false);
   const preferredDiagram = DIAGRAM_SIZE[eventId] ?? DEFAULT_DIAGRAM_SIZE;
   const font = textSize(scramble, eventId);
   const extraGap = EXTRA_GAP[eventId] ?? 0;
 
   const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font], extraGap);
+
+  function openEditor() {
+    setDraft('');
+    setError('');
+    setEditing(true);
+  }
+
+  async function submitCustomScramble() {
+    setValidating(true);
+    const result = await validateCustomScramble(eventId, draft);
+    setValidating(false);
+    if (!result.ok) {
+      setError(result.error ?? 'Invalid scramble');
+      return;
+    }
+    onCustomScramble?.(result.scramble);
+    setEditing(false);
+  }
 
   return (
     <div className={clsx('card p-6 shrink-0 overflow-hidden flex flex-col items-center justify-end gap-4', className)}>
@@ -96,7 +125,37 @@ export function ScramblePanel({
           <button className="text-xs text-accent inline-flex items-center gap-1" onClick={onRefresh}>
             <Icon name="refresh" size={13} /> new scramble
           </button>
+          {onCustomScramble && (
+            <button className="text-xs text-accent inline-flex items-center gap-1" onClick={openEditor} title="Enter a custom scramble">
+              <Icon name="pencil" size={13} /> edit
+            </button>
+          )}
         </div>
+      )}
+
+      {onCustomScramble && (
+        <Modal open={editing} onClose={() => setEditing(false)} title="Custom scramble" size="sm">
+          <div className="flex flex-col gap-3">
+            <textarea
+              className="input font-mono text-sm w-full resize-y"
+              rows={4}
+              autoFocus
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setError('');
+              }}
+              placeholder="e.g. R U R' U' F2 D L"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitCustomScramble();
+              }}
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <button className="btn-primary" onClick={submitCustomScramble} disabled={validating}>
+              {validating ? 'Checking…' : 'Use this scramble'}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

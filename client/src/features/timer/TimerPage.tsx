@@ -429,6 +429,7 @@ export default function TimerPage() {
                 onRefresh={() => scr.refresh()}
                 onGoBack={scr.goBack}
                 canGoBack={canGoBack}
+                onCustomScramble={scr.setCustom}
                 maxHeight={scrambleMaxHeight}
                 className="overflow-hidden"
               />
