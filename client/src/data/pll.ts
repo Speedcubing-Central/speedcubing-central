@@ -37,6 +37,6 @@ export const PLL_SET: AlgSet = {
   id: 'PLL',
   name: 'PLL',
   kind: 'pll',
-  description: 'Permutation of the Last Layer: all 21 cases. Arrows show how pieces move.',
+  description: 'Permutation of the Last Layer: all 21 cases.',
   cases: pllCases,
 };

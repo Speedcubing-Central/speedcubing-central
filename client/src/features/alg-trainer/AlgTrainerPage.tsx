@@ -174,7 +174,7 @@ const SET_CARDS_3x3 = [
 
 const SQ1_CS_SET = getSet('SQ1CubeShape')!;
 const SET_CARDS_SQ1 = [
-  { id: 'SQ1CubeShape', label: 'Cube Shape', description: 'Restore a physical cube shape', count: SQ1_CS_SET.cases.length,
+  { id: 'SQ1CubeShape', label: 'Cube Shape', description: 'Square-1 Cube Shape', count: SQ1_CS_SET.cases.length,
     preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_CS_SET.cases.find((c) => c.id === 'sq1-cs-kite-square') ?? SQ1_CS_SET.cases[0])} size={80} /> },
 ];
 
@@ -503,13 +503,18 @@ function CaseBrowser({
         title={set.name}
         subtitle={set.description}
         action={
-          <button
-            onClick={() => setResetSignal((n) => n + 1)}
-            className="btn-ghost flex items-center gap-1.5 text-sm"
-            title="Reset every case's diagram back to its default viewing angle"
-          >
-            <Icon name="refresh" size={15} /> Reset Perspective
-          </button>
+          // Square-1's case diagram is a fixed camera angle (see
+          // Sq1CaseDiagram), not drag-to-rotate like the other sets' — no
+          // perspective to reset.
+          set.kind === 'sq1-cs' ? undefined : (
+            <button
+              onClick={() => setResetSignal((n) => n + 1)}
+              className="btn-ghost flex items-center gap-1.5 text-sm"
+              title="Reset every case's diagram back to its default viewing angle"
+            >
+              <Icon name="refresh" size={15} /> Reset Perspective
+            </button>
+          )
         }
       />
 
@@ -1063,13 +1068,15 @@ function TrainingSession({
           >
             <Icon name="target" size={15} /> Stats
           </button>
-          <button
-            onClick={() => setDiagramResetSignal((n) => n + 1)}
-            className="btn-ghost flex items-center gap-1.5 text-sm"
-            title="Reset the diagram back to its default viewing angle"
-          >
-            <Icon name="refresh" size={15} /> Reset Perspective
-          </button>
+          {!isSq1 && (
+            <button
+              onClick={() => setDiagramResetSignal((n) => n + 1)}
+              className="btn-ghost flex items-center gap-1.5 text-sm"
+              title="Reset the diagram back to its default viewing angle"
+            >
+              <Icon name="refresh" size={15} /> Reset Perspective
+            </button>
+          )}
           <button
             onClick={() => setShowSettings(true)}
             className="btn-ghost flex items-center gap-1.5 text-sm"

@@ -6,7 +6,7 @@ export const SQ1_CUBE_SHAPE_SET: AlgSet = {
   id: 'SQ1CubeShape',
   name: 'Cube Shape',
   kind: 'sq1-cs',
-  description: 'Square-1 Cube Shape, restore a physical cube shape before EO/CO/permutation',
+  description: 'Square-1 Cube Shape',
   cases: [
     {
       "id": "sq1-cs-kite-kite",

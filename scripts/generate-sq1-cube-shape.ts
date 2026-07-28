@@ -224,7 +224,7 @@ async function main() {
     "  id: 'SQ1CubeShape',",
     "  name: 'Cube Shape',",
     "  kind: 'sq1-cs',",
-    "  description: 'Square-1 Cube Shape, restore a physical cube shape before EO/CO/permutation',",
+    "  description: 'Square-1 Cube Shape',",
     '  cases: ' + JSON.stringify(outCases, null, 2).split('\n').join('\n  ') + ',',
     '};',
     '',
