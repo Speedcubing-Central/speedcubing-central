@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { formatTime, formatMoveCount, getEvent, SUBSET_EVENTS, type Penalty } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
+import { apiError } from '../../lib/api';
 import { useSettings } from '../../store/settings';
 import { toast } from '../../store/toast';
 import { useAuth } from '../../store/auth';
@@ -117,6 +118,13 @@ export default function TimerPage() {
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
+  // Returns whether the solve actually saved, so callers (e.g. addTyped)
+  // know whether it's safe to clear the typed-in time. A failed
+  // createSession/addSolve (network blip, expired session, server error)
+  // must not advance the scramble or silently vanish — previously an
+  // uncaught rejection here skipped scr.advance() with zero feedback, so a
+  // failed save looked identical to a successful one except the scramble
+  // never changed and the solve never appeared.
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty, plusTwoCount: number, solution?: string) => {
       setSubmitting(true);
@@ -133,6 +141,10 @@ export default function TimerPage() {
           const hits = detectNewPBs(prevSolves, solve);
           if (hits.length > 0) setPbHits(hits);
         }
+        return true;
+      } catch (e) {
+        toast.error(apiError(e, 'Failed to save solve, try again'));
+        return false;
       } finally {
         setSubmitting(false);
       }
@@ -253,15 +265,18 @@ export default function TimerPage() {
     else document.documentElement.requestFullscreen().catch(() => undefined);
   }
 
-  const addTyped = useCallback(() => {
+  const addTyped = useCallback(async () => {
     if (!typed.trim()) {
       scr.advance();
       return;
     }
     const parsed = parseTimeInput(typed, solvePrecision);
     if (!parsed) return;
-    onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
-    setTyped('');
+    // Only clear the typed value once the solve actually saved — on
+    // failure the typed time is kept so the user can just retry instead of
+    // having to retype it from scratch (see onComplete's error handling).
+    const saved = await onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
+    if (saved) setTyped('');
   }, [typed, solvePrecision, onComplete, scr.advance]);
 
   // Enter advances/submits without needing focus anywhere in particular —

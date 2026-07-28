@@ -177,9 +177,16 @@ There is no admin account or admin role — see Roles below.
   this exact app (same repo/branch, `npm run build && npm start`), sharing the
   main site's production database — not a separate deployment pipeline or a
   divergent branch, deliberately, since this repo's `start` script runs
-  `prisma db push --accept-data-loss` on every boot and two branches with
-  different schemas pointed at one database could silently drop each other's
-  tables/columns. Two flags gate everything instead: `BETA_SITE` (server env
+  `prisma db push` on every boot and two branches with different schemas
+  pointed at one database could otherwise drop each other's tables/columns.
+  The `start` script intentionally omits `--accept-data-loss` (added after a
+  data-loss incident where a boot silently dropped columns/tables): a
+  destructive schema diff now makes `db push` exit non-zero and the boot
+  fails loudly instead of silently applying it. If a deploy ever fails to
+  start with a data-loss warning from `db push`, that means beta/main have
+  drifted out of schema sync (or a genuinely destructive schema change needs
+  a manual, reviewed migration), so investigate before forcing it through;
+  do not just re-add the flag. Two flags gate everything instead: `BETA_SITE` (server env
   var, `server/src/env.ts`) / `VITE_BETA_SITE` (matching client build-time
   var, read via `client/src/lib/betaSite.ts`'s `IS_BETA_SITE`) is true only
   on the beta-hosted service and controls which features exist there at all
