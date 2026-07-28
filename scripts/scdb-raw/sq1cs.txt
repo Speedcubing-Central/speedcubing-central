@@ -1,0 +1,1704 @@
+Kite / Kite
+SQ1
+-
+Cube Shape
+-
+1 Slice
+setup:
+/
+alg: / votes:19
+---
+Left fist / Right fist
+SQ1
+-
+Cube Shape
+-
+2 Slices
+setup:
+1,-1 / -3,0 /
+alg: /3,0/-1,1 votes:1
+alg: /-3,0/-1,1 votes:0
+---
+Right fist / Left fist
+SQ1
+-
+Cube Shape
+-
+2 Slices
+setup:
+/ -3,0 /
+alg: /3,0/ votes:0
+alg: /-3,0/ votes:0
+---
+Barrel / Barrel
+SQ1
+-
+Cube Shape
+-
+2 Slices
+setup:
+/ -3,-3 /
+alg: /3,3/ votes:1
+alg: /-3,-3/ votes:0
+---
+Muffin / Square
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ -3,0 / -2,0 /
+alg: /2,0/3,0/ votes:2
+---
+Square / Muffin
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 0,3 / 0,2 /
+alg: /0,-2/0,-3/ votes:0
+---
+Shield / Square
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,0 / 1,0 /
+alg: /-1,0/-3,0/ votes:0
+---
+Square / Shield
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 0,-3 / 0,-1 /
+alg: /0,1/0,3/ votes:0
+---
+Right paw / Left paw
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,0 / -5,2 /
+alg: /-4,1/3,0/ votes:0
+---
+Left paw / Right paw
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,0 / 1,-4 /
+alg: /-1,4/-3,0/ votes:0
+---
+Muffin / Muffin
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ -3,-3 / 2,0 /
+alg: /-2,0/3,3/ votes:0
+---
+Shield / Shield
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,3 / -1,0 /
+alg: /1,0/-3,-3/ votes:0
+---
+Scallop / Scallop
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ -3,-3 / 2,1 /
+alg: /1,2/-3,-3/ votes:0
+alg: /-2,-1/3,3/ votes:0
+---
+Barrel / Kite
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,0 / 3,0 /
+alg: /-3,0/-3,0/ votes:0
+---
+Kite / Barrel
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 0,-3 / 0,-3 /
+alg: /0,3/0,3/ votes:0
+---
+Scallop / Kite
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 3,0 / 1,2 /
+alg: /-1,-2/-3,0/ votes:0
+---
+Kite / Scallop
+SQ1
+-
+Cube Shape
+-
+3 Slices
+setup:
+/ 0,-3 / -2,-1 /
+alg: /2,1/0,3/ votes:0
+---
+Star / 6-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / 4,-1 / -2,-4 /
+alg: /2,4/-4,1/0,3/ votes:4
+---
+6-2 / Star
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,-4 / 4,2 /
+alg: /-4,-2/-1,4/-3,0/ votes:0
+---
+Star / 8
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / -1,-2 / 4,2 /
+alg: /-4,-2/1,2/-3,-3/ votes:0
+---
+8 / Star
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 2,1 / -2,-4 /
+alg: /2,4/-2,-1/3,3/ votes:0
+---
+Star / 4-4
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / -1,0 / 2,2 /
+alg: /-2,-2/1,0/-3,-3/ votes:0
+---
+4-4 / Star
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 0,1 / -2,-2 /
+alg: /2,2/0,-1/3,3/ votes:0
+---
+Left 4-2 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / 2,1 / -2,-3 /
+alg: /2,3/-2,-1/-3,0/-1,1 votes:0
+---
+Parallel Edges / Left 4-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,3 / 1,2 / -3,-2 /
+alg: /3,2/-1,-2/0,-3/ votes:0
+---
+Right 4-2 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,2 / 2,3 /
+alg: /-2,-3/-1,-2/-3,0/ votes:0
+---
+Parallel Edges / Right 4-2 
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,2 / -2,3 / -4,0 /
+alg: /4,0/2,-3/-1,-2/-3,0/ votes:0
+---
+Right 5-1 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,4 /
+alg: /0,-4/2,1/0,3/ votes:0
+---
+Perpendicular Edges / Right 5-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 4,0 /
+alg: /-4,0/-2,-1/-3,0/-1,1 votes:0
+---
+Left 5-1 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 0,-4 /
+alg: /0,4/1,2/0,3/-1,1 votes:2
+---
+Perpendicular Edges / Left 5-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,2 / -4,0 /
+alg: /4,0/-1,-2/-3,0/ votes:0
+---
+4-1-1 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,2 / -2,0 /
+alg: /2,0/-1,-2/-3,0/ votes:0
+---
+Perpendicular Edges / 4-1-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,2 /
+alg: /0,-2/2,1/0,3/ votes:0
+---
+3-2-1 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,2 /
+alg: /0,-2/0,1/0,3/ votes:0
+---
+Perpendicular Edges / 3-2-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,0 / -2,-1 /
+alg: /2,1/-1,0/-3,0/ votes:0
+---
+3-1-2 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / 0,-1 / 1,2 /
+alg: /-1,-2/0,1/0,3/ votes:0
+---
+Perpendicular Edges / 3-1-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,0 / -2,0 /
+alg: /2,0/-1,0/-3,0/ votes:0
+---
+3-3 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,-4 / 0,2 /
+alg: /0,-2/-1,4/-3,0/ votes:0
+---
+Perpendicular Edges / 3-3
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 0,-3 / 5,-2 / 2,0 /
+alg: /-2,0/-5,2/0,3/-1,1 votes:0
+---
+Right 5-1 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,3 / 1,2 / -3,2 /
+alg: /3,-2/-1,-2/0,-3/ votes:0
+---
+Pair / Right 5-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 2,-3 /
+alg: /-2,3/-2,-1/-3,0/-1,1 votes:0
+---
+Left 5-1 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 0,3 / 2,1 / 3,-2 /
+alg: /-3,2/-2,-1/0,-3/-1,1 votes:0
+---
+Pair / Left 5-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 2,-3 /
+alg: /-2,3/-2,-1/-3,0 /-1,1 votes:0
+---
+4-1-1 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / -4,1 / 0,-4 /
+alg: /0,4/4,-1/-3,0/-1,1 votes:0
+---
+Pair / 4-1-1
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+1,-1 / 3,0 / -4,1 / 4,0 /
+alg: /-4,0/4,-1/-3,0/-1,1 votes:0
+---
+2-2-2 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 0,-1 / 2,0 /
+alg: /-2,0/0,1/3,3/ votes:0
+---
+Pair / 2-2-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / 1,0 / 0,-2 /
+alg: /0,2/-1,0/-3,-3/ votes:0
+---
+Left 4-2 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 2,1 / -2,0 /
+alg: /2,0/-2,-1/3,3/ votes:0
+---
+Pair / Left 4-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / -2,-1 / 0,-2 /
+alg: /0,2/2,1/3,3/ votes:0
+---
+Right 4-2 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / -1,0 / 0,-4 /
+alg: /0,4/1,0/-3,-3/ votes:0
+---
+Pair / Right 4-2
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / -1,-2 / 2,0 /
+alg: /-2,0/1,2/-3,-3/ votes:0
+---
+6 / Pair
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / -1,-2 / 0,-4 /
+alg: /0,4/1,2/-3,-3/ votes:0
+---
+Pair / 6
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 2,1 / 4,0 /
+alg: /-4,0/-2,-1/3,3/ votes:0
+---
+Right fist / Left paw
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,4 /
+alg: /0,-4/0,1/0,3/ votes:0
+---
+Left paw / Right fist
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,0 / -4,0 /
+alg: /4,0/-1,0/-3,0/ votes:0
+---
+Left fist / Right paw
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,-3 / 0,-1 / 1,0 /
+alg: /-1,0/0,1/0,3/ votes:0
+---
+Right paw / Left fist
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,0 / 1,0 / 0,-1 /
+alg: /0,1/-1,0/-3,0/ votes:0
+---
+Right paw / Right paw
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 0,1 / -2,-2 / 1,-2 /
+alg: /-1,2/2,2/0,-1/3,3/ votes:0
+---
+Muffin / Shield
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 0,3 / 1,2 / -3,0 /
+alg: /3,0/-1,-2/0,-3/ votes:0
+---
+Shield / Muffin
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,0 / -2,-1 / 0,3 /
+alg: /0,-3/2,1/3,0/ votes:0
+---
+Scallop / Barrel
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ 3,3 / 1,0 / -4,0 /
+alg: /4,0/-1,0/-3,-3/ votes:2
+---
+Barrel / Scallop
+SQ1
+-
+Cube Shape
+-
+4 Slices
+setup:
+/ -3,-3 / 0,-1 / 0,4 /
+alg: /0,-4/0,1/3,3/ votes:0
+---
+Right paw / Square
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / 2,0 / -1,0 / 0,1
+alg: 0,-1/1,0/-2,0/-1,-2/-3,0/ votes:0
+---
+Square / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,-2 / 0,1 / -1,0
+alg: 1,0/0,-1/0,2/2,1/0,3/ votes:0
+---
+Left paw / Square
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 2,0 / -2,3 /
+alg: /2,-3/-2,0/-2,-1/-3,0/-1,1 votes:0
+---
+Square / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 0,-2 / -3,2 /
+alg: /3,-2/0,2/1,2/0,3/-1,1 votes:0
+---
+Scallop / Square
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / -3,0 / -1,-2 / 4,0 / -2,0 /
+alg: /2,0/-4,0/1,2/3,0/-1,1 votes:0
+---
+Square / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,3 / 2,1 / 0,-4 / 0,2 /
+alg: /0,-2/0,4/-2,-1/0,-3/-1,1 votes:0
+---
+4-1-1 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 0,-4 / -3,2 /
+alg: /3,-2/0,4/1,2/0,3/-1,1 votes:0
+---
+Parallel Edges / 4-1-1
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / -4,0 / 2,-3 /
+alg: /-2,3/4,0/-1,-2/-3,0/ votes:0
+---
+6 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / -1,-2 / -2,-4 / -3,-2 /
+alg: /3,2/2,4/1,2/-3,-3/ votes:0
+---
+Parallel Edges / 6
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / -1,-2 / -2,-4 / -3,-2 /
+alg: /3,2/2,4/1,2/-3,-3/ votes:0
+---
+3-2-1 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / -4,0 / 2,3 /
+alg: /4,0/2,-3/-1,-2/-3,0/ votes:0
+---
+Parallel Edges / 3-2-1
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,2 / -2,0 / -4,1 /
+alg: /-3,-2/1,2/0,3/-1,1 votes:0
+---
+3-1-2 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / -1,-2 / 2,0 / 4,-1 /
+alg: /2,3/-2,-1/-3,0/-1,1 votes:0
+---
+Parallel Edges / 3-1-2
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / 0,-1 / -2,-3 /
+alg: /3,2/-1,-2/0,-3/ votes:0
+---
+3-3 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / -1,-2 / 2,0 / 2,-1 /
+alg: /-2,1/-2,0/1,2/-3,-3/ votes:0
+---
+Parallel Edges / 3-3
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,2 / 0,2 / -1,2 /
+alg: /1,-2/0,-2/-1,-2/-3,-3/ votes:0
+---
+Left 5-1 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / 0,4 / 3,0 /
+alg: /-3,0/0,-4/-1,-2/0,-3/ votes:0
+---
+Parallel Edges / Left 5-1
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,-3 / 0,1 / 0,4 / 4,-1 /
+alg: /-4,1/0,-4/0,-1/3,3/ votes:0
+---
+Right 5-1 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 0,-4 / -3,0 /
+alg: /3,0/0,4/1,2/0,3/-1,1 votes:0
+---
+Parallel Edges / Right 5-1
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / -4,0 / 0,-3 /
+alg: /0,3/4,0/-1,-2/-3,0/ votes:0
+---
+Right 4-2 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / 3,-2 / 4,-3 /
+alg: /-4,3/-3,2/-1,-2/0,-3/ votes:0
+---
+Perpendicular Edges / Right 4-2
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / 3,-2 / 4,-3 /
+alg: /-4,3/-3,2/-1,-2/0,-3/ votes:0
+---
+Right 4-2 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / 2,-3 / 3,-4 /
+alg: /-3,4/-2,3/-1,-2/-3,0/ votes:0
+---
+Perpendicular Edges / Left 4-2
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 4,-3 / 0,3 /
+alg: /0,-3/-4,3/-2,-1/-3,0/-1,1 votes:0
+---
+6 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / 2,-3 / 3,4 /
+alg: /-3,-4/-2,3/-1,-2/-3,0/ votes:0
+---
+Perpendicular Edges / 6
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / -2,3 / 3,2 /
+alg: /-3,-2/2,-3/-2,-1/-3,0/-1,1 votes:0
+---
+3-2-1 / Pair
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / 3,-2 / 0,-5 /
+alg: /0,5/-3,2/-1,-2/0,-3/ votes:0
+---
+Pair / 3-2-1
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,0 / -2,-1 / 2,-3 / 5,0 /
+alg: /-5,0/-2,3/2,1/3,0/ votes:0
+---
+3-1-2 / Pair
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / 3,-4 / 0,5 /
+alg: /0,-5/-3,4/-1,-2/0,-3/ votes:0
+---
+Pair / 3-1-2
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,4 / 2,-2 / 0,-2
+alg: 0,2/-2,2/0,-4/2,1/0,3/ votes:0
+---
+3-3 / Pair
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / -3,0 / 0,2 /
+alg: /0,-2/3,0/-1,-2/0,-3/ votes:0
+---
+Pair / 3-3
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,0 / -2,-1 / 0,3 / -2,0 /
+alg: /2,0/0,-3/2,1/3,0/ votes:0
+---
+Left paw / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,2 / 2,2 / -1,0 /
+alg: /1,0/-2,-2/-1,-2/-3,-3/ votes:0
+---
+Left fist / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / -5,2 / 0,4 / 0,-2 /
+alg: /0,2/0,-4/5,-2/-3,0/ votes:0
+---
+Left paw / Left fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / -2,5 / -4,0 / 2,0 /
+alg: /-2,0/4,0/2,-5/0,3/ votes:0
+---
+Right fist / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / 2,0 /
+alg: /-2,0/-1,0/-3,0/ votes:0
+---
+Right paw / Right fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,-2 /
+alg: /0,2/0,1/0,3/ votes:0
+---
+Right paw / Muffin
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,-3 / 2,1 / -2,0 / 1,0 /
+alg: /-1,0/2,0/-2,-1/3,3/ votes:0
+---
+Muffin / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / -1,-2 / 0,-2 / 1,0 /
+alg: /0,-1/0,2/1,2/-3,-3/ votes:0
+---
+Left paw / Muffin
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,-3 / -2,-1 / 2,0 / -1,0 /
+alg: /1,0/-2,0/2,1/3,3/ votes:0
+---
+Muffin / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,2 / 0,-2 / 0,1 /
+alg: /0,-1/0,2/-1,-2/-3,-3/ votes:0
+---
+Left paw / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / -2,3 / 0,1 /
+alg: /0,-1/2,-3/-1,-2/-3,0/ votes:0
+---
+Shield / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / -2,-1 / -3,2 / -1,0 /
+alg: /1,0/3,-2/2,1/0,3/ votes:0
+---
+Right paw / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,2 / 2,-3 / -1,0 /
+alg: /1,0/-2,3/-1,-2/-3,0/ votes:0
+---
+Shield / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / -2,-1 / 3,-2 / 0,1 /
+alg: /0,-1/-3,2/2,1/0,3/ votes:0
+---
+Right fist / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / 5,-2 / 0,-2 / 1,2 /
+alg: /-1,-2/0,2/-5,2/0,3/-1,1 votes:0
+---
+Shield / Right fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / 5,-2 / 0,-2 / 1,2 /
+alg: /-1,-2/0,2/-5,2/0,3/-1,1 votes:0
+---
+Left fist / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / 5,-2 / 0,-2 / 1,0 /
+alg: /-1,0/0,2/-5,2/0,3/-1,1 votes:0
+---
+Shield / Left fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,-5 / 2,0 / 0,-1 /
+alg: /0,1/-2,0/-2,5/-3,0/-1,1 votes:0
+---
+Muffin / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 3,-4 / 0,-2 /
+alg: /0,2/-3,4/1,2/0,3/-1,1 votes:0
+---
+Scallop / Muffin
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 4,-3 / 2,0 /
+alg: /-2,0/-4,3/-2,-1/-3,0/-1,1 votes:0
+---
+Left fist / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,-4 / 0,4 / -1,0 /
+alg: /1,0/0,-4/-1,4/0,-3/ votes:0
+---
+Scallop / Left fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,0 / 4,-1 / -4,0 / 0,1 /
+alg: /0,-1/4,0/-4,1/3,0/ votes:0
+---
+Right fist / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,4 / 0,-4 / 1,0 /
+alg: /-1,0/0,4/1,-4/0,3/-1,1 votes:0
+---
+Scallop / Right fist
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / -4,1 / 4,0 / 0,-1 /
+alg: /0,1/-4,0/4,-1/-3,0/-1,1 votes:0
+---
+Left paw / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 3,-2 / -3,-2 /
+alg: /3,2/-3,2/1,2/0,3/-1,1 votes:0
+---
+Scallop / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 2,-3 / 2,3 /
+alg: /-2,-3/-2,3/-2,-1/-3,0/-1,1 votes:0
+---
+Right paw / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,3 / 1,2 / -3,2 / 3,2 /
+alg: /-3,-2/3,-2/-1,-2/0,-3/ votes:0
+---
+Scallop / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,0 / -2,-1 / -2,3 / -2,-3 /
+alg: /2,3/2,-3/2,1/3,0/ votes:0
+---
+Shield / Scallop
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,2 / 0,4 / 0,-2 /
+alg: /0,2/0,-4/-1,-2/-3,-3/ votes:0
+---
+Scallop / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,-3 / -2,-1 / -4,0 / 2,0 /
+alg: /-2,0/4,0/2,1/3,3/ votes:0
+---
+Left paw / Barrel
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / 4,-3 / -2,1 /
+alg: /2,-1/-4,3/-2,-1/-3,0/-1,1 votes:0
+---
+Barrel / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / 3,-4 / -1,2 /
+alg: /1,-2/-3,4/1,2/0,3/-1,1 votes:0
+---
+Right paw / Barrel
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 0,-3 / -1,-2 / -3,4 / -2,1 /
+alg: /2,-1/3,-4/1,2/0,3/-1,1 votes:0
+---
+Barrel / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+1,-1 / 3,0 / 2,1 / -4,3 / -1,2 /
+alg: /1,-2/4,-3/-2,-1/-3,0/-1,1 votes:0
+---
+Shield / Barrel
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,3 / 1,0 / -2,0 / 2,0 /
+alg: /-2,0/2,0/-1,0/-3,-3/ votes:0
+---
+Barrel / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ -3,-3 / 0,-1 / 0,2 / 0,-2 /
+alg: /0,2/0,-2/0,1/3,3/ votes:0
+---
+Left paw / Kite
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / -2,0 / 0,-1 /
+alg: /0,1/2,0/-1,0/-3,0/ votes:0
+---
+Kite / Left paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / 0,-1 / 1,2 / -1,0 /
+alg: /1,0/-1,-2/0,1/0,3/ votes:0
+---
+Shield / Kite
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / 0,-1 / 1,2 / 0,2 /
+alg: /0,-2/-1,-2/0,1/0,3/ votes:0
+---
+Kite / Shield
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / -2,0 / 2,0 /
+alg: /-2,0/2,0/-1,0/-3,0/ votes:0
+---
+Right paw / Kite
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 3,0 / 1,0 / -2,-1 / 0,1 /
+alg: /0,-1/2,1/-1,0/-3,0/ votes:0
+---
+Kite / Right paw
+SQ1
+-
+Cube Shape
+-
+5 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,2 / 1,0 /
+alg: /-1,0/0,-2/0,1/0,3/ votes:0
+---
+Left fist / Square
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,2 / 2,0 / -1,-2 / 4,0 /
+alg: /-4,0/1,2/-2,0/-1,-2/-3,0/ votes:0
+---
+Square / Left fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,-2 / 2,1 / 0,-4 /
+alg: /0,4/-2,-1/0,2/2,1/0,3/ votes:0
+---
+Right fist / Square
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,2 / -2,0 / 2,1 / -4,0 / 0,-1
+alg: 0,-1/0,1/4,0/-2,-1/2,0/-1,-2/-3,0/ votes:2
+---
+Square / Right fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,2 / -1,-2 / 0,4 / 1,0
+alg: 1,0/-1,0/0,-4/1,2/0,-2/2,1/0,3/ votes:0
+---
+Barrel / Square
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,3 / 1,0 / -2,-2 / 2,1 / -2,-2 /
+alg: /2,2/-2,-1/2,2/-1,0/-3,-3/ votes:0
+---
+Square / Barrel
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ -3,-3 / 0,1 / -2,-2 / 1,-2 / -2,-2 /
+alg: /2,2/-1,2/2,2/0,-1/3,3/ votes:0
+---
+Star / 7-1
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,3 / 1,2 / 3,-2 / 2,1 / 2,0 /
+alg: /-2,0/-2,-1/-3,2/-1,-2/0,-3/ votes:2
+---
+7-1 / Star
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+1,-1 / 3,0 / 2,1 / -2,3 / 1,2 / 0,2 / -1,0
+alg: 1,0/0,-2/-1,-2/ 2,-3/-2,-1/-3,0/-1,1 votes:3
+---
+Star / 5-3
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / -2,-1 / 3,-2 / 2,1 / 4,0 / 0,-3
+alg: 0,3/-4,0/-2,-1/-3,2/2,1/0,3/ votes:0
+---
+5-3 / Star
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,2 / 2,-3 / -1,-2 / 0,-4 /
+alg: /0,4/1,2/-2,3/-1,-2/-3,0/ votes:0
+---
+2-2-2 / Parallel Edges
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,0 / -2,-1 / -2,0 / -6,3 /
+alg: /6,-3/2,0/2,1/-1,0/-3,0/ votes:0
+---
+Parallel Edges / 2-2-2
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,0 / -2,-1 / -2,0 / 0,-3 /
+alg: /0,3/2,0/2,1/-1,0/-3,0/ votes:0
+---
+2-2-2 / Perpendicular Edges
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,2 / -2,0 / 1,0 /
+alg: /-1,0/2,0/0,-2/0,1/0,3/ votes:0
+---
+Perpendicular Edges / 2-2-2
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,0 / -2,-1 / 0,-2 / 0,1 /
+alg: /0,-1/0,2/2,1/-1,0/-3,0/ votes:0
+---
+Left fist / Left fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,2 / 0,-2 / 0,2 /
+alg: /0,-2/0,2/0,-2/0,1/0,3/ votes:0
+---
+Right fist / Right fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,0 / -2,0 / 2,0 / -2,0 /
+alg: /2,0/-2,0/2,0/-1,0/-3,0/ votes:0
+---
+Right fist / Muffin
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,-4 / -2,0 / 2,1 / -4,0 /
+alg: /4,0/-2,-1/2,0/-1,4/-3,0/ votes:0
+---
+Muffin / Right fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / 4,-1 / 0,2 / -1,-2 / 0,4 /
+alg: /0,-4/1,2/0,-2/-4,1/0,3/ votes:0
+---
+Left fist / Muffin
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,-4 / -2,0 / 0,1 / -4,0 /
+alg: /4,0/0,-1/2,0/-1,4/-3,0/ votes:0
+---
+Muffin / Left fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / 4,-1 / 0,2 / -1,0 / 0,4 /
+alg: /0,-4/1,0/0,-2/-4,1/0,3/ votes:0
+---
+Right fist / Barrel
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,3 / -1,-2 / -2,0 / 1,0 / 2,0 /
+alg: /-2,0/-1,0/2,0/1,2/-3,-3/ votes:0
+---
+Barrel / Right fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ -3,-3 / 2,1 / 0,2 / 0,-1 / 0,-2 /
+alg: /0,2/0,1/0,-2/-2,-1/3,3/ votes:0
+---
+Left fist / Barrel
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,3 / 1,2 / 2,0 / -1,0 / -2,0 /
+alg: /2,0/1,0/-2,0/-1,-2/-3,-3/ votes:0
+---
+Barrel / Left fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ -3,-3 / -2,-1 / 0,-2 / 0,1 / 0,2 /
+alg: /0,-2/0,-1/0,2/2,1/3,3/ votes:0
+---
+Muffin / Barrel
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+1,-1 / -3,0 / -1,0 / 2,0 / -2,0 / -2,-3 /
+alg: /2,3/2,0/-2,0/1,0/3,0/-1,1 votes:0
+---
+Barrel / Muffin
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+1,-1 / 0,3 / 0,1 / 0,-2 / 0,2 / 3,2 /
+alg: /-3,-2/0,-2/0,2/0,-1/0,-3/-1,1 votes:0
+---
+Left fist / Kite
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,2 / -2,0 / 0,1 / 2,0 /
+alg: /-2,0/0,-1/2,0/-1,-2/-3,0/ votes:0
+---
+Kite / Left fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,3 / 1,2 / 0,2 / -1,0 / 0,-2 /
+alg: /0,2/1,0/0,-2/-1,-2/0,-3/ votes:0
+---
+Right fist / Kite
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,0 / 1,2 / -2,0 / 0,1 / 2,0 /
+alg: /-2,0/0,-1/2,0/-1,-2/-3,0/ votes:0
+---
+Kite / Right fist
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 0,-3 / -2,-1 / 0,2 / -1,0 / 0,-2 /
+alg: /0,2/1,0/0,-2/2,1/0,3/ votes:0
+---
+Muffin / Kite
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ 3,3 / 1,0 / -2,0 / 2,0 / -2,-3 /
+alg: /2,3/-2,0/2,0/-1,0/-3,-3/ votes:0
+---
+Kite / Muffin
+SQ1
+-
+Cube Shape
+-
+6 Slices
+setup:
+/ -3,-3 / 0,1 / 0,-2 / 0,2 / -3,-2 /
+alg: /3,2/0,-2/0,2/0,-1/3,3/ votes:0
+---
+Kite / Square
+SQ1
+-
+Cube Shape
+-
+7 Slices
+setup:
+/ 3,0 / 1,0 / -2,0 / 2,0 / -2,0 / 1,0 /
+alg: /-1,0/2,0/-2,0/2,0/-1,0/-3,0/ votes:4
+---
+Square / Kite
+SQ1
+-
+Cube Shape
+-
+7 Slices
+setup:
+/ 0,-3 / 0,-1 / 0,2 / 0,-2 / 0,2 / 0,-1 /
+alg: /0,1/0,-2/0,2/0,-2/0,1/0,3/ votes:0
+---
+Square / Square
+SQ1
+-
+Cube Shape
+-
+Solved
+setup:
+
+alg:  votes:11
+---

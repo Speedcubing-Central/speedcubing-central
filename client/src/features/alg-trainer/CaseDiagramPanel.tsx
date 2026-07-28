@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RotatingCaseDiagram } from '../../components/CubeDiagram';
+import { RotatingCaseDiagram, Sq1CaseDiagram } from '../../components/CubeDiagram';
 import type { AlgCase, AlgSet } from '../../data/algSets';
 import { IS_2x2, rotatingStickering } from './algDiagram';
 
@@ -61,16 +61,20 @@ export function CaseDiagramPanel({
 
   return (
     <div ref={cardRef} className="card p-6 shrink-0 overflow-hidden flex flex-col items-center justify-center gap-4">
-      <RotatingCaseDiagram
-        alg={alg}
-        size={diagramSize}
-        defaultLat={30}
-        puzzle={IS_2x2(set.kind) ? '2x2x2' : '3x3x3'}
-        diagramPrefix={c.diagramPrefix}
-        stickering={rotatingStickering(set.kind)}
-        resetSignal={resetSignal}
-        setup={setup}
-      />
+      {set.kind === 'sq1-cs' ? (
+        <Sq1CaseDiagram setup={setup ?? ''} size={diagramSize} />
+      ) : (
+        <RotatingCaseDiagram
+          alg={alg}
+          size={diagramSize}
+          defaultLat={30}
+          puzzle={IS_2x2(set.kind) ? '2x2x2' : '3x3x3'}
+          diagramPrefix={c.diagramPrefix}
+          stickering={rotatingStickering(set.kind)}
+          resetSignal={resetSignal}
+          setup={setup}
+        />
+      )}
       <div ref={textRef} className="font-mono text-base font-semibold text-primary text-center leading-relaxed break-all w-full">
         {scrambleText}
       </div>

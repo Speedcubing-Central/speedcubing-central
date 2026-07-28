@@ -5,7 +5,7 @@ import '@cubing/icons';
 import { PageHeader, Badge } from '../../components/ui';
 import {
   OllDiagram, PllDiagram, CollDiagram, F2LDiagram, TwoByTwoDiagram,
-  RotatingCaseDiagram, simplifyAlg, cleanAlgForDisplay, attachAuf,
+  RotatingCaseDiagram, Sq1CaseDiagram, simplifyAlg, cleanAlgForDisplay, attachAuf,
   buildTrainerScrambleAndSolution,
 } from '../../components/CubeDiagram';
 import { ALG_SETS, getSet, type AlgCase, type AlgSet } from '../../data/algSets';
@@ -28,6 +28,7 @@ import { AlgSolveDetail } from './AlgSolveDetail';
 import { SET_TO_URL, URL_TO_SET, joinSetSlugs, parseSetSlugs } from './algUrls';
 import { useElementHeight, useIsDesktop } from '../../components/useLayoutHelpers';
 import { useFillViewportHeight } from '../../components/useFillViewportHeight';
+import { IS_BETA_SITE } from '../../lib/betaSite';
 
 const COLUMN_GAP = 12; // gap-3
 const TIMER_MIN_HEIGHT = 160;
@@ -91,6 +92,7 @@ function CubingIcon({ event, className }: { event: string; className?: string })
 // three-quarter default angle used elsewhere.
 function CaseImage({ c, set, size = 80, pref, resetSignal }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref; resetSignal?: number }) {
   const alg = effectiveAlg(c, pref);
+  if (set.kind === 'sq1-cs') return <Sq1CaseDiagram setup={resolveCaseSetup(c)} size={size} />;
   return (
     <RotatingCaseDiagram
       alg={alg}
@@ -131,7 +133,7 @@ function StatusBadge({ status }: { status: AlgStatus }) {
 const PUZZLES = [
   { id: '3x3', label: '3×3', event: '333', available: true },
   { id: '2x2', label: '2×2', event: '222', available: true },
-  { id: 'sq1', label: 'Square-1', event: 'sq1', available: false },
+  { id: 'sq1', label: 'Square-1', event: 'sq1', available: IS_BETA_SITE },
   { id: 'minx', label: 'Megaminx', event: 'minx', available: false },
   { id: 'pyram', label: 'Pyraminx', event: 'pyram', available: false },
   { id: 'skewb', label: 'Skewb', event: 'skewb', available: false },
@@ -170,6 +172,12 @@ const SET_CARDS_3x3 = [
   { id: 'COLL', label: 'COLL', description: 'Corners of the Last Layer',  count: 40, preview: <CollDiagram alg="R U R' U R U2 R'" size={80} /> },
 ];
 
+const SQ1_CS_SET = getSet('SQ1CubeShape')!;
+const SET_CARDS_SQ1 = [
+  { id: 'SQ1CubeShape', label: 'Cube Shape', description: 'Restore a physical cube shape', count: SQ1_CS_SET.cases.length,
+    preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_CS_SET.cases.find((c) => c.id === 'sq1-cs-kite-square') ?? SQ1_CS_SET.cases[0])} size={80} /> },
+];
+
 const SET_CARDS_2x2 = [
   { id: 'OrtegaOLL', label: 'OLL', description: 'Ortega OLL', count: 7,
     preview: <TwoByTwoDiagram alg="R U R' U R U2 R'" size={80} stickering="2x2-oll" /> },
@@ -197,8 +205,9 @@ function SetPicker({
   multiSelect?: boolean;
 }) {
   const is3x3 = puzzle === '3x3';
-  const label = is3x3 ? '3×3' : '2×2';
-  const cards = is3x3 ? SET_CARDS_3x3 : SET_CARDS_2x2;
+  const isSq1 = puzzle === 'sq1';
+  const label = is3x3 ? '3×3' : isSq1 ? 'Square-1' : '2×2';
+  const cards = is3x3 ? SET_CARDS_3x3 : isSq1 ? SET_CARDS_SQ1 : SET_CARDS_2x2;
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const handleClick = (id: string) => {
@@ -365,15 +374,19 @@ function CaseModal({
         )}
 
         <div className="flex justify-center">
-          <RotatingCaseDiagram
-            alg={displayAlg}
-            size={280}
-            defaultLat={30}
-            puzzle={puzzleKind}
-            diagramPrefix={c.diagramPrefix}
-            stickering={rotatingStickering(set.kind)}
-            setup={resolveCaseSetup(c)}
-          />
+          {set.kind === 'sq1-cs' ? (
+            <Sq1CaseDiagram setup={resolveCaseSetup(c)} size={280} />
+          ) : (
+            <RotatingCaseDiagram
+              alg={displayAlg}
+              size={280}
+              defaultLat={30}
+              puzzle={puzzleKind}
+              diagramPrefix={c.diagramPrefix}
+              stickering={rotatingStickering(set.kind)}
+              setup={resolveCaseSetup(c)}
+            />
+          )}
         </div>
 
         <div>
@@ -708,6 +721,14 @@ function parseMoves(alg: string): string[] {
   return alg.trim().split(/\s+/).filter(Boolean);
 }
 
+// Same as parseMoves, but for Square-1's "(x, y) /" notation: a plain
+// whitespace split breaks a "(x, y)" twist apart at its internal comma-space
+// (into "(x," and "y)"), so this instead matches whole parenthesized twists
+// or bare slice turns as single tokens.
+function parseSq1Moves(alg: string): string[] {
+  return alg.match(/\([^)]*\)|\//g) ?? [];
+}
+
 // True if the algorithm's first or last move is a bare whole-cube rotation
 // (y/y'/y2/x/.../z2). Used to prefer alternates without this shape when an
 // equally-valid one exists — purely cosmetic (buildTrainerScrambleAndSolution
@@ -849,6 +870,7 @@ function TrainingSession({
   const currentSet = getSet(currentSetId)!;
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
   const puzzleKind = IS_2x2(currentSet.kind) ? '2x2x2' : '3x3x3';
+  const isSq1 = currentSet.kind === 'sq1-cs';
 
   // Pick an alternate (never the preferred alg, so it's not given away) plus
   // a random AUF, so the same case doesn't always render as one of a small
@@ -864,6 +886,15 @@ function TrainingSession({
   // case — see VALID_ALTS's own doc comment for the numbers.
   const usingValidatedAlt = (VALID_ALTS[currentCase.id] ?? []).length > 0;
   const { randomAlg, auf } = useMemo(() => {
+    // Square-1 cases have no AUF concept (no analogue of a top-layer U turn
+    // in this alg set), and every alt already verified against the case's
+    // one fixed setup (see generate-sq1-cube-shape.ts) — so any pool entry
+    // is always a valid solve, picked purely for reveal variety.
+    if (isSq1) {
+      const pool = [currentCase.moves, ...(currentCase.alts ?? [])];
+      const alg = pool[Math.floor(Math.random() * pool.length)];
+      return { randomAlg: alg, auf: '' };
+    }
     const verified = VALID_ALTS[currentCase.id] ?? [];
     const pool = verified.length > 0 ? verified : [currentCase.moves];
     // Prefer candidates that don't start/end with a rotation (see
@@ -877,23 +908,28 @@ function TrainingSession({
     const a = s.trainerRandomAUF ? AUF_MOVES[Math.floor(Math.random() * AUF_MOVES.length)] : '';
     return { randomAlg: alg, auf: a };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCase, s.trainerRandomAUF]);
+  }, [currentCase, s.trainerRandomAUF, isSq1]);
 
   // attachAuf combines the AUF with the algorithm, placing a leading
   // whole-cube rotation *before* the AUF rather than after it (a solver
   // does the regrip, then the AUF turn — not the reverse; see its doc
   // comment for why that reordering is exact, not just cosmetic).
-  const solvingAlg = attachAuf(auf, randomAlg);
+  const solvingAlg = isSq1 ? randomAlg : attachAuf(auf, randomAlg);
   // buildTrainerScrambleAndSolution builds the scramble *and* the exact
   // algorithm that solves it — see its doc comment for why "solvingAlg
   // unchanged" isn't always the correct solution once a rotation embedded in
   // it (e.g. a leading "y") gets dropped from the scramble side: naively
   // reusing solvingAlg as-is broke exactly this case (an EG-1 solution that
   // did a "y rotation to turn it into an L-case" and didn't even solve it).
-  const { scramble, solution: exactSolution } = useMemo(
-    () => buildTrainerScrambleAndSolution(solvingAlg, puzzleKind),
-    [solvingAlg, puzzleKind],
-  );
+  // Square-1 sidesteps all of that: the "scramble" is always just the
+  // case's own (single, fixed) setup — buildTrainerScrambleAndSolution's
+  // rotation/AUF-folding logic assumes WCA face-turn notation and doesn't
+  // apply to Square-1's "(x, y) /" tuples at all.
+  const { scramble, solution: exactSolution } = useMemo(() => {
+    if (isSq1) return { scramble: resolveCaseSetup(currentCase), solution: solvingAlg };
+    return buildTrainerScrambleAndSolution(solvingAlg, puzzleKind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSq1, currentCase, solvingAlg, puzzleKind]);
   // SOLUTION_ALGS (scripts/generate-solution-algs.ts) precomputes, for the
   // case's own default `moves` and every AUF, the shortest algorithm
   // verified to solve that (case, AUF) pairing — reordered per attachAuf
@@ -909,12 +945,17 @@ function TrainingSession({
   // there's no verified alt for a custom alg either, buildTrainerScrambleAndSolution's
   // exact pairing is the only remaining guarantee of correctness.
   const usingDefaultAlg = preferredAlg === currentCase.moves;
-  const displaySolutionAlg = usingDefaultAlg
-    ? (SOLUTION_ALGS[currentCase.id]?.[auf] ?? exactSolution)
-    : usingValidatedAlt
-      ? attachAuf(auf, cleanAlgForDisplay(preferredAlg, puzzleKind))
-      : exactSolution;
-  const moves = useMemo(() => parseMoves(displaySolutionAlg), [displaySolutionAlg]);
+  const displaySolutionAlg = isSq1
+    ? (usingDefaultAlg ? randomAlg : preferredAlg)
+    : usingDefaultAlg
+      ? (SOLUTION_ALGS[currentCase.id]?.[auf] ?? exactSolution)
+      : usingValidatedAlt
+        ? attachAuf(auf, cleanAlgForDisplay(preferredAlg, puzzleKind))
+        : exactSolution;
+  const moves = useMemo(
+    () => (isSq1 ? parseSq1Moves(displaySolutionAlg) : parseMoves(displaySolutionAlg)),
+    [isSq1, displaySolutionAlg],
+  );
 
   const [revealed, setRevealed] = useState(0);
   const [manualInput, setManualInput] = useState('');
@@ -1556,7 +1597,10 @@ export default function AlgTrainerPage() {
   const navigate = useNavigate();
 
   const tab: 'library' | 'trainer' = tabParam === 'trainer' ? 'trainer' : 'library';
-  const puzzle = puzzleParam ?? null;
+  // Square-1 is beta-only (see PUZZLES' `available` flag) — guarded here too
+  // so a direct URL to the sq1 trainer/library on the main site falls back
+  // to the puzzle landing page instead of bypassing the picker's gate.
+  const puzzle = puzzleParam === 'sq1' && !IS_BETA_SITE ? null : (puzzleParam ?? null);
   // Library stays single-set (it's a browse view, not a drill pool) — this
   // `setId` only feeds LibraryTab. Trainer sessions can combine several
   // sets — the URL joins their slugs with "+" (e.g.

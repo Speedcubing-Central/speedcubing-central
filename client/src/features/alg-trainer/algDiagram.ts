@@ -1,6 +1,7 @@
 import type { AlgCase, AlgSet } from '../../data/algSets';
 import { invertAlg, cleanAlgForDisplay, type StickeringKind } from '../../components/CubeDiagram';
 import { SETUP_ALGS } from '../../data/setupAlgs.generated';
+import { SQ1_SETUP_ALGS } from '../../data/sq1SetupAlgs.generated';
 
 // Shared between the trainer session view and the solve-detail/stats modals
 // so they resolve puzzle/stickering identically.
@@ -15,7 +16,7 @@ export const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'e
 // may have set as their preferred algorithm, so switching preferred algs
 // never changes what the case's setup looks like.
 export function resolveCaseSetup(c: AlgCase): string {
-  return SETUP_ALGS[c.id] ?? invertAlg(c.moves);
+  return SETUP_ALGS[c.id] ?? SQ1_SETUP_ALGS[c.id] ?? invertAlg(c.moves);
 }
 
 // Same as resolveCaseSetup, but for displaying as text: SpeedCubeDB's own
@@ -25,7 +26,7 @@ export function resolveCaseSetup(c: AlgCase): string {
 // there's no stray rotation to explain when there's no authoritative source
 // to defer to.
 export function resolveCaseSetupText(c: AlgCase, puzzle: string): string {
-  return SETUP_ALGS[c.id] ?? cleanAlgForDisplay(invertAlg(c.moves), puzzle);
+  return SETUP_ALGS[c.id] ?? SQ1_SETUP_ALGS[c.id] ?? cleanAlgForDisplay(invertAlg(c.moves), puzzle);
 }
 
 export function twoByTwoStickering(kind: AlgSet['kind']): StickeringKind {

@@ -633,6 +633,39 @@ export function TwoByTwoDiagram({ alg, size = 80, diagramPrefix = '', stickering
   return <div ref={ref} style={{ width: size, height: size }} />;
 }
 
+// Square-1 case diagram. Unlike every other diagram here, this does NOT go
+// through spawn3D/resolveSetupMoves — those assume WCA outer-face notation
+// (the 'x2 ' camera-framing prefix, cleanAlgForDisplay's rotation-cancelling)
+// which doesn't apply to Square-1's "(x,y) /" tuple notation, and there's no
+// meaningful flat-net stickering mask for its variable wedge-shaped pieces
+// either. `setup` is expected to already be a verified, cubing.js-ready
+// alg string (see resolveCaseSetup / SQ1_SETUP_ALGS) applied directly as
+// `experimentalSetupAlg` to a solved Square-1 — same camera framing
+// ScrambleImage.tsx uses for sq1 scrambles, for a consistent look.
+export function Sq1CaseDiagram({ setup, size = 80 }: { setup: string; size?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+    while (container.firstChild) container.removeChild(container.firstChild);
+    const el = document.createElement('twisty-player') as TwistyEl;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.setAttribute('background', 'none');
+    el.setAttribute('control-panel', 'none');
+    el.setAttribute('hint-facelets', 'none');
+    el.setAttribute('visualization', 'PG3D');
+    el.setAttribute('camera-latitude', '25');
+    el.setAttribute('camera-longitude', '30');
+    container.appendChild(el);
+    el.puzzle = 'square1';
+    el.visualization = 'PG3D';
+    el.alg = '';
+    el.experimentalSetupAlg = setup;
+  }, [setup, size]);
+  return <div ref={ref} style={{ width: size, height: size }} />;
+}
+
 export function RotatingCaseDiagram({
   alg, size = 280, defaultLat = 30, puzzle = '3x3x3', diagramPrefix = '', stickering = 'full' as StickeringKind, resetSignal = 0, setup,
 }: {
