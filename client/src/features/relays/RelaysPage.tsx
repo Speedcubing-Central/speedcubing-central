@@ -10,6 +10,7 @@ import { eventIconClass } from '../../lib/eventIcons';
 import { Icon } from '../../components/Icon';
 import CustomRelayBuilder from './CustomRelayBuilder';
 import { guestRelayStore } from './relayLocalStore';
+import { IS_BETA_SITE } from '../../lib/betaSite';
 
 function EventIconRow({ events }: { events: string[] }) {
   return (
@@ -149,9 +150,11 @@ export default function RelaysPage() {
           <button className="btn flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-border" onClick={() => setShowBuilder(true)}>
             <Icon name="plus" size={16} /> Custom Relay
           </button>
-          <Link to="/relays/team" className="btn-primary flex items-center gap-2 px-3 py-2 rounded-lg text-sm">
-            <Icon name="swords" size={16} /> Team Relay
-          </Link>
+          {IS_BETA_SITE && (
+            <Link to="/relays/team" className="btn-primary flex items-center gap-2 px-3 py-2 rounded-lg text-sm">
+              <Icon name="swords" size={16} /> Team Relay
+            </Link>
+          )}
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import { prisma } from '../prisma.js';
 import { requireAuth, optionalAuth } from '../auth/middleware.js';
 import { toCustomRelayDTO, toRelayAttemptDTO } from '../util/dto.js';
 import { EVENT_IDS, getRelayPreset, expandToLegs, type CustomRelayEventEntry } from '@scc/shared';
+import { env } from '../env.js';
 
 const router = Router();
 
@@ -177,6 +178,12 @@ router.delete('/attempts/:id', requireAuth, async (req, res, next) => {
 });
 
 // ---- Team relay rooms ----
+// Beta-only: the client only links to /relays/team on the beta site (see
+// RelaysPage.tsx and App.tsx), and the matching Socket.io handlers are only
+// registered when env.BETA_SITE is set (server/src/socket.ts). Gating these
+// REST endpoints the same way keeps room creation/lookup unreachable on the
+// main deployment too, not just unlinked.
+if (env.BETA_SITE) {
 
 const createRoomSchema = z
   .object({
@@ -304,5 +311,7 @@ router.get('/rooms/:code', async (req, res, next) => {
     next(e);
   }
 });
+
+}
 
 export default router;

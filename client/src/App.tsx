@@ -97,13 +97,13 @@ export default function App() {
         <Route path="/algorithms/trainer/:puzzle/:setId/stats" element={<AlgStatsPage />} />
         <Route path="/battle" element={<BattleLobby />} />
         <Route path="/battle/:code" element={<BattleRoom />} />
+        <Route path="/relays" element={<RelaysPage />} />
+        <Route path="/relays/run" element={<SoloRelayRunner />} />
+        <Route path="/relays/share/:id" element={<SharedCustomRelayPage />} />
         {IS_BETA_SITE && (
           <>
-            <Route path="/relays" element={<RelaysPage />} />
-            <Route path="/relays/run" element={<SoloRelayRunner />} />
             <Route path="/relays/team" element={<RelayLobby />} />
             <Route path="/relays/team/:code" element={<RelayRoom />} />
-            <Route path="/relays/share/:id" element={<SharedCustomRelayPage />} />
           </>
         )}
         <Route path="/reconstruction" element={<ReconstructionPage />} />

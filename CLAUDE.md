@@ -121,7 +121,8 @@ There is no admin account or admin role — see Roles below.
 | `/results`, `/results/:wcaId`                                | WCA competitor lookup + results history + official/unofficial (CubingContests) results |
 | `/settings`                                                  | Appearance (light/dark, color themes, accent), Account, password change, session |
 | `/login`                                                     | WCA OAuth + email/password                                        |
-| `/relays`, `/relays/run`, `/relays/team`, `/relays/team/:code`, `/relays/share/:id` | Multi-event relays (solo or real-time team, Socket.io) — **beta-only**, see Beta site below |
+| `/relays`, `/relays/run`, `/relays/share/:id` | Multi-event relays — solo/custom, on the main site |
+| `/relays/team`, `/relays/team/:code` | Real-time team relay (Socket.io) — **beta-only**, see Beta site below |
 
 ## Conventions & notes
 
@@ -186,12 +187,14 @@ There is no admin account or admin role — see Roles below.
   start with a data-loss warning from `db push`, that means beta/main have
   drifted out of schema sync (or a genuinely destructive schema change needs
   a manual, reviewed migration), so investigate before forcing it through;
-  do not just re-add the flag. Two flags gate everything instead: `BETA_SITE` (server env
-  var, `server/src/env.ts`) / `VITE_BETA_SITE` (matching client build-time
+  do not just re-add the flag. Two flags gate the beta-only pieces instead: `BETA_SITE`
+  (server env var, `server/src/env.ts`) / `VITE_BETA_SITE` (matching client build-time
   var, read via `client/src/lib/betaSite.ts`'s `IS_BETA_SITE`) is true only
   on the beta-hosted service and controls which features exist there at all
-  (currently: Relay — its router, Socket.io handlers, routes, and nav entry
-  are all absent unless this is set). `User.betaAccess` (Prisma boolean)
+  (currently: Team Relay — its room endpoints in `relays.ts`, the Socket.io
+  relay handlers, the `/relays/team*` routes, and the "Team Relay" button on
+  `/relays` are all absent/hidden unless this is set; solo/custom relays
+  ship on both sites). `User.betaAccess` (Prisma boolean)
   controls *who* can use the beta site once reached — checked fresh from the
   database on every request (`server/src/auth/betaGate.ts`, applied globally
   in `app.ts` right after the `/api/auth` mount, plus inside Socket.io's

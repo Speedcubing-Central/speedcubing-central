@@ -88,9 +88,9 @@ export function createApp() {
   app.use('/api/scramble', scrambleRouter);
   app.use('/api/reconstructions', reconstructionsRouter);
   app.use('/api/cc', ccRouter);
-  // Relay is beta-only — entirely absent from the main deployment (falls
-  // through to the /api 404 below).
-  if (env.BETA_SITE) app.use('/api/relays', relaysRouter);
+  // Solo/custom relays are available on the main deployment; the team-room
+  // endpoints inside this router stay beta-only (see relays.ts).
+  app.use('/api/relays', relaysRouter);
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => {
