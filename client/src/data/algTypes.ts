@@ -12,7 +12,7 @@ export interface AlgCase {
   pll?: PllArrow[];
 }
 
-export type AlgSetKind = 'oll' | 'pll' | 'f2l' | 'coll' | 'zbll' | '2x2-oll' | '2x2-pbl' | 'cll' | 'eg1' | 'eg2' | 'sq1-cs';
+export type AlgSetKind = 'oll' | 'pll' | 'f2l' | 'coll' | 'zbll' | '2x2-oll' | '2x2-pbl' | 'cll' | 'eg1' | 'eg2' | 'sq1-cs' | 'sq1-co' | 'sq1-eo' | 'sq1-cp' | 'sq1-ep';
 
 export interface AlgSet {
   id: string;

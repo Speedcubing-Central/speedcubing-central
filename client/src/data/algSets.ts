@@ -8,9 +8,16 @@ import { CLL_SET } from './cll';
 import { EG1_SET } from './eg1';
 import { EG2_SET } from './eg2';
 import { SQ1_CUBE_SHAPE_SET } from './sq1CubeShape';
+import { SQ1_CO_SET } from './sq1CO';
+import { SQ1_EO_SET } from './sq1EO';
+import { SQ1_CP_SET } from './sq1CP';
+import { SQ1_EP_SET } from './sq1EP';
 import type { AlgSet } from './algTypes';
 
-export const ALG_SETS: AlgSet[] = [OLL_SET, PLL_SET, F2L_SET, COLL_SET, ORTEGA_OLL_SET, ORTEGA_PBL_SET, CLL_SET, EG1_SET, EG2_SET, SQ1_CUBE_SHAPE_SET];
+export const ALG_SETS: AlgSet[] = [
+  OLL_SET, PLL_SET, F2L_SET, COLL_SET, ORTEGA_OLL_SET, ORTEGA_PBL_SET, CLL_SET, EG1_SET, EG2_SET,
+  SQ1_CUBE_SHAPE_SET, SQ1_CO_SET, SQ1_EO_SET, SQ1_CP_SET, SQ1_EP_SET,
+];
 
 export function getSet(id: string): AlgSet | undefined {
   return ALG_SETS.find((s) => s.id === id);

@@ -2,10 +2,28 @@ import type { AlgCase, AlgSet } from '../../data/algSets';
 import { invertAlg, cleanAlgForDisplay, type StickeringKind } from '../../components/CubeDiagram';
 import { SETUP_ALGS } from '../../data/setupAlgs.generated';
 import { SQ1_SETUP_ALGS } from '../../data/sq1SetupAlgs.generated';
+import { SQ1_CO_SETUP_ALGS } from '../../data/sq1COSetupAlgs.generated';
+import { SQ1_EO_SETUP_ALGS } from '../../data/sq1EOSetupAlgs.generated';
+import { SQ1_CP_SETUP_ALGS } from '../../data/sq1CPSetupAlgs.generated';
+import { SQ1_EP_SETUP_ALGS } from '../../data/sq1EPSetupAlgs.generated';
 
 // Shared between the trainer session view and the solve-detail/stats modals
 // so they resolve puzzle/stickering identically.
 export const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'eg1', 'eg2'].includes(kind);
+
+// True for every Square-1 set (Cube Shape, CO, EO, CP, EP, ...) — these all
+// share the same PG3D case-diagram rendering (see Sq1CaseDiagram) and none
+// of them support the drag-to-rotate "Reset Perspective" affordance the
+// other kinds do.
+export const IS_SQ1 = (kind: AlgSet['kind']) => kind.startsWith('sq1-');
+
+// Combined lookup across every Square-1 set's own generated setup-algs map
+// — merged once here rather than checked one at a time in resolveCaseSetup/
+// resolveCaseSetupText, since that list only grows as more Square-1 sets are
+// added and case ids are unique across all of them.
+const ALL_SQ1_SETUP_ALGS: Record<string, string> = {
+  ...SQ1_SETUP_ALGS, ...SQ1_CO_SETUP_ALGS, ...SQ1_EO_SETUP_ALGS, ...SQ1_CP_SETUP_ALGS, ...SQ1_EP_SETUP_ALGS,
+};
 
 // The setup to scramble a solved cube into a case, for use as a diagram's
 // `experimentalSetupAlg` (see CubeDiagram.tsx's resolveSetupMoves, which
@@ -16,7 +34,7 @@ export const IS_2x2 = (kind: AlgSet['kind']) => ['2x2-oll', '2x2-pbl', 'cll', 'e
 // may have set as their preferred algorithm, so switching preferred algs
 // never changes what the case's setup looks like.
 export function resolveCaseSetup(c: AlgCase): string {
-  return SETUP_ALGS[c.id] ?? SQ1_SETUP_ALGS[c.id] ?? invertAlg(c.moves);
+  return SETUP_ALGS[c.id] ?? ALL_SQ1_SETUP_ALGS[c.id] ?? invertAlg(c.moves);
 }
 
 // Same as resolveCaseSetup, but for displaying as text: SpeedCubeDB's own
@@ -26,7 +44,7 @@ export function resolveCaseSetup(c: AlgCase): string {
 // there's no stray rotation to explain when there's no authoritative source
 // to defer to.
 export function resolveCaseSetupText(c: AlgCase, puzzle: string): string {
-  return SETUP_ALGS[c.id] ?? SQ1_SETUP_ALGS[c.id] ?? cleanAlgForDisplay(invertAlg(c.moves), puzzle);
+  return SETUP_ALGS[c.id] ?? ALL_SQ1_SETUP_ALGS[c.id] ?? cleanAlgForDisplay(invertAlg(c.moves), puzzle);
 }
 
 export function twoByTwoStickering(kind: AlgSet['kind']): StickeringKind {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RotatingCaseDiagram, Sq1CaseDiagram } from '../../components/CubeDiagram';
 import type { AlgCase, AlgSet } from '../../data/algSets';
-import { IS_2x2, rotatingStickering } from './algDiagram';
+import { IS_2x2, IS_SQ1, rotatingStickering } from './algDiagram';
 
 const MIN_DIAGRAM = 90;
 const MAX_DIAGRAM = 480;
@@ -61,7 +61,7 @@ export function CaseDiagramPanel({
 
   return (
     <div ref={cardRef} className="card p-6 shrink-0 overflow-hidden flex flex-col items-center justify-center gap-4">
-      {set.kind === 'sq1-cs' ? (
+      {IS_SQ1(set.kind) ? (
         <Sq1CaseDiagram setup={setup ?? ''} size={diagramSize} />
       ) : (
         <RotatingCaseDiagram

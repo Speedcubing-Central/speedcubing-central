@@ -5,6 +5,7 @@ export const SET_TO_URL: Record<string, string> = {
   EG1: 'eg-1', EG2: 'eg-2', CLL: 'cll',
   OrtegaOLL: 'ortega-oll', OrtegaPBL: 'ortega-pbl',
   SQ1CubeShape: 'cube-shape',
+  SQ1CO: 'co', SQ1EO: 'eo', SQ1CP: 'cp', SQ1EP: 'ep',
 };
 export const URL_TO_SET: Record<string, string> = Object.fromEntries(
   Object.entries(SET_TO_URL).map(([k, v]) => [v, k]),

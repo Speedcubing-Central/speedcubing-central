@@ -1,0 +1,92 @@
+Adj / Solved
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 0,-3 / 0,3 / 0,-3 / 3,0 / -3,3 /
+alg: / -3,3 / 3,0 / 0,-3 / 0,3 / 0,-3 / votes:6
+alg: / 3,-3 / -3,0 / 0,3 / 0,-3 / 0,3 / votes:3
+---
+Opp / Solved
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 3,3 / -3,0 / 3,3 / -3,0 / 3,3 /
+alg: / 3,3 / -3,0 / 3,3 / -3,0 / 3,3 / votes:1
+alg: / -3,-3 / 3,0 / -3,-3 / 3,0 / -3,-3 / votes:0
+alg: / -3,-3 / -3,0 / -3,-3 / -3,0 / -3,-3 / votes:0
+alg: / 3,3 / -3,0 / 3,3 / -3,0 / 3,3 / votes:0
+---
+Solved / Adj
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 3,0 / -3,0 / 3,0 / 0,-3 / -3,3 /
+alg: / -3,3 / 0,-3 / 3,0 / -3,0 / 3,0 / votes:1
+alg: / 3,-3 / 0,3 / -3,0 / 3,0 / -3,0 / votes:0
+---
+Solved / Opp
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 3,3 / 0,3 / 3,3 / 0,3 / 3,3 /
+alg: / 3,3 / 0,3 / 3,3 / 0,3 / 3,3 / votes:2
+alg: / -3,-3 / 0,-3 / -3,-3 / 0,-3 / -3,-3 / votes:0
+alg: / 3,3 / 0,-3 / 3,3 / 0,-3 / 3,3 / votes:0
+alg: / -3,-3 / 0,3 / -3,-3 / 0,3 / -3,-3 / votes:0
+---
+Adj / Adj
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 0,-3 / 3,3 / -3,0 /
+alg: / -3,0 / 3,3 / 0,-3 / votes:3
+alg: / 0,-3 / 3,3 / -3,0 / votes:0
+---
+Opp / Adj
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 3,0 / -3,0 / 3,0 / -3,0 /
+alg: / 3,0 / -3,0 / 3,0 / -3,0 / votes:1
+alg: / -3,0 / 3,0 / -3,0 / 3,0 / votes:0
+---
+Adj / Opp
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 0,3 / 0,-3 / 0,3 / 0,-3 /
+alg: / 0,-3 / 0,3 / 0,-3 / 0,3 / votes:2
+alg: / 0,3 / 0,-3 / 0,3 / 0,-3 / votes:1
+---
+Opp / Opp
+SQ1
+-
+Corner Permutation
+-
+
+setup:
+/ 3,-3 / -3,3 /
+alg: / -3,3 / 3,-3 / votes:2
+alg: / 3,-3 / -3,3 / votes:1
+---

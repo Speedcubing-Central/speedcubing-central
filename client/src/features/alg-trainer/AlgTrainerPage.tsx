@@ -16,7 +16,7 @@ import { useSettings } from '../../store/settings';
 import { formatTime as fmtTime, type Penalty, type AlgSolveDTO } from '@scc/shared';
 import { parseTimeInput } from '../../lib/timeInput';
 import { copyText } from '../../lib/clipboard';
-import { IS_2x2, rotatingStickering, resolveCaseSetup, resolveCaseSetupText } from './algDiagram';
+import { IS_2x2, IS_SQ1, rotatingStickering, resolveCaseSetup, resolveCaseSetupText } from './algDiagram';
 import { VALID_ALTS } from '../../data/validAlts.generated';
 import { SOLUTION_ALGS } from '../../data/solutionAlgs.generated';
 import { CaseDiagramPanel } from './CaseDiagramPanel';
@@ -92,7 +92,7 @@ function CubingIcon({ event, className }: { event: string; className?: string })
 // three-quarter default angle used elsewhere.
 function CaseImage({ c, set, size = 80, pref, resetSignal }: { c: AlgCase; set: AlgSet; size?: number; pref?: AlgPref; resetSignal?: number }) {
   const alg = effectiveAlg(c, pref);
-  if (set.kind === 'sq1-cs') return <Sq1CaseDiagram setup={resolveCaseSetup(c)} size={size} />;
+  if (IS_SQ1(set.kind)) return <Sq1CaseDiagram setup={resolveCaseSetup(c)} size={size} />;
   return (
     <RotatingCaseDiagram
       alg={alg}
@@ -173,9 +173,21 @@ const SET_CARDS_3x3 = [
 ];
 
 const SQ1_CS_SET = getSet('SQ1CubeShape')!;
+const SQ1_CO_SET_REF = getSet('SQ1CO')!;
+const SQ1_EO_SET_REF = getSet('SQ1EO')!;
+const SQ1_CP_SET_REF = getSet('SQ1CP')!;
+const SQ1_EP_SET_REF = getSet('SQ1EP')!;
 const SET_CARDS_SQ1 = [
   { id: 'SQ1CubeShape', label: 'Cube Shape', description: 'Square-1 Cube Shape', count: SQ1_CS_SET.cases.length,
     preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_CS_SET.cases.find((c) => c.id === 'sq1-cs-kite-square') ?? SQ1_CS_SET.cases[0])} size={80} /> },
+  { id: 'SQ1CO', label: SQ1_CO_SET_REF.name, description: SQ1_CO_SET_REF.description, count: SQ1_CO_SET_REF.cases.length,
+    preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_CO_SET_REF.cases[0])} size={80} /> },
+  { id: 'SQ1EO', label: SQ1_EO_SET_REF.name, description: SQ1_EO_SET_REF.description, count: SQ1_EO_SET_REF.cases.length,
+    preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_EO_SET_REF.cases[0])} size={80} /> },
+  { id: 'SQ1CP', label: SQ1_CP_SET_REF.name, description: SQ1_CP_SET_REF.description, count: SQ1_CP_SET_REF.cases.length,
+    preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_CP_SET_REF.cases[0])} size={80} /> },
+  { id: 'SQ1EP', label: SQ1_EP_SET_REF.name, description: SQ1_EP_SET_REF.description, count: SQ1_EP_SET_REF.cases.length,
+    preview: <Sq1CaseDiagram setup={resolveCaseSetup(SQ1_EP_SET_REF.cases[0])} size={80} /> },
 ];
 
 const SET_CARDS_2x2 = [
@@ -374,7 +386,7 @@ function CaseModal({
         )}
 
         <div className="flex justify-center">
-          {set.kind === 'sq1-cs' ? (
+          {IS_SQ1(set.kind) ? (
             <Sq1CaseDiagram setup={resolveCaseSetup(c)} size={280} />
           ) : (
             <RotatingCaseDiagram
@@ -506,7 +518,7 @@ function CaseBrowser({
           // Square-1's case diagram is a fixed camera angle (see
           // Sq1CaseDiagram), not drag-to-rotate like the other sets' — no
           // perspective to reset.
-          set.kind === 'sq1-cs' ? undefined : (
+          IS_SQ1(set.kind) ? undefined : (
             <button
               onClick={() => setResetSignal((n) => n + 1)}
               className="btn-ghost flex items-center gap-1.5 text-sm"
@@ -875,7 +887,7 @@ function TrainingSession({
   const currentSet = getSet(currentSetId)!;
   const preferredAlg = effectiveAlg(currentCase, prefs[currentCase.id]);
   const puzzleKind = IS_2x2(currentSet.kind) ? '2x2x2' : '3x3x3';
-  const isSq1 = currentSet.kind === 'sq1-cs';
+  const isSq1 = IS_SQ1(currentSet.kind);
 
   // Pick an alternate (never the preferred alg, so it's not given away) plus
   // a random AUF, so the same case doesn't always render as one of a small
