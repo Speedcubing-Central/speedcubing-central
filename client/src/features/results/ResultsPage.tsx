@@ -525,7 +525,7 @@ export default function ResultsPage() {
           onFocus={() => { if (searchQuery.length >= 2) setShowDropdown(true); }}
           onKeyDown={(e) => { if (e.key === 'Escape') setShowDropdown(false); }}
           placeholder="Search competitor by name or WCA ID…"
-          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-lg border border-gray-200 dark:border-border bg-card text-foreground placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card text-foreground placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
         />
         {searchQuery && (
           <button
@@ -537,7 +537,7 @@ export default function ResultsPage() {
         )}
       </div>
       {showDropdown && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 dark:border-border bg-card shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-card shadow-lg overflow-hidden max-h-60 overflow-y-auto">
           {searchResults.map((r: any) => (
             <button
               key={r.wca_id}
@@ -621,7 +621,7 @@ export default function ResultsPage() {
       )}
 
       {/* Profile header */}
-      <div className="rounded-xl bg-card border-2 border-accent p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="rounded-xl bg-white dark:bg-card border-2 border-accent p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <h1 className="text-2xl font-bold leading-tight">{person.name}</h1>

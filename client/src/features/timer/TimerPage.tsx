@@ -641,7 +641,7 @@ export default function TimerPage() {
 // before the data it depends on has actually landed.
 function TimerLoadingOverlay({ message }: { message: string }) {
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-card/80 backdrop-blur-sm">
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/80 dark:bg-card/80 backdrop-blur-sm">
       <Icon name="refresh" size={28} className="animate-spin text-accent" />
       <p className="text-muted text-sm">{message}</p>
     </div>
