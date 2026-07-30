@@ -155,6 +155,53 @@ function normalizeRoot(svg: string): string {
 }
 
 /**
+ * Unwrap the bare `<g>` wrappers cubing.js puts around each face.
+ *
+ * react-native-svg drops exactly one of them: on a 4x4 or 7x7 net one whole face
+ * renders blank, and which face changes depending on what else is in the tree
+ * (stripping the per-group <title> moved it from the left face to the bottom
+ * one), which is the signature of a positional parser bug rather than anything
+ * wrong with the drawing. The SVG we hand it is provably sound: well-formed,
+ * every face present with equal sticker counts, no duplicate ids, every sticker
+ * filled and inside the viewBox.
+ *
+ * These wrappers are pure grouping, with no attributes and no transform, so the
+ * stickers render identically as direct children of the parent. Removing them
+ * takes the renderer's group handling out of the picture entirely.
+ *
+ * Only attribute-less `<g>` tags are unwrapped. `<g id="puzzle"
+ * transform="translate(5,40) scale(40)">` on the 3x3 carries the whole drawing's
+ * positioning, and flattening that would scatter the cube across the canvas.
+ */
+function flattenBareGroups(svg: string): string {
+  const out: string[] = [];
+  // Depth of *bare* groups currently open, so the matching close is dropped and
+  // no other group's close is.
+  const openKinds: ('bare' | 'kept')[] = [];
+  const re = /<g\b([^>]*)>|<\/g>/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(svg))) {
+    out.push(svg.slice(last, m.index));
+    last = m.index + m[0].length;
+    if (m[0] === '</g>') {
+      const kind = openKinds.pop();
+      if (kind !== 'bare') out.push('</g>');
+    } else {
+      const attrs = (m[1] ?? '').trim();
+      if (attrs === '') {
+        openKinds.push('bare');
+      } else {
+        openKinds.push('kept');
+        out.push(m[0]);
+      }
+    }
+  }
+  out.push(svg.slice(last));
+  return out.join('');
+}
+
+/**
  * Drop the hint facelets: the faded copies of the U-layer stickers that
  * cubing.js draws fanned around the top face, so a 3D-ish view can show sides
  * you'd otherwise not see. On a flat net every one of those stickers is already
@@ -229,7 +276,9 @@ async function load(puzzleId: string): Promise<LoadedPuzzle | null> {
     // Hint facelets go before the fill map is built, so the duplicates never
     // enter it; the CSS is inlined before too, so a stroke that came from a
     // class is carried on the element itself from here on.
-    const rawSvg = inlineStyleBlocks(stripHintFacelets(normalizeRoot(String(await loader.svg()))));
+    const rawSvg = flattenBareGroups(
+      inlineStyleBlocks(stripHintFacelets(normalizeRoot(String(await loader.svg())))),
+    );
     const kpuzzle = (await loader.kpuzzle()) as {
       definition: { orbits: OrbitSpec[] };
       defaultPattern: () => { applyAlg: (a: string) => { patternData: Record<string, { pieces: number[]; orientation: number[] }> } };

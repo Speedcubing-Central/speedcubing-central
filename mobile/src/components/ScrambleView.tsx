@@ -54,7 +54,7 @@ export function ScrambleView({
         {sq1Pairs(scramble).map((pair, i) => (
           <Text
             key={`${i}-${pair}`}
-            style={{ color: p.text, fontFamily: MONO, fontSize, lineHeight: fontSize * 1.5 }}
+            style={{ color: p.text, fontFamily: MONO, fontSize, lineHeight: fontSize * 1.28 }}
           >
             {pair}
           </Text>
@@ -70,7 +70,7 @@ export function ScrambleView({
           color: p.text,
           fontFamily: MONO,
           fontSize,
-          lineHeight: fontSize * 1.5,
+          lineHeight: fontSize * 1.28,
           textAlign: 'center',
         }}
       >
@@ -86,11 +86,12 @@ export function ScrambleView({
         borderColor: p.border,
         borderWidth: 1,
         borderRadius: radius.md,
-        padding: space.md,
-        gap: space.sm,
+        paddingHorizontal: space.md,
+        paddingVertical: space.sm,
+        gap: space.xs,
       }}
     >
-      <View style={{ minHeight: compact ? 24 : 48, justifyContent: 'center' }}>{body}</View>
+      <View style={{ minHeight: compact ? 24 : 34, justifyContent: 'center' }}>{body}</View>
       {(onRefresh || onGoBack) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
@@ -134,8 +135,8 @@ function ScrambleAction({
       disabled={disabled}
       hitSlop={8}
       style={({ pressed }) => ({
-        width: 40,
-        height: 32,
+        width: 38,
+        height: 28,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: radius.pill,

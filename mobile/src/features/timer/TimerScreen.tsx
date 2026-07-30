@@ -70,11 +70,13 @@ const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map
 // longer takes literally everything the footer doesn't claim, which is what made
 // it tower over a scramble image and stats squeezed into the last ~100px.
 //
-// 3:2 rather than 2:1 because the footer's share isn't all scramble/stats: the
-// penalty tile lives in it too and takes its natural height off the top, so at
-// 2:1 the row was left about where it started.
+// 3:1 works now that the footer has a floor (below): the share decides how
+// *spare* space is split, and the floor guarantees the footer's contents fit
+// regardless, so the timer can take the lion's share without squeezing the
+// scramble image and stats. An earlier 2:1 without the floor was what let them
+// be pushed off screen.
 const TIMER_FLEX = 3;
-const FOOTER_FLEX = 2;
+const FOOTER_FLEX = 1;
 
 // Width budget for the scramble net. Held to a constant rather than growing with
 // the tile because the net is four faces wide: every pixel it gains horizontally
@@ -92,7 +94,7 @@ const SCRAMBLE_NET_MAX_W = 132;
 // off the bottom of a screen that deliberately doesn't scroll. Giving the footer
 // a floor makes the timer absorb the shortfall instead, which it can do
 // gracefully because its digits already auto-shrink to fit.
-const FOOTER_ROW_MIN_H = 104;
+const FOOTER_ROW_MIN_H = 100;
 const PENALTY_TILE_H = 56;
 
 export default function TimerScreen({ navigation }: Props) {
