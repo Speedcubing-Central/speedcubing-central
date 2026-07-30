@@ -137,12 +137,21 @@ function readAspect(svg: string): number {
  * lets the drawing scale to whatever box we give it.
  */
 function normalizeRoot(svg: string): string {
-  return svg
-    .replace(/<\?xml[^>]*\?>/g, '')
-    .replace(/<!DOCTYPE[^>]*>/g, '')
-    .replace(/(<svg\b[^>]*?)\s+width="[^"]*"/, '$1')
-    .replace(/(<svg\b[^>]*?)\s+height="[^"]*"/, '$1')
-    .trim();
+  return (
+    svg
+      .replace(/<\?xml[^>]*\?>/g, '')
+      .replace(/<!DOCTYPE[^>]*>/g, '')
+      // <title> and <desc> are metadata, and react-native-svg implements neither
+      // (its element set has no Title or Desc). cubing.js puts a <title> in every
+      // face group, so on an NxN or megaminx net that's an unsupported element as
+      // the first child of a dozen groups. Dropping them costs nothing rendered
+      // and leaves the parser only elements it knows.
+      .replace(/<title>[\s\S]*?<\/title>/g, '')
+      .replace(/<desc>[\s\S]*?<\/desc>/g, '')
+      .replace(/(<svg\b[^>]*?)\s+width="[^"]*"/, '$1')
+      .replace(/(<svg\b[^>]*?)\s+height="[^"]*"/, '$1')
+      .trim()
+  );
 }
 
 /**

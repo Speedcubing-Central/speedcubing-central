@@ -37,7 +37,13 @@ export function ScrambleView({
   const p = usePalette();
   const carrot = useSettings((s) => s.carrotNotation);
 
-  const fontSize = compact ? 14 : eventId === 'minx' ? 13 : 17;
+  // Scale with the scramble's own length rather than by event. A 7x7 scramble is
+  // ~100 moves and at 17pt wrapped to a dozen lines, which ate enough of the
+  // column that the footer below the timer was pushed off the bottom of a screen
+  // that deliberately doesn't scroll. Megaminx used to be special-cased here for
+  // exactly this reason; length covers it and every other long scramble too.
+  const len = scramble?.length ?? 0;
+  const fontSize = compact ? 14 : len > 190 ? 12 : len > 120 ? 13 : len > 70 ? 15 : 17;
 
   let body: React.ReactNode;
   if (loading && !scramble) {

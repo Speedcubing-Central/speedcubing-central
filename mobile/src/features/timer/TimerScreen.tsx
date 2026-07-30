@@ -81,6 +81,20 @@ const FOOTER_FLEX = 2;
 // comes out of the stats tile sharing the row.
 const SCRAMBLE_NET_MAX_W = 132;
 
+// The scramble/stats row's floor, and the footer's floor including the penalty
+// tile above it.
+//
+// The flex split alone isn't enough. On a big cube the scramble text is long
+// enough to wrap several lines, which leaves less for the timer and footer to
+// share, and the footer's share can fall below what its own contents need. React
+// Native leaves flexShrink at 0, so the penalty tile never gives way and the row
+// is squeezed instead; on 5x5 and up that pushed the scramble image and stats
+// off the bottom of a screen that deliberately doesn't scroll. Giving the footer
+// a floor makes the timer absorb the shortfall instead, which it can do
+// gracefully because its digits already auto-shrink to fit.
+const FOOTER_ROW_MIN_H = 104;
+const PENALTY_TILE_H = 56;
+
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
   const settings = useSettings();
@@ -488,7 +502,16 @@ export default function TimerScreen({ navigation }: Props) {
             nothing and has no free space to grow into), which hid the scramble
             image and stats entirely and handed their space to the timer. */}
         {!immersive && (
-          <View style={{ flex: FOOTER_FLEX, gap: space.sm }}>
+          <View
+            style={{
+              flex: FOOTER_FLEX,
+              // Floor covering the row plus, when it's showing, the penalty tile
+              // and the gap above it. Without this the footer shrinks below its
+              // own contents and they spill off the bottom of the screen.
+              minHeight: FOOTER_ROW_MIN_H + (newest ? PENALTY_TILE_H + space.sm : 0),
+              gap: space.sm,
+            }}
+          >
             {/* Penalties get their own tile rather than sitting loose above the
                 footer: they act on the last solve, not on the timer, and a
                 surface of their own is what makes that separation legible. */}
@@ -516,7 +539,7 @@ export default function TimerScreen({ navigation }: Props) {
               // banner) never give way, and on a short screen this row is the
               // only thing that can shrink. Without a floor it shrinks to
               // nothing and the scramble image and stats vanish.
-              style={{ flex: 1, minHeight: 104, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
+              style={{ flex: 1, minHeight: FOOTER_ROW_MIN_H, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
               onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             >
               {/* Fixed width, so the tile is the same size before the drawing
