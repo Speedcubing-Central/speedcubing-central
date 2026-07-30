@@ -41,12 +41,20 @@ export function ScrambleNet({
   eventId,
   scramble,
   size,
+  maxHeight,
   style,
 }: {
   eventId: string;
   scramble: string;
-  /** Width budget in px. Height follows from the net's 4:3 face grid. */
+  /** Width budget in px. */
   size: number;
+  /**
+   * Height budget in px, if the caller has one. The net is four faces wide but
+   * only three tall, so width is usually the binding constraint; a caller that
+   * has height to spare and little width still needs the drawing to stay inside
+   * both, which is why this fits to whichever is tighter rather than assuming.
+   */
+  maxHeight?: number;
   style?: React.ComponentProps<typeof Svg>['style'];
 }) {
   const n = cubeSizeForEvent(eventId);
@@ -69,7 +77,10 @@ export function ScrambleNet({
   const gapStickers = 0.32;
   const unitsWide = NET_COLS * n + (NET_COLS - 1) * gapStickers;
   const unitsTall = NET_ROWS * n + (NET_ROWS - 1) * gapStickers;
-  const cell = size / unitsWide;
+  // One cell size satisfying both budgets, so the net grows into whatever space
+  // it's given without ever overflowing the axis that runs out first.
+  const cell = Math.min(size / unitsWide, maxHeight !== undefined ? maxHeight / unitsTall : Infinity);
+  const width = cell * unitsWide;
   const height = cell * unitsTall;
   // Sticker inset, so adjacent stickers read as separate tiles.
   const inset = Math.max(0.5, cell * 0.06);
@@ -98,7 +109,7 @@ export function ScrambleNet({
   }
 
   return (
-    <Svg width={size} height={height} viewBox={`0 0 ${size} ${height}`} style={style}>
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={style}>
       {tiles}
     </Svg>
   );

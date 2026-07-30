@@ -63,6 +63,17 @@ type Props = NativeStackScreenProps<TimerStackParamList, 'TimerHome'>;
 
 const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
 
+// How the leftover column height splits between the timer and the footer. The
+// timer still gets the larger share (it's the thing you aim a thumb at), but no
+// longer takes literally everything the footer doesn't claim, which is what made
+// it tower over a scramble image and stats squeezed into the last ~100px.
+const TIMER_FLEX = 2;
+
+// Width budget for the scramble net. Held to a constant rather than growing with
+// the tile because the net is four faces wide: every pixel it gains horizontally
+// comes out of the stats tile sharing the row.
+const SCRAMBLE_NET_MAX_W = 132;
+
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
   const settings = useSettings();
@@ -91,6 +102,11 @@ export default function TimerScreen({ navigation }: Props) {
   const scr = useScrambler(scrambleEventId, data.currentId);
 
   const [showEventPicker, setShowEventPicker] = useState(false);
+  // Measured, not assumed: the footer's height comes from the flex split, which
+  // depends on screen size, whether the penalty tile is present, and the safe
+  // area. The net needs that number to fit itself to it. No feedback loop, since
+  // the row's height is decided by flex before its contents are drawn.
+  const [footerH, setFooterH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbNote, setPbNote] = useState<string | null>(null);
@@ -359,7 +375,7 @@ export default function TimerScreen({ navigation }: Props) {
             see and the area that starts a solve are the same rectangle, which
             matters more here than on any other panel. */}
         {entryMode === 'keyboard' && !isFmc ? (
-          <Tile style={{ flex: 1, overflow: 'hidden' }}>
+          <Tile style={{ flex: TIMER_FLEX, overflow: 'hidden' }}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Timer. Touch and hold, then release to start."
@@ -408,7 +424,7 @@ export default function TimerScreen({ navigation }: Props) {
           // Manual entry, also the path FMC takes in this pass.
           <Tile
             style={{
-              flex: 1,
+              flex: TIMER_FLEX,
               alignItems: 'center',
               justifyContent: 'center',
               gap: space.lg,
@@ -500,7 +516,17 @@ export default function TimerScreen({ navigation }: Props) {
               </Tile>
             )}
 
-            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}>
+            {/* The footer claims a share of the column rather than being sized
+                by its contents, which is what shortens the timer: previously the
+                timer was `flex: 1` against a content-sized footer, so it took
+                every pixel the footer didn't need. The net then fits itself to
+                the row's measured height (see ScrambleNet's maxHeight), because
+                it can't simply be made wider: it's four faces across, so extra
+                width comes straight out of the stats tile beside it. */}
+            <View
+              style={{ flex: 1, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
+              onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
+            >
               {hasScrambleNet(scrambleEventId) && scr.scramble ? (
                 <Tile style={{ padding: space.sm, justifyContent: 'center' }}>
                   <Pressable
@@ -508,7 +534,12 @@ export default function TimerScreen({ navigation }: Props) {
                     accessibilityLabel="Scramble image"
                     onPress={() => navigation.navigate('Stats')}
                   >
-                    <ScrambleNet eventId={scrambleEventId} scramble={scr.scramble} size={116} />
+                    <ScrambleNet
+                      eventId={scrambleEventId}
+                      scramble={scr.scramble}
+                      size={SCRAMBLE_NET_MAX_W}
+                      maxHeight={footerH > 0 ? footerH - space.sm * 2 : undefined}
+                    />
                   </Pressable>
                 </Tile>
               ) : null}
@@ -591,10 +622,10 @@ function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
                 style={{
                   color: p.textMuted,
                   fontFamily: font.sansSemi,
-                  fontSize: 10,
+                  fontSize: 11,
                   textTransform: 'uppercase',
                   letterSpacing: 0.5,
-                  minWidth: 34,
+                  minWidth: 38,
                 }}
               >
                 {cell.label}
@@ -604,7 +635,7 @@ function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
                 style={{
                   color: p.text,
                   fontFamily: MONO_BOLD,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontVariant: ['tabular-nums'],
                   flexShrink: 1,
                 }}
