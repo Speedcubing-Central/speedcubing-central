@@ -18,7 +18,8 @@ real-time Battle Mode, and a 3D scramble/solution reconstruction viewer.
 | 3D cube    | `cubing.js` (`<twisty-player>`) for reconstruction & alg diagrams |
 | Puzzle icons | `@cubing/icons` CSS icon library (`<span className="cubing-icon event-333">`) |
 
-This is an **npm workspaces monorepo** with three packages: `shared`, `server`, `client`.
+This is an **npm workspaces monorepo** with four packages: `shared`, `server`, `client`,
+and `mobile` (Expo / React Native, targeting iOS + Android; see Mobile app below).
 
 ## Directory structure
 
@@ -45,10 +46,19 @@ This is an **npm workspaces monorepo** with three packages: `shared`, `server`, 
 │       ├── socket.ts       # Battle Mode realtime server
 │       ├── app.ts          # Express app (helmet, cors, compression, rate-limit, error handler)
 │       └── index.ts        # HTTP server + Socket.io bootstrap
-├── shared/                 # Types + averaging logic shared by client & server
+├── mobile/                 # Expo (React Native) app for iOS + Android
+│   └── src/
+│       ├── components/     # Screen shell, sheets, ScrambleView, shared settings UI
+│       ├── features/       # One folder per tab (timer/ is the only fully built one)
+│       ├── lib/            # api (bearer axios), tokens (expo-secure-store), socket, beta
+│       ├── navigation/      # Bottom tab bar + Timer/More stacks
+│       ├── store/          # Zustand: auth, settings, serverConfig
+│       └── App.tsx         # Beta gate + themed NavigationContainer
+├── shared/                 # Types + logic shared by client, server & mobile
 │   └── src/
 │       ├── index.ts        # DTOs, WCA event list, socket event types, time formatting
-│       └── averaging.ts    # WCA trimmed average + mean (drop best/worst, DNF rules)
+│       ├── averaging.ts    # WCA trimmed average + mean (drop best/worst, DNF rules)
+│       └── timerStats.ts   # Rolling/best averages, BPA/WPA/target, PB detection
 ├── prisma/schema.prisma    # Database schema
 ├── scripts/                # start-embedded-pg.mjs (no-Docker local Postgres)
 ├── docker-compose.yml      # Local Postgres convenience
@@ -94,11 +104,14 @@ There is no admin account or admin role — see Roles below.
 
 | Command                  | Description                                       |
 | ------------------------ | -------------------------------------------------- |
-| `npm run dev`            | Run server + client concurrently                   |
+| `npm run dev`            | Run server + client + mobile (Expo) concurrently    |
 | `npm run dev:server`     | Server only (tsx watch)                            |
 | `npm run dev:client`     | Client only (vite)                                 |
-| `npm run build`          | Build shared, server, then client                  |
-| `npm run typecheck`      | `tsc --noEmit` across all three packages            |
+| `npm run dev:mobile`     | Mobile only (`expo start`)                          |
+| `npm run build`          | Build shared, server, client, then mobile           |
+| `npm run build:web`      | Build shared, server, client only (the deploy build) |
+| `npm run build:mobile`   | `expo export` for iOS + Android                     |
+| `npm run typecheck`      | `tsc --noEmit` across all four packages              |
 | `npm run db:up`          | Start the Postgres container                        |
 | `npm run db:setup`       | `prisma db push` + seed                             |
 | `npm run prisma:migrate` | Create/apply a versioned migration (unused so far)  |
@@ -174,6 +187,48 @@ There is no admin account or admin role — see Roles below.
   thresholds the engine uses internally when the solve actually starts.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
+- **Mobile app** (`mobile/`, Expo SDK 57 / React Native, iOS + Android). Talks to the
+  same server and database as the web client, so a user's solves, sessions and
+  reconstructions are identical on both, and a Battle room created on one platform is
+  joinable from the other. Feature *logic* is shared, never reimplemented: anything
+  both clients compute (averaging, the Timer's whole stats table, scramble/alg types,
+  socket event types) lives in `shared/`; `shared/src/timerStats.ts` was moved out of
+  `client/src/features/timer/stats.ts` for exactly this reason, and that old path is now
+  a re-export so no web import changed. Note the web `fmt` helper double-rounds
+  (`formatTime(Math.round(v), …)`); mobile's `StatsScreen` copies that verbatim, since
+  identical maths displayed two different ways is still two different stats.
+  The *interface* is deliberately not a port of the desktop layout: navigation is a
+  bottom tab bar (Timer / Algorithms / Battle / Relays / More) with **no Home tab**
+  (a sidebar needs a landing slot, a tab bar doesn't), and the desktop Timer's
+  permanently-visible stats table and solves list became pushed sub-screens
+  (`navigation/TimerStack.tsx`), leaving only the last solve and current Ao5 on screen
+  while solving. Beyond the Timer, tabs are stubs.
+  - **Auth is bearer-token, not cookie.** A native client has no cookie jar, so it
+    sends `X-Auth-Mode: bearer` to `/api/auth/{login,register,refresh}` and gets the
+    JWT pair in the response body, stores it in `expo-secure-store` (which is
+    encrypted, unlike `AsyncStorage`), and sends `Authorization: Bearer <access>`. Socket.io
+    handshakes pass the same token via `socket.handshake.auth.token`. Both are
+    additive fallbacks checked *after* the cookie, minted by the same
+    `signAccessToken`/`signRefreshToken` with the same TTLs and `tokenVersion`
+    semantics. It is a second transport for one credential, not a second auth path. The
+    web client sends neither header and is byte-for-byte unaffected.
+  - **Beta gating** mirrors web's two layers (see Beta site below) rather than
+    inventing a third scheme: `mobile/src/lib/beta.ts` composes "is this the beta
+    deployment" with "does this account have `betaAccess`". The one necessary
+    difference is detecting the former: a single binary can't be "the beta build"
+    the way a Vite build can, so it asks `GET /api/auth/config` (`betaSite`) instead
+    of reading a compile-time constant.
+  - **Metro monorepo resolution was verified, not assumed**: Expo 57's default
+    config already auto-detects the npm workspace (every workspace in
+    `watchFolders`, root `node_modules` in `resolver.nodeModulesPaths`), so
+    `@scc/shared` resolves from `mobile/` with **no `metro.config.js` needed**,
+    confirmed by finding shared's own event data inside the built Hermes bundle. It
+    resolves to `shared/dist`, same as the web client, so `build:shared` (or
+    `postinstall`) must have run. One gotcha: because Metro's server root is the
+    workspace root, the dev bundle URL is `/mobile/index.bundle?…`, not
+    `/index.bundle?…`.
+  - `npm run build` includes `expo export`. Deploys that only need the server and web
+    client should use **`npm run build:web`** to skip it.
 - **Beta site**: `beta.speedcubingcentral.com` is a second hosted instance of
   this exact app (same repo/branch, `npm run build && npm start`), sharing the
   main site's production database — not a separate deployment pipeline or a

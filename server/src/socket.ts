@@ -22,8 +22,8 @@ import {
 } from '@scc/shared';
 
 export interface SocketData {
-  // Set from the verified access_token cookie at handshake time (see the
-  // io.use() middleware below) — never from client-supplied event payloads.
+  // Set from the verified access token at handshake time (see the io.use()
+  // middleware below), never from client-supplied event payloads.
   // Undefined means "not logged in" (a guest), which is a legitimate,
   // allowed state, not an auth failure.
   userId?: string;
@@ -119,16 +119,28 @@ export function attachSocket(server: HttpServer): IOServer {
     pingTimeout: PING_TIMEOUT_MS,
   });
 
-  // Derives identity from the same httpOnly access_token cookie requireAuth
-  // verifies for REST requests — never trust a client-supplied userId in an
-  // event payload (that was the original bug this closes: anyone could claim
-  // to be any user id and get treated as them). Cookies already flow on this
-  // same-origin connection with no client-side change needed (dev via the
-  // Vite proxy, prod via the single server). An invalid/missing/expired
-  // token just means "not logged in" — guests must still be allowed to
-  // connect and join rooms, so this never blocks the handshake.
+  // Derives identity from the same access token requireAuth verifies for REST
+  // requests. Never trust a client-supplied userId in an event payload (that
+  // was the original bug this closes: anyone could claim to be any user id and
+  // get treated as them). An invalid/missing/expired token just means "not
+  // logged in". Guests must still be allowed to connect and join rooms, so
+  // this never blocks the handshake.
+  //
+  // Two transports, one verification. The httpOnly access_token cookie is
+  // checked first: it already flows on the web client's same-origin
+  // connection with no client-side change needed (dev via the Vite proxy,
+  // prod via the single server), so that path is untouched. A native client
+  // has no cookie jar, so the mobile app passes the same access token it
+  // stores in expo-secure-store via `socket.handshake.auth.token`, which is
+  // verified here with the identical verifyAccessToken call. A bearer token
+  // is a second transport for the same credential, not a weaker one. This is
+  // what lets a mobile user and a web user land in the same Socket.io room
+  // with correctly-attributed identities.
   io.use(async (socket, next) => {
-    const token = readCookie(socket.request.headers.cookie, 'access_token');
+    const handshakeToken = socket.handshake.auth?.token;
+    const token =
+      readCookie(socket.request.headers.cookie, 'access_token') ??
+      (typeof handshakeToken === 'string' && handshakeToken ? handshakeToken : undefined);
     if (token) {
       try {
         socket.data.userId = verifyAccessToken(token).sub;

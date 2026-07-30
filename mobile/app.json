@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Speedcubing Central",
+    "slug": "speedcubing-central",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "speedcubingcentral",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f1117",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.speedcubingcentral.app"
+    },
+    "android": {
+      "package": "com.speedcubingcentral.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f1117",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "//": "API base URL of the Speedcubing Central server this build talks to. Point it at the LAN IP of your dev machine (not localhost — that resolves to the phone/emulator itself) when running against `npm run dev:server`, or at the deployed origin for a release build. Overridable at runtime-config time via the EXPO_PUBLIC_API_URL env var; see src/lib/config.ts.",
+      "apiBaseUrl": "http://localhost:3001"
+    }
+  }
+}

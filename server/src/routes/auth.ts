@@ -1,14 +1,17 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import bcrypt from 'bcryptjs';
 import axios from 'axios';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import type { User } from '@prisma/client';
 import { prisma } from '../prisma.js';
 import { env, isProd } from '../env.js';
 import {
   setAuthCookies,
   clearAuthCookies,
+  signAccessToken,
+  signRefreshToken,
   verifyRefreshToken,
   type JwtPayload,
 } from '../auth/jwt.js';
@@ -16,6 +19,41 @@ import { requireAuth, optionalAuth } from '../auth/middleware.js';
 import { toPublicUser } from '../util/dto.js';
 
 const router = Router();
+
+// ── Bearer-token clients (the mobile app) ─────────────────────────────────
+// httpOnly cookies are the wrong primitive for a native HTTP client: there's
+// no browser cookie jar, and a React Native fetch/axios stack can't read a
+// Set-Cookie that the OS networking layer may or may not have persisted. So
+// a native client opts in to being handed the JWTs directly, in the response
+// body, by sending `X-Auth-Mode: bearer`. It then stores them in
+// expo-secure-store and sends the access token as an `Authorization: Bearer`
+// header (which requireAuth/optionalAuth already accept as a fallback, see
+// server/src/auth/middleware.ts's extractToken).
+//
+// This is purely additive: cookies are still set on exactly the same
+// responses as before, and the web client never sends this header, so its
+// behaviour is byte-for-byte unchanged. The tokens handed out here are minted
+// from the same signAccessToken/signRefreshToken with the same payload,
+// TTLs, and tokenVersion semantics as the cookie pair. There is no second,
+// weaker auth path, just a second transport for the same credential.
+function wantsBearerTokens(req: Request): boolean {
+  return req.get('x-auth-mode')?.toLowerCase() === 'bearer';
+}
+
+interface AuthResponseBody {
+  user: ReturnType<typeof toPublicUser>;
+  tokens?: { accessToken: string; refreshToken: string };
+}
+
+// Builds the login/register/refresh response body: always the user (what the
+// web client reads), plus the token pair only for a client that asked for it.
+function authBody(req: Request, user: User, payload: JwtPayload): AuthResponseBody {
+  const body: AuthResponseBody = { user: toPublicUser(user) };
+  if (wantsBearerTokens(req)) {
+    body.tokens = { accessToken: signAccessToken(payload), refreshToken: signRefreshToken(payload) };
+  }
+  return body;
+}
 
 // Stricter than the blanket 300/min-per-IP limiter on all of /api (see
 // app.ts) — login/register/password-change are the routes an attacker would
@@ -53,7 +91,7 @@ router.post('/register', authLimiter, async (req, res, next) => {
     });
     const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
     setAuthCookies(res, payload);
-    res.status(201).json({ user: toPublicUser(user) });
+    res.status(201).json(authBody(req, user, payload));
   } catch (e) {
     next(e);
   }
@@ -75,7 +113,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
     }
     const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
     setAuthCookies(res, payload);
-    res.json({ user: toPublicUser(user) });
+    res.json(authBody(req, user, payload));
   } catch (e) {
     next(e);
   }
@@ -99,8 +137,16 @@ router.post('/logout', optionalAuth, async (req, res, next) => {
 });
 
 // POST /api/auth/refresh
+//
+// Same logical flow for both transports: verify the refresh token, re-read
+// the user, reject a stale tokenVersion, mint a fresh pair. The only
+// difference is where the incoming refresh token comes from and where the new
+// pair goes: the cookie jar for web, the request/response body for a bearer
+// client. The cookie is still checked first, so the web client's path is
+// untouched.
 router.post('/refresh', async (req, res) => {
-  const token = req.cookies?.refresh_token;
+  const bodyToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
+  const token = req.cookies?.refresh_token ?? bodyToken;
   if (!token) {
     res.status(401).json({ error: 'No refresh token' });
     return;
@@ -119,7 +165,7 @@ router.post('/refresh', async (req, res) => {
     }
     const fresh: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
     setAuthCookies(res, fresh);
-    res.json({ user: toPublicUser(user) });
+    res.json(authBody(req, user, fresh));
   } catch {
     res.status(401).json({ error: 'Invalid refresh token' });
   }
@@ -184,9 +230,22 @@ router.put('/password', requireAuth, authLimiter, async (req, res, next) => {
 
 // ---- WCA OAuth ----
 
-// GET /api/auth/config — lets the client know which login methods are available
+// GET /api/auth/config reports which login methods are available, and whether
+// this deployment is the beta site.
+//
+// `betaSite` exists for the mobile app. The web client learns this at *build*
+// time from VITE_BETA_SITE (client/src/lib/betaSite.ts), because the main and
+// beta sites are separate builds of the same repo. A single mobile binary
+// can't work that way: it's one build that can be pointed at either API base
+// URL, so it has to ask the server it's actually talking to instead. This
+// endpoint is mounted before app.ts's beta gate, so it's reachable on the
+// beta deployment even by an account without beta access, exactly like
+// /login is on web.
 router.get('/config', (_req, res) => {
-  res.json({ wcaEnabled: Boolean(env.WCA_CLIENT_ID && env.WCA_CLIENT_SECRET) });
+  res.json({
+    wcaEnabled: Boolean(env.WCA_CLIENT_ID && env.WCA_CLIENT_SECRET),
+    betaSite: env.BETA_SITE,
+  });
 });
 
 const OAUTH_STATE_COOKIE = 'oauth_state';
