@@ -229,15 +229,38 @@ There is no admin account or admin role — see Roles below.
     difference is detecting the former: a single binary can't be "the beta build"
     the way a Vite build can, so it asks `GET /api/auth/config` (`betaSite`) instead
     of reading a compile-time constant.
-  - **Metro monorepo resolution was verified, not assumed**: Expo 57's default
-    config already auto-detects the npm workspace (every workspace in
-    `watchFolders`, root `node_modules` in `resolver.nodeModulesPaths`), so
-    `@scc/shared` resolves from `mobile/` with **no `metro.config.js` needed**,
+  - **Metro monorepo resolution was verified, not assumed**: Expo's default config
+    already auto-detects the npm workspace (every workspace in `watchFolders`, root
+    `node_modules` in `resolver.nodeModulesPaths`), so `@scc/shared` resolves from
+    `mobile/` with no extra `watchFolders`/`nodeModulesPaths` config needed,
     confirmed by finding shared's own event data inside the built Hermes bundle. It
     resolves to `shared/dist`, same as the web client, so `build:shared` (or
     `postinstall`) must have run. One gotcha: because Metro's server root is the
     workspace root, the dev bundle URL is `/mobile/index.bundle?…`, not
     `/index.bundle?…`.
+  - **`metro.config.js` is still required**, though, for a different reason: a
+    duplicate-React bug. npm hoists any workspace dependency with no version
+    conflict to the monorepo root regardless of whether that dependency is
+    React-instance-sensitive: `zustand`, `@react-navigation/core`, and
+    `@react-navigation/routers` all ended up there. Metro's default resolver walks
+    UP from wherever the *requesting* package physically sits before consulting its
+    explicit `nodeModulesPaths`, so a hoisted package finds the repo root's React
+    (`client`'s React 18) via that walk before ever reaching mobile's own React 19,
+    producing two React instances in one bundle ("Invalid hook call", "Cannot read
+    property 'useCallback' of null"). `resolver.disableHierarchicalLookup = true`
+    closes this but is too blunt: it also breaks legitimate uses of the same
+    walk-up, like `expo` resolving its own privately-nested `expo/node_modules/
+    expo-asset`. The actual fix in `mobile/metro.config.js` is a
+    `resolver.resolveRequest` override that forces only the specific
+    singleton-sensitive names (`react`, `react-native`, `scheduler`,
+    `use-sync-external-store`, matched including subpath imports like
+    `react/jsx-runtime`) to resolve as if requested from inside `mobile/`, leaving
+    Metro's default resolution (walk-up included) untouched for everything else.
+    Verified by parsing a live dev bundle's module registrations directly: exactly
+    one `react/index.js` module exists in the graph, and every consumer that
+    matters — including packages physically hoisted to the repo root, like
+    `zustand/react.js` and `use-sync-external-store`'s own internal `require('react')`
+    — depends on that same module ID.
   - `npm run build` includes `expo export`. Deploys that only need the server and web
     client should use **`npm run build:web`** to skip it.
 - **Beta site**: `beta.speedcubingcentral.com` is a second hosted instance of
