@@ -30,7 +30,7 @@
       "expo-secure-store"
     ],
     "extra": {
-      "//": "API base URL of the Speedcubing Central server this build talks to. Point it at the LAN IP of your dev machine (not localhost — that resolves to the phone/emulator itself) when running against `npm run dev:server`, or at the deployed origin for a release build. Overridable at runtime-config time via the EXPO_PUBLIC_API_URL env var; see src/lib/config.ts.",
+      "//": "API base URL of the Speedcubing Central server this build talks to. Point it at the LAN IP of your dev machine (not localhost, which resolves to the phone/emulator itself) when running against `npm run dev:server`, or at the deployed origin for a release build. Overridable at runtime-config time via the EXPO_PUBLIC_API_URL env var; see src/lib/config.ts.",
       "apiBaseUrl": "http://localhost:3001"
     }
   }
