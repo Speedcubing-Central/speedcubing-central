@@ -55,7 +55,8 @@ export type IconName =
   | 'keyboard'
   | 'chart'
   | 'list'
-  | 'layers';
+  | 'layers'
+  | 'chevronDown';
 
 function Paths({ name, color }: { name: IconName; color: string }) {
   switch (name) {
@@ -321,6 +322,11 @@ function Paths({ name, color }: { name: IconName; color: string }) {
           <Path d="m3.5 13 8.5 4.5 8.5-4.5" />
         </>
       );
+    // Mobile-only, like `chart`/`list`/`layers` above: the web client opens its
+    // pickers as <select> elements and native ones as modals, so it never needs
+    // to draw a disclosure arrow itself.
+    case 'chevronDown':
+      return <Path d="m6 9.5 6 6 6-6" />;
   }
 }
 

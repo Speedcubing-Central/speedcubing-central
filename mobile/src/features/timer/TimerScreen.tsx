@@ -273,9 +273,36 @@ export default function TimerScreen({ navigation }: Props) {
         {!immersive && (
           <>
             {/* ── Header ──
-                Session and event on the left as the two things you change, the
-                three sub-screens on the right as icons. */}
+                Event first, then the session it scopes: a session belongs to an
+                event (the Sessions screen is titled "3x3 Sessions"), so reading
+                left to right now goes broad to narrow. The event keeps the
+                filled pill because it's the primary selector, and the session
+                sits next to it as plain text so the pair doesn't read as two
+                competing buttons. The three sub-screens stay on the right. */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change event"
+                onPress={() => setShowEventPicker(true)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                  paddingVertical: 6,
+                  paddingLeft: 11,
+                  paddingRight: 7,
+                  borderRadius: radius.pill,
+                  backgroundColor: p.cardHover,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 13 }}>
+                  {getEvent(event)?.name ?? event}
+                </Text>
+                {/* Down, not right: this opens a sheet up from the bottom. */}
+                <Icon name="chevronDown" size={14} color={p.accent} />
+              </Pressable>
+
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Change session"
@@ -286,38 +313,17 @@ export default function TimerScreen({ navigation }: Props) {
                   gap: 6,
                   flexShrink: 1,
                   paddingVertical: 8,
-                  paddingRight: space.sm,
+                  paddingHorizontal: space.xs,
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <Icon name="layers" size={17} color={p.textMuted} />
+                <Icon name="layers" size={16} color={p.textMuted} />
                 <Text
                   numberOfLines={1}
-                  style={{ color: p.text, fontFamily: font.sansSemi, fontSize: 14, flexShrink: 1 }}
+                  style={{ color: p.textMuted, fontFamily: font.sansSemi, fontSize: 13, flexShrink: 1 }}
                 >
                   {sessionLabel}
                 </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Change event"
-                onPress={() => setShowEventPicker(true)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: radius.pill,
-                  backgroundColor: p.cardHover,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 13 }}>
-                  {getEvent(event)?.name ?? event}
-                </Text>
-                <Icon name="arrowRight" size={13} color={p.accent} />
               </Pressable>
 
               <View style={{ flex: 1 }} />
@@ -452,7 +458,6 @@ export default function TimerScreen({ navigation }: Props) {
                 <Text style={{ color: '#fff', fontFamily: font.sansBold }}>Add</Text>
               </Pressable>
             </View>
-            <Muted>Type a time, "DNF", or append "+" to stack a +2</Muted>
           </Tile>
         )}
 
