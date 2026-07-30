@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Alert, Pressable, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
@@ -347,54 +347,60 @@ export default function TimerScreen({ navigation }: Props) {
           </>
         )}
 
-        {/* ── The timer surface ── */}
+        {/* ── The timer surface ──
+            In its own tile, with no padding of its own and overflow clipped to
+            the radius, so the Pressable fills the tile exactly: the panel you
+            see and the area that starts a solve are the same rectangle, which
+            matters more here than on any other panel. */}
         {entryMode === 'keyboard' && !isFmc ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Timer. Touch and hold, then release to start."
-            onPressIn={() => {
-              if (!showEventPicker && !inputBlocked) engine.press();
-            }}
-            onPressOut={() => {
-              if (!showEventPicker && !inputBlocked) engine.release();
-            }}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: space.md,
-            }}
-          >
-            <Text
-              adjustsFontSizeToFit
-              numberOfLines={1}
+          <Tile style={{ flex: 1, overflow: 'hidden' }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Timer. Touch and hold, then release to start."
+              onPressIn={() => {
+                if (!showEventPicker && !inputBlocked) engine.press();
+              }}
+              onPressOut={() => {
+                if (!showEventPicker && !inputBlocked) engine.release();
+              }}
               style={{
-                color: digitColor,
-                fontFamily: MONO_BOLD,
-                fontSize: immersive ? 84 : 64,
-                fontVariant: ['tabular-nums'],
-                paddingHorizontal: space.lg,
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.md,
               }}
             >
-              {display}
-            </Text>
-            <Muted style={{ textAlign: 'center', paddingHorizontal: space.lg }}>
-              {inputBlocked ? (data.solvesLoading ? 'Loading solves…' : 'Scrambling…') : hint}
-            </Muted>
-            {(engine.phase === 'inspecting' || engine.phase === 'running') && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={engine.cancel}
-                hitSlop={12}
-                style={{ position: 'absolute', bottom: space.lg, alignSelf: 'center' }}
+              <Text
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                style={{
+                  color: digitColor,
+                  fontFamily: MONO_BOLD,
+                  fontSize: immersive ? 84 : 64,
+                  fontVariant: ['tabular-nums'],
+                  paddingHorizontal: space.lg,
+                }}
               >
-                <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 12 }}>Cancel attempt</Text>
-              </Pressable>
-            )}
-          </Pressable>
+                {display}
+              </Text>
+              <Muted style={{ textAlign: 'center', paddingHorizontal: space.lg }}>
+                {inputBlocked ? (data.solvesLoading ? 'Loading solves…' : 'Scrambling…') : hint}
+              </Muted>
+              {(engine.phase === 'inspecting' || engine.phase === 'running') && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={engine.cancel}
+                  hitSlop={12}
+                  style={{ position: 'absolute', bottom: space.lg, alignSelf: 'center' }}
+                >
+                  <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 12 }}>Cancel attempt</Text>
+                </Pressable>
+              )}
+            </Pressable>
+          </Tile>
         ) : (
           // Manual entry, also the path FMC takes in this pass.
-          <View
+          <Tile
             style={{
               flex: 1,
               alignItems: 'center',
@@ -447,7 +453,7 @@ export default function TimerScreen({ navigation }: Props) {
               </Pressable>
             </View>
             <Muted>Type a time, "DNF", or append "+" to stack a +2</Muted>
-          </View>
+          </Tile>
         )}
 
         {/* ── Footer: scramble image, stats, penalties ── */}
@@ -475,32 +481,31 @@ export default function TimerScreen({ navigation }: Props) {
               </View>
             )}
 
+            {/* Penalties get their own tile rather than sitting loose above the
+                footer: they act on the last solve, not on the timer, and a
+                surface of their own is what makes that separation legible. */}
             {newest && (
-              <PenaltyRow
-                penalty={newest.penalty}
-                plusTwoCount={newest.plusTwoCount}
-                onChange={(pen, count) => data.updatePenalty(newest.id, pen, count)}
-                hidePlusTwo={isFmc}
-              />
+              <Tile style={{ padding: space.sm }}>
+                <PenaltyRow
+                  penalty={newest.penalty}
+                  plusTwoCount={newest.plusTwoCount}
+                  onChange={(pen, count) => data.updatePenalty(newest.id, pen, count)}
+                  hidePlusTwo={isFmc}
+                />
+              </Tile>
             )}
 
             <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}>
               {hasScrambleNet(scrambleEventId) && scr.scramble ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Scramble image"
-                  onPress={() => navigation.navigate('Stats')}
-                  style={{
-                    backgroundColor: p.card,
-                    borderColor: p.border,
-                    borderWidth: 1,
-                    borderRadius: radius.md,
-                    padding: space.sm,
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ScrambleNet eventId={scrambleEventId} scramble={scr.scramble} size={116} />
-                </Pressable>
+                <Tile style={{ padding: space.sm, justifyContent: 'center' }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Scramble image"
+                    onPress={() => navigation.navigate('Stats')}
+                  >
+                    <ScrambleNet eventId={scrambleEventId} scramble={scr.scramble} size={116} />
+                  </Pressable>
+                </Tile>
               ) : null}
 
               <StatsBlock
@@ -534,19 +539,40 @@ export default function TimerScreen({ navigation }: Props) {
   );
 }
 
+// The screen's one surface treatment, shared by every panel on it (timer,
+// penalties, scramble image, stats) so they read as one set rather than four
+// separately-styled boxes. Deliberately local and not ui.tsx's Card: that one is
+// a hairline-bordered content card with generous padding, which is right for a
+// settings or detail screen but too soft and too padded for panels that sit
+// edge to edge and have to hold their own next to 84pt digits.
+function Tile({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const p = usePalette();
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: p.card,
+          borderColor: p.border,
+          borderWidth: 1,
+          borderRadius: radius.md,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
 // The compact label/value grid beside the scramble image. Two columns so six
 // stats fit in the footer without crowding the timer, and every value is
 // tabular so the columns don't jitter as times change.
 function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
   const p = usePalette();
   return (
-    <View
+    <Tile
       style={{
         flex: 1,
-        backgroundColor: p.card,
-        borderColor: p.border,
-        borderWidth: 1,
-        borderRadius: radius.md,
         paddingVertical: space.sm,
         paddingHorizontal: space.md,
         justifyContent: 'space-evenly',
@@ -584,6 +610,6 @@ function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
           ))}
         </View>
       ))}
-    </View>
+    </Tile>
   );
 }
