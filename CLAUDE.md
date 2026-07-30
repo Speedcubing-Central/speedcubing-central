@@ -187,7 +187,18 @@ There is no admin account or admin role — see Roles below.
   thresholds the engine uses internally when the solve actually starts.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
-- **Mobile app** (`mobile/`, Expo SDK 57 / React Native, iOS + Android). Talks to the
+- **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). Pinned to SDK
+  54, not the current Expo release, because Apple's App Store review has been holding
+  up new Expo Go builds since SDK 55 (its App Store listing was stuck on 54 as of this
+  writing), so a project on a newer SDK than that gets "Project is incompatible with
+  this version of Expo Go" from Expo Go with no fix available client-side, since there
+  is no newer build in the App Store to install. Bumping past 54 for Expo Go testing
+  needs one of: `eas go` (build your own Expo Go client, needs an Apple Developer
+  Program membership), the public Expo Go TestFlight beta (free, but capacity-limited
+  and not always open), or a custom dev client via EAS/`expo run`. Re-check whether
+  Apple's review has cleared before assuming SDK 54 is still the ceiling; if it has,
+  bumping back up is a normal `npx expo install expo@<newer>` + `npx expo install --fix`,
+  the same mechanism used to pin here. Talks to the
   same server and database as the web client, so a user's solves, sessions and
   reconstructions are identical on both, and a Battle room created on one platform is
   joinable from the other. Feature *logic* is shared, never reimplemented: anything
