@@ -8,6 +8,7 @@ import {
   formatMoveCount,
   formatTime,
   getEvent,
+  mean,
   singleStats,
   SUBSET_EVENTS,
   TIMER_ONLY_EVENT_IDS,
@@ -17,39 +18,47 @@ import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
-import { Chip, MONO, Muted, StatPill } from '../../components/ui';
+import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
+import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
+import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { EventPickerSheet } from '../../components/EventPickerSheet';
 import { PenaltyRow } from './PenaltyRow';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
 import type { TimerStackParamList } from '../../navigation/TimerStack';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
-// ── The mobile Timer, restructured rather than shrunk ─────────────────────
+// ── The mobile Timer ──────────────────────────────────────────────────────
 //
 // The web Timer page is a two-column desktop layout: scramble + timer +
 // last-solve on the left, and a permanently-visible Statistics table
 // (single/mo3/ao5/ao12/ao50/ao100/ao1000 x Current/Best/BPA/WPA/Target) plus the
 // full Solves list on the right. That's roughly 40 numbers and an unbounded list
-// competing with the timer for a phone screen, which doesn't work. So on mobile:
+// competing with the timer for a phone screen, so the phone layout is organised
+// around what you look at between attempts instead, in the shape the established
+// mobile timers (CubeTime, Twisty Timer) converged on:
 //
-//  * The timer surface itself is the screen. It's the biggest tap target, sized
-//    to fill whatever's left, and it's what your thumb lands on.
-//  * Only two numbers stay visible while solving: the last solve and the current
-//    Ao5. The two a cuber actually watches between attempts.
-//  * The full stats table and the solves list moved to their own sub-screens,
-//    one tap away via the header (see navigation/TimerStack.tsx). Same numbers,
-//    same code (@scc/shared's timerStats), just not all at once.
-//  * Session and event selection collapsed from always-on dropdowns into two
-//    chips that open sheets.
-//  * During inspection and while running, everything except the digits is
-//    hidden. No chrome to mis-tap when you're about to put your hands on a cube.
+//   header      session and event, plus the three sub-screen entry points
+//   scramble    the text, with previous/new controls
+//   timer       the digits, taking every pixel left over
+//   footer      scramble image beside a compact stats block, then penalties
 //
-// The underlying behaviour is the web behaviour: same engine phases, same WCA
-// inspection penalties, same scramble prefetching, same input blocking while
-// solves/scrambles load, same PB detection, same server round-trips.
+// The footer is the substantive change from the first pass, which showed only
+// Last and Ao5. A scramble image matters because it's how you check your cube is
+// actually scrambled right, and it can't come from web's cubing.js
+// <twisty-player> (a DOM element), so it's drawn natively, see
+// components/ScrambleNet.tsx. Alongside it the stats block carries Ao5, Ao12,
+// Ao100, session mean, best and count, which is the set worth glancing at
+// without leaving the timer. The exhaustive table stays one tap away in Stats.
+//
+// Every number here comes from @scc/shared, the same functions the web client
+// calls, so nothing displayed is computed a second way.
+//
+// The underlying behaviour is unchanged: same engine phases, same WCA inspection
+// penalties, same scramble prefetching, same input blocking while solves and
+// scrambles load, same PB detection, same server round-trips.
 type Props = NativeStackScreenProps<TimerStackParamList, 'TimerHome'>;
 
 const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
@@ -156,8 +165,6 @@ export default function TimerScreen({ navigation }: Props) {
     if (saved) setTyped('');
   }, [typed, solvePrecision, onComplete, scr]);
 
-  const stats = useMemo(() => singleStats(data.solves), [data.solves]);
-  const ao5 = useMemo(() => currentAverage(data.solves, 5), [data.solves]);
   const newest = data.solves[0];
 
   const runningStr = (ms: number) => {
@@ -173,6 +180,32 @@ export default function TimerScreen({ navigation }: Props) {
       ? formatMoveCount(ms, penalty, 0, plusTwoCount)
       : formatTime(ms, penalty, solvePrecision, plusTwoCount);
   };
+
+  // Same convention as StatsScreen and the web StatsTable: an average is
+  // rounded to whole milliseconds before formatting. Kept identical so a number
+  // shown in two places is never rounded two different ways.
+  const fmtAvg = (v: number | null): string => {
+    if (v === null) return '—';
+    if (!isFinite(v)) return 'DNF';
+    return isFmc ? formatMoveCount(v, 'NONE', 2) : formatTime(Math.round(v), 'NONE', solvePrecision);
+  };
+
+  // The footer's stats block. Recomputed only when the solve list changes, not
+  // on every timer frame; currentAverage is O(size) and the mean is O(n), but
+  // the timer re-renders ~60x a second while running and none of this changes
+  // mid-attempt.
+  const footerStats = useMemo(() => {
+    const single = singleStats(data.solves);
+    const sessionMean = mean(data.solves);
+    return {
+      ao5: currentAverage(data.solves, 5),
+      ao12: currentAverage(data.solves, 12),
+      ao100: currentAverage(data.solves, 100),
+      meanValue: sessionMean.isDNF ? Infinity : sessionMean.value,
+      best: single.best,
+      count: single.count,
+    };
+  }, [data.solves]);
 
   const display = useMemo(() => {
     const phase = engine.phase;
@@ -208,7 +241,8 @@ export default function TimerScreen({ navigation }: Props) {
   // While an attempt is live the screen goes immersive: chrome hidden so
   // nothing but the digits is on screen (and nothing but the digits is
   // touchable) at the moment your hands are leaving the phone for the cube.
-  const immersive = engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
+  const immersive =
+    engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
 
   const hint = (() => {
     switch (engine.phase) {
@@ -235,26 +269,69 @@ export default function TimerScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
-      <View style={{ flex: 1, padding: space.md, gap: space.sm }}>
+      <View style={{ flex: 1, paddingHorizontal: space.md, paddingBottom: space.sm, gap: space.sm }}>
         {!immersive && (
           <>
-            {/* Header: event + session as chips, and the two sub-screen entry
-                points that replaced the desktop right-hand column. */}
-            <View style={{ flexDirection: 'row', gap: space.xs, alignItems: 'center' }}>
-              <Chip label={getEvent(event)?.name ?? event} onPress={() => setShowEventPicker(true)} />
-              <Chip
-                label={sessionLabel}
+            {/* ── Header ──
+                Session and event on the left as the two things you change, the
+                three sub-screens on the right as icons. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change session"
                 onPress={() => navigation.navigate('Sessions')}
-                style={{ flexShrink: 1 }}
-              />
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  flexShrink: 1,
+                  paddingVertical: 8,
+                  paddingRight: space.sm,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Icon name="layers" size={17} color={p.textMuted} />
+                <Text
+                  numberOfLines={1}
+                  style={{ color: p.text, fontFamily: font.sansSemi, fontSize: 14, flexShrink: 1 }}
+                >
+                  {sessionLabel}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change event"
+                onPress={() => setShowEventPicker(true)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: radius.pill,
+                  backgroundColor: p.cardHover,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 13 }}>
+                  {getEvent(event)?.name ?? event}
+                </Text>
+                <Icon name="arrowRight" size={13} color={p.accent} />
+              </Pressable>
+
               <View style={{ flex: 1 }} />
-              <Chip label="Stats" onPress={() => navigation.navigate('Stats')} />
-              <Chip label="Solves" onPress={() => navigation.navigate('Solves')} />
-              <Chip label="⚙" onPress={() => navigation.navigate('TimerSettings')} />
+              <IconButton name="chart" accessibilityLabel="Statistics" onPress={() => navigation.navigate('Stats')} />
+              <IconButton name="list" accessibilityLabel="Solves" onPress={() => navigation.navigate('Solves')} />
+              <IconButton
+                name="gear"
+                accessibilityLabel="Timer settings"
+                onPress={() => navigation.navigate('TimerSettings')}
+              />
             </View>
 
             {!user && (
-              <Text style={{ color: p.textMuted, fontSize: 11, textAlign: 'center' }}>
+              <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 11, textAlign: 'center' }}>
                 Not signed in. Solves are saved on this device only.
               </Text>
             )}
@@ -283,13 +360,9 @@ export default function TimerScreen({ navigation }: Props) {
             }}
             style={{
               flex: 1,
-              backgroundColor: immersive ? p.bg : p.card,
-              borderColor: p.border,
-              borderWidth: immersive ? 0 : 1,
-              borderRadius: radius.md,
               alignItems: 'center',
               justifyContent: 'center',
-              gap: space.lg,
+              gap: space.md,
             }}
           >
             <Text
@@ -297,9 +370,8 @@ export default function TimerScreen({ navigation }: Props) {
               numberOfLines={1}
               style={{
                 color: digitColor,
-                fontFamily: MONO,
-                fontSize: immersive ? 96 : 72,
-                fontWeight: '700',
+                fontFamily: MONO_BOLD,
+                fontSize: immersive ? 84 : 64,
                 fontVariant: ['tabular-nums'],
                 paddingHorizontal: space.lg,
               }}
@@ -316,7 +388,7 @@ export default function TimerScreen({ navigation }: Props) {
                 hitSlop={12}
                 style={{ position: 'absolute', bottom: space.lg, alignSelf: 'center' }}
               >
-                <Text style={{ color: p.textMuted, fontSize: 12 }}>Cancel attempt</Text>
+                <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 12 }}>Cancel attempt</Text>
               </Pressable>
             )}
           </Pressable>
@@ -325,10 +397,6 @@ export default function TimerScreen({ navigation }: Props) {
           <View
             style={{
               flex: 1,
-              backgroundColor: p.card,
-              borderColor: p.border,
-              borderWidth: 1,
-              borderRadius: radius.md,
               alignItems: 'center',
               justifyContent: 'center',
               gap: space.lg,
@@ -338,7 +406,7 @@ export default function TimerScreen({ navigation }: Props) {
             <Text
               adjustsFontSizeToFit
               numberOfLines={1}
-              style={{ color: p.text, fontFamily: MONO, fontSize: 56, fontWeight: '700' }}
+              style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: 52 }}
             >
               {typed || (isFmc ? 'moves' : formatTime(0, 'NONE', solvePrecision))}
             </Text>
@@ -375,15 +443,14 @@ export default function TimerScreen({ navigation }: Props) {
                   opacity: inputBlocked ? 0.4 : pressed ? 0.75 : 1,
                 })}
               >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
+                <Text style={{ color: '#fff', fontFamily: font.sansBold }}>Add</Text>
               </Pressable>
             </View>
             <Muted>Type a time, "DNF", or append "+" to stack a +2</Muted>
           </View>
         )}
 
-        {/* ── The only stats kept on-screen while solving ──
-            Everything else lives in the Stats sub-screen. */}
+        {/* ── Footer: scramble image, stats, penalties ── */}
         {!immersive && (
           <View style={{ gap: space.sm }}>
             {pbNote && (
@@ -395,28 +462,18 @@ export default function TimerScreen({ navigation }: Props) {
                   paddingHorizontal: space.md,
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'center' }}>
+                <Text
+                  style={{
+                    color: '#fff',
+                    fontFamily: font.sansBold,
+                    fontSize: 13,
+                    textAlign: 'center',
+                  }}
+                >
                   New PB: {pbNote}
                 </Text>
               </View>
             )}
-            <View
-              style={{
-                flexDirection: 'row',
-                backgroundColor: p.card,
-                borderColor: p.border,
-                borderWidth: 1,
-                borderRadius: radius.md,
-                paddingVertical: space.md,
-              }}
-            >
-              <StatPill label="Last" value={newest ? fmt(newest.time, newest.penalty, newest.plusTwoCount) : '—'} />
-              <View style={{ width: 1, backgroundColor: p.border }} />
-              <StatPill
-                label="Ao5"
-                value={ao5 === null ? '—' : ao5 === Infinity ? 'DNF' : fmt(Math.round(ao5))}
-              />
-            </View>
 
             {newest && (
               <PenaltyRow
@@ -426,6 +483,43 @@ export default function TimerScreen({ navigation }: Props) {
                 hidePlusTwo={isFmc}
               />
             )}
+
+            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}>
+              {hasScrambleNet(scrambleEventId) && scr.scramble ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Scramble image"
+                  onPress={() => navigation.navigate('Stats')}
+                  style={{
+                    backgroundColor: p.card,
+                    borderColor: p.border,
+                    borderWidth: 1,
+                    borderRadius: radius.md,
+                    padding: space.sm,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ScrambleNet eventId={scrambleEventId} scramble={scr.scramble} size={116} />
+                </Pressable>
+              ) : null}
+
+              <StatsBlock
+                rows={[
+                  [
+                    { label: 'Ao5', value: fmtAvg(footerStats.ao5) },
+                    { label: 'Ao12', value: fmtAvg(footerStats.ao12) },
+                  ],
+                  [
+                    { label: 'Ao100', value: fmtAvg(footerStats.ao100) },
+                    { label: 'Mean', value: fmtAvg(footerStats.meanValue) },
+                  ],
+                  [
+                    { label: 'Best', value: footerStats.best === null ? '—' : fmt(footerStats.best) },
+                    { label: 'Solves', value: String(footerStats.count) },
+                  ],
+                ]}
+              />
+            </View>
           </View>
         )}
       </View>
@@ -437,5 +531,59 @@ export default function TimerScreen({ navigation }: Props) {
         onClose={() => setShowEventPicker(false)}
       />
     </SafeAreaView>
+  );
+}
+
+// The compact label/value grid beside the scramble image. Two columns so six
+// stats fit in the footer without crowding the timer, and every value is
+// tabular so the columns don't jitter as times change.
+function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
+  const p = usePalette();
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: p.card,
+        borderColor: p.border,
+        borderWidth: 1,
+        borderRadius: radius.md,
+        paddingVertical: space.sm,
+        paddingHorizontal: space.md,
+        justifyContent: 'space-evenly',
+      }}
+    >
+      {rows.map((row, i) => (
+        <View key={i} style={{ flexDirection: 'row' }}>
+          {row.map((cell) => (
+            <View key={cell.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+              <Text
+                style={{
+                  color: p.textMuted,
+                  fontFamily: font.sansSemi,
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  minWidth: 34,
+                }}
+              >
+                {cell.label}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: p.text,
+                  fontFamily: MONO_BOLD,
+                  fontSize: 14,
+                  fontVariant: ['tabular-nums'],
+                  flexShrink: 1,
+                }}
+              >
+                {cell.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
   );
 }

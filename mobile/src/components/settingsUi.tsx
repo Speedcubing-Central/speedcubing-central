@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { usePalette } from '../store/settings';
-import { radius, space } from '../theme';
+import { font, radius, space } from '../theme';
 
 // Settings row primitives, mirroring client/src/components/settingsUi.tsx so the
 // two apps present the same options with the same labels and hints.
@@ -38,7 +38,7 @@ export function SettingsRow({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: p.text, fontSize: 15, fontWeight: '600' }}>{label}</Text>
+          <Text style={{ color: p.text, fontSize: 15, fontFamily: font.sansSemi }}>{label}</Text>
           {hint ? <Text style={{ color: p.textMuted, fontSize: 12, marginTop: 2 }}>{hint}</Text> : null}
         </View>
         {inline ? <View>{children}</View> : null}
@@ -77,7 +77,7 @@ export function SettingsGroup({ title, children }: { title: string; children: Re
         style={{
           color: p.textMuted,
           fontSize: 11,
-          fontWeight: '700',
+          fontFamily: font.sansBold,
           textTransform: 'uppercase',
           letterSpacing: 0.8,
           marginTop: space.md,
@@ -133,7 +133,7 @@ export function OptionRow<T extends string | number>({
               paddingHorizontal: 14,
             }}
           >
-            <Text style={{ color: selected ? '#fff' : p.text, fontSize: 12, fontWeight: '600' }}>
+            <Text style={{ color: selected ? '#fff' : p.text, fontSize: 12, fontFamily: font.sansSemi }}>
               {o.label}
             </Text>
           </Pressable>

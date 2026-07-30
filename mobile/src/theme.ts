@@ -73,3 +73,28 @@ export function getPalette(themeId: string, theme: 'dark' | 'light', accentOverr
 // Shared spacing/typography scale, so screens don't each invent their own.
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
+
+// ── Type families, matching the web client ────────────────────────────────
+//
+// The web client loads Inter (sans) and JetBrains Mono (mono) from Google Fonts
+// and wires them into Tailwind's fontFamily (client/tailwind.config.js), so the
+// same two families are bundled here via @expo-google-fonts and referenced by
+// these names. Fraunces (web's `display` family) is deliberately not bundled:
+// web uses it only on the marketing landing page, which has no mobile
+// counterpart, so shipping a third font file would buy nothing.
+//
+// These are the exact keys the fonts register under in App.tsx's useFonts call.
+// React Native has no font inheritance, so every Text that should not be
+// system-default names one of these explicitly. The `weight` variants exist
+// because RN's fontWeight is unreliable with custom families on Android: asking
+// for a heavier weight of a single registered face silently renders the same
+// face, so each weight is loaded as its own family instead.
+export const font = {
+  sans: 'Inter_400Regular',
+  sansMedium: 'Inter_500Medium',
+  sansSemi: 'Inter_600SemiBold',
+  sansBold: 'Inter_700Bold',
+  sansBlack: 'Inter_800ExtraBold',
+  mono: 'JetBrainsMono_500Medium',
+  monoBold: 'JetBrainsMono_700Bold',
+} as const;

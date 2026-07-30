@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 import { usePalette } from '../store/settings';
 import { Muted, Screen } from './ui';
-import { radius, space } from '../theme';
+import { font, radius, space } from '../theme';
 
 // A screen that exists in the tab structure but whose feature isn't built for
 // mobile yet.
@@ -22,7 +22,7 @@ export function StubScreen({
   return (
     <Screen scroll>
       <View>
-        <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>{title}</Text>
+        <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>{title}</Text>
         <Muted>{summary}</Muted>
       </View>
       <View
@@ -34,7 +34,7 @@ export function StubScreen({
           gap: space.sm,
         }}
       >
-        <Text style={{ color: p.text, fontWeight: '700', fontSize: 14 }}>Not in this build yet</Text>
+        <Text style={{ color: p.text, fontFamily: font.sansBold, fontSize: 14 }}>Not in this build yet</Text>
         {notes.map((note) => (
           <Muted key={note}>• {note}</Muted>
         ))}

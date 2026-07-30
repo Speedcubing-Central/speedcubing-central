@@ -10,8 +10,8 @@ import { api, apiError } from '../../lib/api';
 import { createSocket, type SccSocket } from '../../lib/socket';
 import { usePalette } from '../../store/settings';
 import { useAuth } from '../../store/auth';
-import { Button, EmptyState, MONO, Muted, Screen } from '../../components/ui';
-import { radius, space } from '../../theme';
+import { Button, EmptyState, MONO, MONO_BOLD, Muted, Screen } from '../../components/ui';
+import { font, radius, space } from '../../theme';
 
 // Battle Mode, lobby and live room state, without gameplay.
 //
@@ -127,7 +127,7 @@ export default function BattleScreen() {
     return (
       <Screen scroll>
         <View>
-          <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>{joined.name}</Text>
+          <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>{joined.name}</Text>
           <Muted>
             Room {joined.code} · {getEvent(joined.eventId)?.name ?? joined.eventId} · round {joined.roundNumber} ·{' '}
             {joined.status.toLowerCase()}
@@ -144,7 +144,7 @@ export default function BattleScreen() {
             gap: space.sm,
           }}
         >
-          <Text style={{ color: p.text, fontWeight: '700' }}>
+          <Text style={{ color: p.text, fontFamily: font.sansBold }}>
             Players ({joined.participants.length})
           </Text>
           {joined.participants.map((participant) => (
@@ -166,7 +166,7 @@ export default function BattleScreen() {
                     ? 'done'
                     : '—'}
               </Text>
-              <Text style={{ color: p.accent, fontFamily: MONO, fontWeight: '700' }}>{participant.points}</Text>
+              <Text style={{ color: p.accent, fontFamily: MONO_BOLD }}>{participant.points}</Text>
             </View>
           ))}
         </View>
@@ -202,7 +202,7 @@ export default function BattleScreen() {
   return (
     <Screen scroll>
       <View>
-        <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>Battle</Text>
+        <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>Battle</Text>
         <Muted>Race other cubers in real time. Rooms are shared with the web app.</Muted>
       </View>
 
@@ -216,7 +216,7 @@ export default function BattleScreen() {
           gap: space.sm,
         }}
       >
-        <Text style={{ color: p.text, fontWeight: '700' }}>Join with a code</Text>
+        <Text style={{ color: p.text, fontFamily: font.sansBold }}>Join with a code</Text>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           <TextInput
             value={code}
@@ -250,7 +250,7 @@ export default function BattleScreen() {
           style={{
             color: p.textMuted,
             fontSize: 11,
-            fontWeight: '700',
+            fontFamily: font.sansBold,
             textTransform: 'uppercase',
             letterSpacing: 0.8,
           }}
@@ -278,7 +278,7 @@ export default function BattleScreen() {
                 padding: space.md,
               })}
             >
-              <Text style={{ color: p.text, fontWeight: '700' }}>{room.name}</Text>
+              <Text style={{ color: p.text, fontFamily: font.sansBold }}>{room.name}</Text>
               <Muted>
                 {room.code} · {getEvent(room.eventId)?.name ?? room.eventId} · {room.participantCount}/10 ·{' '}
                 {room.status.toLowerCase()}

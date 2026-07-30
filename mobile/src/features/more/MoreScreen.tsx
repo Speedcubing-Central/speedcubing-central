@@ -6,7 +6,7 @@ import { useBeta } from '../../lib/beta';
 import { Muted, Screen } from '../../components/ui';
 import type { MoreStackParamList } from '../../navigation/MoreStack';
 import { SERVER_ORIGIN } from '../../lib/config';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
 type Props = NativeStackScreenProps<MoreStackParamList, 'MoreHome'>;
 
@@ -26,7 +26,7 @@ export default function MoreScreen({ navigation }: Props) {
 
   return (
     <Screen scroll>
-      <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>More</Text>
+      <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>More</Text>
 
       {/* Account */}
       <Pressable
@@ -42,7 +42,7 @@ export default function MoreScreen({ navigation }: Props) {
       >
         {user ? (
           <>
-            <Text style={{ color: p.text, fontSize: 16, fontWeight: '700' }}>{user.displayName}</Text>
+            <Text style={{ color: p.text, fontSize: 16, fontFamily: font.sansBold }}>{user.displayName}</Text>
             <Muted>
               {user.email ?? user.wcaId ?? 'Signed in'}
               {isBetaSite ? (hasBetaAccess ? ' · beta access' : ' · no beta access') : ''}
@@ -50,7 +50,7 @@ export default function MoreScreen({ navigation }: Props) {
           </>
         ) : (
           <>
-            <Text style={{ color: p.accent, fontSize: 16, fontWeight: '700' }}>Sign in</Text>
+            <Text style={{ color: p.accent, fontSize: 16, fontFamily: font.sansBold }}>Sign in</Text>
             <Muted>Sign in to sync your solves and sessions with the web app.</Muted>
           </>
         )}
@@ -70,7 +70,7 @@ export default function MoreScreen({ navigation }: Props) {
               padding: space.md,
             })}
           >
-            <Text style={{ color: p.text, fontSize: 15, fontWeight: '700' }}>{item.label}</Text>
+            <Text style={{ color: p.text, fontSize: 15, fontFamily: font.sansBold }}>{item.label}</Text>
             <Muted>{item.hint}</Muted>
           </Pressable>
         ))}

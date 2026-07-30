@@ -2,7 +2,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { usePalette } from '../../store/settings';
 import { useBeta } from '../../lib/beta';
 import { Muted, Screen } from '../../components/ui';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
 // Algorithm Trainer, puzzle picker.
 //
@@ -84,7 +84,7 @@ export default function AlgorithmsScreen() {
   return (
     <Screen scroll>
       <View>
-        <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>Algorithms</Text>
+        <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>Algorithms</Text>
         <Muted>Browse and drill algorithm sets.</Muted>
       </View>
 
@@ -122,7 +122,7 @@ export default function AlgorithmsScreen() {
                 opacity: puzzle.available ? 1 : 0.5,
               })}
             >
-              <Text style={{ color: p.text, fontSize: 17, fontWeight: '700' }}>{puzzle.label}</Text>
+              <Text style={{ color: p.text, fontSize: 17, fontFamily: font.sansBold }}>{puzzle.label}</Text>
               <Muted>
                 {puzzle.available ? `${puzzle.sets.length} set${puzzle.sets.length === 1 ? '' : 's'}` : 'Coming soon'}
               </Muted>

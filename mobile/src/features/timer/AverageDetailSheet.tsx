@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FlatList, Modal, Pressable, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 import {
   formatMoveCount,
   formatTime,
@@ -9,7 +9,8 @@ import {
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
 import { MONO } from '../../components/ui';
-import { radius, space } from '../../theme';
+import { Sheet } from '../../components/Sheet';
+import { font, radius, space } from '../../theme';
 
 // One average, broken out into the solves that made it. The mobile equivalent
 // of the web AverageDetail modal.
@@ -46,36 +47,17 @@ export function AverageDetailSheet({
   const label = view.size === 3 ? 'mo3' : `ao${view.size}`;
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: '#0008' }} onPress={onClose} />
-      <View
-        style={{
-          height: '75%',
-          backgroundColor: p.card,
-          borderTopLeftRadius: radius.lg,
-          borderTopRightRadius: radius.lg,
-          borderTopWidth: 1,
-          borderColor: p.border,
-          paddingHorizontal: space.md,
-          paddingBottom: space.xl,
-        }}
-      >
-        <View style={{ alignItems: 'center', paddingVertical: space.md }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} />
-        </View>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            marginBottom: space.sm,
-          }}
-        >
-          <Text style={{ color: p.text, fontSize: 18, fontWeight: '800' }}>{label}</Text>
-          <Text style={{ color: p.accent, fontSize: 20, fontWeight: '700', fontFamily: MONO }}>{value}</Text>
-        </View>
-
-        <FlatList
+    <Sheet
+      visible
+      onClose={onClose}
+      title={label}
+      fillHeight
+      maxHeightRatio={0.78}
+      headerRight={
+        <Text style={{ color: p.accent, fontSize: 20, fontFamily: font.monoBold }}>{value}</Text>
+      }
+    >
+      <FlatList
           data={view.window}
           keyExtractor={(s) => s.id}
           renderItem={({ item, index }) => {
@@ -111,12 +93,11 @@ export function AverageDetailSheet({
           }}
         />
 
-        {view.droppedIndices.length > 0 && (
-          <Text style={{ color: p.textMuted, fontSize: 11, marginTop: space.sm }}>
-            Dropped solves (best &amp; worst) are dimmed and shown in parentheses.
-          </Text>
-        )}
-      </View>
-    </Modal>
+      {view.droppedIndices.length > 0 && (
+        <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 11, marginTop: space.sm }}>
+          Dropped solves (best &amp; worst) are dimmed and shown in parentheses.
+        </Text>
+      )}
+    </Sheet>
   );
 }

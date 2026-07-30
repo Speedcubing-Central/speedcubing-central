@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MAX_PLUS_TWO_COUNT, type Penalty } from '@scc/shared';
 import { usePalette } from '../../store/settings';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
 // OK / +2 / DNF selector. Same semantics as the web PenaltyButtons: OK clears
 // any penalty, +2 stacks another +2 per tap up to MAX_PLUS_TWO_COUNT, and a "−"
@@ -45,7 +45,7 @@ export function PenaltyRow({
         onPress={() => onChange('NONE', 0)}
         style={optionStyle(isOk, p.green)}
       >
-        <Text style={{ color: isOk ? p.green : p.textMuted, fontWeight: '700', fontSize: 13 }}>OK</Text>
+        <Text style={{ color: isOk ? p.green : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>OK</Text>
       </Pressable>
 
       {!hidePlusTwo && (
@@ -72,7 +72,7 @@ export function PenaltyRow({
                 borderRightColor: p.yellow,
               }}
             >
-              <Text style={{ color: p.yellow, fontWeight: '700', fontSize: 15 }}>−</Text>
+              <Text style={{ color: p.yellow, fontFamily: font.sansBold, fontSize: 15 }}>−</Text>
             </Pressable>
           )}
           <Pressable
@@ -89,7 +89,7 @@ export function PenaltyRow({
               opacity: plusTwoCount >= MAX_PLUS_TWO_COUNT ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: isPlusTwo ? p.yellow : p.textMuted, fontWeight: '700', fontSize: 13 }}>
+            <Text style={{ color: isPlusTwo ? p.yellow : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>
               {isPlusTwo ? (plusTwoCount === 1 ? '+2' : `+${plusTwoCount * 2}`) : '+2'}
             </Text>
           </Pressable>
@@ -102,7 +102,7 @@ export function PenaltyRow({
         onPress={() => onChange('DNF', 0)}
         style={optionStyle(isDnf, p.red)}
       >
-        <Text style={{ color: isDnf ? p.red : p.textMuted, fontWeight: '700', fontSize: 13 }}>DNF</Text>
+        <Text style={{ color: isDnf ? p.red : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>DNF</Text>
       </Pressable>
     </View>
   );

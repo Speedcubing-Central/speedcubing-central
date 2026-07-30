@@ -1,8 +1,9 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { usePalette, useSettings } from '../store/settings';
 import { carrotScramble, formatScramble, isSquareOne, sq1Pairs } from '../lib/scramble';
-import { radius, space } from '../theme';
+import { font, radius, space } from '../theme';
 import { MONO } from './ui';
+import { Icon, type IconName } from './Icon';
 
 // Scramble display, matching the web ScramblePanel's text rules (which is the
 // part that actually matters for correctness): megaminx broken into one row per
@@ -10,11 +11,12 @@ import { MONO } from './ui';
 // wrap individually so a line never breaks mid-pair and a meaningful trailing
 // slash is never dropped.
 //
-// Deliberately text-only. The web panel also renders a cubing.js
-// <twisty-player> 2D diagram; that's a web-component/WebGL widget with no React
-// Native equivalent, and a scramble diagram is out of scope for this pass (see
-// the Algorithms tab stub for the same reason). The scramble text itself is
-// complete and correct.
+// Text only, by design: the scramble *image* is a separate component
+// (ScrambleNet), so the Timer can place it in the footer beside the stats rather
+// than stacked under the scramble text where it would compete with the timer for
+// vertical space. Web draws its diagram with a cubing.js <twisty-player>, which
+// has no React Native equivalent, so ScrambleNet renders the net natively
+// instead. See components/ScrambleNet.tsx and lib/cubeNet.ts.
 export function ScrambleView({
   eventId,
   scramble,
@@ -86,20 +88,32 @@ export function ScrambleView({
       {(onRefresh || onGoBack) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
-            <ScrambleAction label="Previous" onPress={onGoBack} disabled={!canGoBack} />
+            <ScrambleAction
+              icon="skipBack"
+              label="Previous scramble"
+              onPress={onGoBack}
+              disabled={!canGoBack}
+            />
           )}
-          {onRefresh && <ScrambleAction label="New scramble" onPress={onRefresh} disabled={loading} />}
+          {onRefresh && (
+            <ScrambleAction icon="refresh" label="New scramble" onPress={onRefresh} disabled={loading} />
+          )}
         </View>
       )}
     </View>
   );
 }
 
+// Icon-only, with the words moved to the accessibility label. The two controls
+// are unambiguous as glyphs and this keeps the row from crowding the scramble it
+// sits under.
 function ScrambleAction({
+  icon,
   label,
   onPress,
   disabled,
 }: {
+  icon: IconName;
   label: string;
   onPress: () => void;
   disabled?: boolean;
@@ -108,18 +122,22 @@ function ScrambleAction({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
       onPress={onPress}
       disabled={disabled}
+      hitSlop={8}
       style={({ pressed }) => ({
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        width: 40,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
         borderRadius: radius.pill,
         backgroundColor: p.cardHover,
         opacity: disabled ? 0.35 : pressed ? 0.7 : 1,
       })}
     >
-      <Text style={{ color: p.text, fontSize: 12, fontWeight: '600' }}>{label}</Text>
+      <Icon name={icon} size={16} color={p.text} />
     </Pressable>
   );
 }

@@ -6,6 +6,7 @@ import ReconstructionScreen from '../features/reconstruction/ReconstructionScree
 import ResultsScreen from '../features/results/ResultsScreen';
 import SettingsScreen from '../features/settings/SettingsScreen';
 import LoginScreen from '../features/auth/LoginScreen';
+import { font } from '../theme';
 
 // The four web nav destinations that aren't used mid-practice, plus sign-in,
 // reached from the More tab. See RootNavigator's tab-budget note.
@@ -27,7 +28,7 @@ export function MoreStack() {
       screenOptions={{
         headerStyle: { backgroundColor: p.bg },
         headerTintColor: p.text,
-        headerTitleStyle: { fontWeight: '700' },
+        headerTitleStyle: { fontFamily: font.sansBold },
         contentStyle: { backgroundColor: p.bg },
       }}
     >

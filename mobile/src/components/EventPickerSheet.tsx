@@ -1,7 +1,8 @@
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { UNOFFICIAL_EVENTS, WCA_EVENTS, type WcaEvent } from '@scc/shared';
 import { usePalette } from '../store/settings';
-import { radius, space } from '../theme';
+import { Sheet } from './Sheet';
+import { font, radius, space } from '../theme';
 
 // Bottom-sheet event picker.
 //
@@ -31,7 +32,7 @@ export function EventPickerSheet({
         style={{
           color: p.textMuted,
           fontSize: 11,
-          fontWeight: '700',
+          fontFamily: font.sansBold,
           textTransform: 'uppercase',
           letterSpacing: 0.8,
           marginTop: space.sm,
@@ -57,7 +58,13 @@ export function EventPickerSheet({
               backgroundColor: selected ? p.accent : pressed ? p.cardHover : 'transparent',
             })}
           >
-            <Text style={{ color: selected ? '#fff' : p.text, fontSize: 15, fontWeight: selected ? '700' : '500' }}>
+            <Text
+              style={{
+                color: selected ? '#fff' : p.text,
+                fontSize: 15,
+                fontFamily: selected ? font.sansBold : font.sansMedium,
+              }}
+            >
               {e.name}
             </Text>
           </Pressable>
@@ -67,29 +74,11 @@ export function EventPickerSheet({
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: '#0008' }} onPress={onClose} />
-      <View
-        style={{
-          maxHeight: '78%',
-          backgroundColor: p.card,
-          borderTopLeftRadius: radius.lg,
-          borderTopRightRadius: radius.lg,
-          borderTopWidth: 1,
-          borderColor: p.border,
-          paddingHorizontal: space.md,
-          paddingBottom: space.xl,
-        }}
-      >
-        <View style={{ alignItems: 'center', paddingVertical: space.md }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} />
-        </View>
-        <Text style={{ color: p.text, fontSize: 18, fontWeight: '800', marginBottom: space.sm }}>Event</Text>
-        <ScrollView>
-          {renderGroup('WCA Events', wcaEvents)}
-          {renderGroup('Unofficial Events', UNOFFICIAL_EVENTS)}
-        </ScrollView>
-      </View>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose} title="Event" fillHeight maxHeightRatio={0.78}>
+      <ScrollView>
+        {renderGroup('WCA Events', wcaEvents)}
+        {renderGroup('Unofficial Events', UNOFFICIAL_EVENTS)}
+      </ScrollView>
+    </Sheet>
   );
 }

@@ -3,7 +3,8 @@ import { getEvent, RELAY_PRESETS, presetToLegs, type RelayPreset } from '@scc/sh
 import { usePalette } from '../../store/settings';
 import { useBeta } from '../../lib/beta';
 import { Muted, Screen } from '../../components/ui';
-import { radius, space } from '../../theme';
+import { Icon } from '../../components/Icon';
+import { font, radius, space } from '../../theme';
 
 // Relays.
 //
@@ -32,7 +33,7 @@ export default function RelaysScreen() {
   return (
     <Screen scroll>
       <View>
-        <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>Relays</Text>
+        <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>Relays</Text>
         <Muted>Time multi-event relays solo, build your own, or race one together.</Muted>
       </View>
 
@@ -47,11 +48,16 @@ export default function RelaysScreen() {
             backgroundColor: p.accent,
             borderRadius: radius.md,
             paddingVertical: 14,
+            flexDirection: 'row',
             alignItems: 'center',
+            justifyContent: 'center',
+            gap: space.sm,
             opacity: pressed ? 0.8 : 1,
           })}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>⚔️  Team Relay</Text>
+          {/* Same 'swords' glyph the web RelaysPage button uses. */}
+          <Icon name="swords" size={17} color="#fff" />
+          <Text style={{ color: '#fff', fontFamily: font.sansBold, fontSize: 15 }}>Team Relay</Text>
         </Pressable>
       )}
 
@@ -83,7 +89,7 @@ function RelayGroup({ title, presets }: { title: string; presets: RelayPreset[] 
         style={{
           color: p.textMuted,
           fontSize: 11,
-          fontWeight: '700',
+          fontFamily: font.sansBold,
           textTransform: 'uppercase',
           letterSpacing: 0.8,
         }}
@@ -108,7 +114,7 @@ function RelayGroup({ title, presets }: { title: string; presets: RelayPreset[] 
               gap: 4,
             })}
           >
-            <Text style={{ color: p.text, fontSize: 15, fontWeight: '700' }}>{preset.name}</Text>
+            <Text style={{ color: p.text, fontSize: 15, fontFamily: font.sansBold }}>{preset.name}</Text>
             <Muted>
               {legs.length} leg{legs.length === 1 ? '' : 's'} ·{' '}
               {legs

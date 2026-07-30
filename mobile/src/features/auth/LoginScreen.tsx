@@ -7,7 +7,7 @@ import { usePalette } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { useServerConfig } from '../../store/serverConfig';
 import { Button, Muted, Segmented } from '../../components/ui';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
 // Email/password sign-in and registration against the same endpoints the web
 // client uses. The difference is what happens to the credential afterwards: the
@@ -126,7 +126,7 @@ export default function LoginScreen() {
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Text style={{ color: p.text, fontWeight: '700' }}>Continue with WCA</Text>
+              <Text style={{ color: p.text, fontFamily: font.sansBold }}>Continue with WCA</Text>
             </Pressable>
             <Muted>
               WCA sign-in completes in your browser and signs you in on the web app. Native WCA sign-in is coming;

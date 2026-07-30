@@ -1,6 +1,7 @@
-import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { usePalette } from '../store/settings';
+import { Icon, type IconName } from '../components/Icon';
+import { font } from '../theme';
 import { TimerStack } from './TimerStack';
 import { MoreStack } from './MoreStack';
 import AlgorithmsScreen from '../features/algorithms/AlgorithmsScreen';
@@ -34,15 +35,16 @@ export type RootTabParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-// Emoji glyphs stand in for the web client's SVG icon set. Swapping in a real
-// vector icon font (@expo/vector-icons) is a drop-in change later; this keeps the
-// dependency surface small for the scaffold without leaving the tab bar bare.
-const TAB_GLYPH: Record<keyof RootTabParamList, string> = {
-  Timer: '⏱',
-  Algorithms: '🧩',
-  Battle: '⚔️',
-  Relays: '⏭',
-  More: '⋯',
+// The web client's own icon set, ported to react-native-svg in
+// components/Icon.tsx: same 24x24 paths, so a tab is drawn with the same glyph
+// its sidebar entry uses on the web. (This replaced emoji placeholders, which
+// rendered at inconsistent sizes and couldn't take the active tint.)
+const TAB_ICON: Record<keyof RootTabParamList, IconName> = {
+  Timer: 'timer',
+  Algorithms: 'brain',
+  Battle: 'swords',
+  Relays: 'skipForward',
+  More: 'panel',
 };
 
 export function RootNavigator() {
@@ -58,8 +60,8 @@ export function RootNavigator() {
           backgroundColor: p.card,
           borderTopColor: p.border,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        tabBarIcon: ({ color }) => <Text style={{ fontSize: 19, color }}>{TAB_GLYPH[route.name]}</Text>,
+        tabBarLabelStyle: { fontSize: 11, fontFamily: font.sansSemi },
+        tabBarIcon: ({ color }) => <Icon name={TAB_ICON[route.name]} size={22} color={color} />,
       })}
     >
       <Tab.Screen name="Timer" component={TimerStack} />

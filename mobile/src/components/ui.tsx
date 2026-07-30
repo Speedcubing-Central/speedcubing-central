@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePalette } from '../store/settings';
-import { radius, space } from '../theme';
+import { font, radius, space } from '../theme';
+import { Icon, type IconName } from './Icon';
 
 // Small set of building blocks every screen shares, so the app reads as one
 // product rather than a pile of independently-styled screens. The visual
@@ -71,12 +71,12 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 
 export function Title({ children }: { children: ReactNode }) {
   const p = usePalette();
-  return <Text style={{ color: p.text, fontSize: 22, fontWeight: '800' }}>{children}</Text>;
+  return <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>{children}</Text>;
 }
 
 export function Muted({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
   const p = usePalette();
-  return <Text style={[{ color: p.textMuted, fontSize: 13 }, style]}>{children}</Text>;
+  return <Text style={[{ color: p.textMuted, fontSize: 13, fontFamily: font.sans }, style]}>{children}</Text>;
 }
 
 export function Button({
@@ -115,7 +115,7 @@ export function Button({
         style,
       ]}
     >
-      <Text style={{ color: fg, fontWeight: '700', fontSize: 15 }}>{label}</Text>
+      <Text style={{ color: fg, fontFamily: font.sansBold, fontSize: 15 }}>{label}</Text>
     </Pressable>
   );
 }
@@ -151,7 +151,7 @@ export function Chip({
     >
       <Text
         numberOfLines={1}
-        style={{ color: active ? '#fff' : p.text, fontWeight: '600', fontSize: 13 }}
+        style={{ color: active ? '#fff' : p.text, fontFamily: font.sansSemi, fontSize: 13 }}
       >
         {label}
       </Text>
@@ -203,7 +203,7 @@ export function Segmented<T extends string>({
             <Text
               style={{
                 color: selected ? '#fff' : p.textMuted,
-                fontWeight: '600',
+                fontFamily: font.sansSemi,
                 fontSize: 12,
               }}
             >
@@ -222,16 +222,23 @@ export function StatPill({ label, value, mono = true }: { label: string; value: 
   const p = usePalette();
   return (
     <View style={{ alignItems: 'center', flex: 1 }}>
-      <Text style={{ color: p.textMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+      <Text
+        style={{
+          color: p.textMuted,
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: 0.6,
+          fontFamily: font.sansSemi,
+        }}
+      >
         {label}
       </Text>
       <Text
         style={{
           color: p.text,
           fontSize: 20,
-          fontWeight: '700',
           fontVariant: ['tabular-nums'],
-          fontFamily: mono ? MONO : undefined,
+          fontFamily: mono ? font.monoBold : font.sansBold,
         }}
       >
         {value}
@@ -254,13 +261,61 @@ export function EmptyState({ title, body }: { title: string; body?: string }) {
   const p = usePalette();
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', padding: space.xl, gap: space.sm }}>
-      <Text style={{ color: p.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>{title}</Text>
+      <Text style={{ color: p.text, fontSize: 16, fontFamily: font.sansBold, textAlign: 'center' }}>{title}</Text>
       {body ? <Muted style={{ textAlign: 'center' }}>{body}</Muted> : null}
     </View>
   );
 }
 
-// Monospace family for times and scrambles. Tabular digits matter for a timer
-// that updates every frame. 'monospace' is an Android alias and is NOT a valid
-// iOS font family, so each platform gets its own name.
-export const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
+// Monospace family for times and scrambles, now the same JetBrains Mono the web
+// client uses rather than the platform default (Menlo/Roboto Mono), so a time
+// reads identically on both. Kept as a named export because several screens
+// already reference MONO; `font.mono` in theme.ts is the underlying source.
+export const MONO = font.mono;
+export const MONO_BOLD = font.monoBold;
+
+// A square, icon-only tap target. Used for the header affordances that replaced
+// the emoji buttons, sized to stay comfortably above the ~44px minimum.
+export function IconButton({
+  name,
+  onPress,
+  accessibilityLabel,
+  color,
+  disabled,
+  size = 20,
+  style,
+}: {
+  name: IconName;
+  onPress: () => void;
+  accessibilityLabel: string;
+  color?: string;
+  disabled?: boolean;
+  size?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      style={({ pressed }) => [
+        {
+          width: 38,
+          height: 38,
+          borderRadius: radius.sm,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: pressed ? p.cardHover : 'transparent',
+          opacity: disabled ? 0.35 : 1,
+        },
+        style,
+      ]}
+    >
+      <Icon name={name} size={size} color={color ?? p.text} />
+    </Pressable>
+  );
+}

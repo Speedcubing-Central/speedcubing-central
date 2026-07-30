@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import {
   averagesForSolve,
   formatMoveCount,
@@ -12,9 +12,10 @@ import {
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
 import { parseTimeInput } from '../../lib/timeInput';
-import { Button, MONO, Muted } from '../../components/ui';
+import { Button, MONO, MONO_BOLD, Muted } from '../../components/ui';
+import { Sheet } from '../../components/Sheet';
 import { PenaltyRow } from './PenaltyRow';
-import { radius, space } from '../../theme';
+import { font, radius, space } from '../../theme';
 
 // One solve, in detail. The mobile equivalent of the web SolveDetail modal:
 // penalty editing, time correction, a comment, deletion, and the averages that
@@ -83,25 +84,8 @@ export function SolveDetailSheet({
   }
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: '#0008' }} onPress={onClose} />
-      <View
-        style={{
-          maxHeight: '85%',
-          backgroundColor: p.card,
-          borderTopLeftRadius: radius.lg,
-          borderTopRightRadius: radius.lg,
-          borderTopWidth: 1,
-          borderColor: p.border,
-          paddingHorizontal: space.md,
-          paddingBottom: space.xl,
-        }}
-      >
-        <View style={{ alignItems: 'center', paddingVertical: space.md }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ gap: space.md, paddingBottom: space.lg }}>
+    <Sheet visible onClose={onClose} title="Solve">
+      <ScrollView contentContainerStyle={{ gap: space.md, paddingBottom: space.lg }}>
           {/* Result */}
           <View style={{ alignItems: 'center', gap: 4 }}>
             {editingTime ? (
@@ -137,7 +121,7 @@ export function SolveDetailSheet({
                   setEditingTime(true);
                 }}
               >
-                <Text style={{ color: p.text, fontFamily: MONO, fontSize: 40, fontWeight: '700' }}>
+                <Text style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: 40 }}>
                   {display}
                 </Text>
               </Pressable>
@@ -181,7 +165,7 @@ export function SolveDetailSheet({
                     <Text style={{ color: p.textMuted, fontSize: 10, textTransform: 'uppercase' }}>
                       {a.size === 3 ? 'mo3' : `ao${a.size}`}
                     </Text>
-                    <Text style={{ color: p.text, fontFamily: MONO, fontSize: 15, fontWeight: '700' }}>
+                    <Text style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: 15 }}>
                       {a.value === null
                         ? '—'
                         : !isFinite(a.value)
@@ -221,8 +205,7 @@ export function SolveDetailSheet({
           </View>
 
           <Button label="Delete solve" variant="danger" onPress={confirmDelete} />
-        </ScrollView>
-      </View>
-    </Modal>
+      </ScrollView>
+    </Sheet>
   );
 }
