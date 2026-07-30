@@ -67,7 +67,12 @@ const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map
 // timer still gets the larger share (it's the thing you aim a thumb at), but no
 // longer takes literally everything the footer doesn't claim, which is what made
 // it tower over a scramble image and stats squeezed into the last ~100px.
-const TIMER_FLEX = 2;
+//
+// 3:2 rather than 2:1 because the footer's share isn't all scramble/stats: the
+// penalty tile lives in it too and takes its natural height off the top, so at
+// 2:1 the row was left about where it started.
+const TIMER_FLEX = 3;
+const FOOTER_FLEX = 2;
 
 // Width budget for the scramble net. Held to a constant rather than growing with
 // the tile because the net is four faces wide: every pixel it gains horizontally
@@ -477,9 +482,17 @@ export default function TimerScreen({ navigation }: Props) {
           </Tile>
         )}
 
-        {/* ── Footer: scramble image, stats, penalties ── */}
+        {/* ── Footer: scramble image, stats, penalties ──
+            The flex share belongs on this wrapper, not on the scramble/stats row
+            inside it. That row is the thing being sized, but `flex` only draws
+            space from a parent that has a definite height to give: this wrapper
+            is the timer tile's actual sibling in the column, so it's the one that
+            can claim a share. Putting flex on the inner row instead collapsed it
+            to zero height (flexBasis 0 inside an auto-height parent contributes
+            nothing and has no free space to grow into), which hid the scramble
+            image and stats entirely and handed their space to the timer. */}
         {!immersive && (
-          <View style={{ gap: space.sm }}>
+          <View style={{ flex: FOOTER_FLEX, gap: space.sm }}>
             {pbNote && (
               <View
                 style={{
@@ -524,7 +537,12 @@ export default function TimerScreen({ navigation }: Props) {
                 it can't simply be made wider: it's four faces across, so extra
                 width comes straight out of the stats tile beside it. */}
             <View
-              style={{ flex: 1, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
+              // minHeight is a floor, not a size: React Native leaves flexShrink
+              // at 0, so the auto-height siblings above (the penalty tile, a PB
+              // banner) never give way, and on a short screen this row is the
+              // only thing that can shrink. Without a floor it shrinks to
+              // nothing and the scramble image and stats vanish.
+              style={{ flex: 1, minHeight: 104, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
               onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             >
               {hasScrambleNet(scrambleEventId) && scr.scramble ? (
