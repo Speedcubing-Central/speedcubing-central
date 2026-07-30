@@ -1,121 +1,88 @@
-import { useMemo } from 'react';
-import Svg, { Rect } from 'react-native-svg';
-import { cubeSizeForEvent, scrambledCube, type CubeState, type FaceKey } from '../lib/cubeNet';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
+import { usePalette } from '../store/settings';
+import { hasScrambleImage, renderScrambleImage, type ScrambleImage } from '../lib/cubingSvg';
 
-// The scramble image: an unfolded cube net showing the state the scramble
-// produces, so you can check your cube matches before starting.
+// The scramble image: the state the scramble produces, so you can check your
+// cube matches before starting.
 //
-// Layout is the standard cross/T unfolding, the same shape CubeTime and Twisty
-// Timer use, which is what makes it readable at a glance:
-//
-//        U
-//     L  F  R  B
-//        D
-//
-// Colors are the standard speedcubing scheme, matching what cubing.js renders on
-// the web client so the same scramble looks the same on both platforms: white U,
-// yellow D, green F, blue B, red R, orange L.
-const STICKER_COLOR: Record<FaceKey, string> = {
-  U: '#f8f8f8',
-  D: '#ffd500',
-  F: '#00a651',
-  B: '#0051ba',
-  R: '#e02020',
-  L: '#ff8c1a',
-};
-
-// Column and row of each face in the 4-wide, 3-tall net above.
-const FACE_CELL: Record<FaceKey, { col: number; row: number }> = {
-  U: { col: 1, row: 0 },
-  L: { col: 0, row: 1 },
-  F: { col: 1, row: 1 },
-  R: { col: 2, row: 1 },
-  B: { col: 3, row: 1 },
-  D: { col: 1, row: 2 },
-};
-
-const NET_COLS = 4;
-const NET_ROWS = 3;
-
+// The drawing itself comes from cubing.js (see lib/cubingSvg.ts), which is what
+// the web client renders these with, so the two platforms show the same picture.
+// This used to be a hand-written NxN facelet net, which meant every side event
+// (megaminx, pyraminx, skewb, square-1, clock, FTO, kilominx, redi) had no image
+// at all; all of them are covered now.
 export function ScrambleNet({
   eventId,
   scramble,
   size,
   maxHeight,
-  style,
 }: {
   eventId: string;
   scramble: string;
   /** Width budget in px. */
   size: number;
   /**
-   * Height budget in px, if the caller has one. The net is four faces wide but
-   * only three tall, so width is usually the binding constraint; a caller that
-   * has height to spare and little width still needs the drawing to stay inside
-   * both, which is why this fits to whichever is tighter rather than assuming.
+   * Height budget in px, if the caller has one. Each puzzle's artwork has its
+   * own proportions, so a drawing given only a width can be far taller than the
+   * space available; fitting to whichever budget binds first keeps it inside
+   * both.
    */
   maxHeight?: number;
-  style?: React.ComponentProps<typeof Svg>['style'];
 }) {
-  const n = cubeSizeForEvent(eventId);
+  const p = usePalette();
+  const [image, setImage] = useState<ScrambleImage | null>(null);
 
-  // Recomputed only when the scramble or puzzle actually changes, not on every
-  // timer tick. At 7x7 this is 6*49 stickers through a few hundred integer
-  // rotations, cheap in absolute terms but pointless to redo 60 times a second.
-  const state = useMemo<CubeState | null>(
-    () => (n ? scrambledCube(n, scramble) : null),
-    [n, scramble],
-  );
-
-  // Nothing to draw for puzzles this can't model (megaminx, pyraminx, square-1,
-  // clock, ...) or a scramble that didn't parse. Renders as absent rather than as
-  // a wrong or half-applied cube, which someone might actually set up from.
-  if (!n || !state) return null;
-
-  // Geometry: the net is NET_COLS faces wide, each face n stickers wide, plus a
-  // one-sticker gap between faces so the faces read as separate panels.
-  const gapStickers = 0.32;
-  const unitsWide = NET_COLS * n + (NET_COLS - 1) * gapStickers;
-  const unitsTall = NET_ROWS * n + (NET_ROWS - 1) * gapStickers;
-  // One cell size satisfying both budgets, so the net grows into whatever space
-  // it's given without ever overflowing the axis that runs out first.
-  const cell = Math.min(size / unitsWide, maxHeight !== undefined ? maxHeight / unitsTall : Infinity);
-  const width = cell * unitsWide;
-  const height = cell * unitsTall;
-  // Sticker inset, so adjacent stickers read as separate tiles.
-  const inset = Math.max(0.5, cell * 0.06);
-  const radius = Math.max(0.5, cell * 0.16);
-
-  const tiles: React.ReactElement[] = [];
-  for (const face of Object.keys(FACE_CELL) as FaceKey[]) {
-    const { col, row } = FACE_CELL[face];
-    const originX = col * (n + gapStickers) * cell;
-    const originY = row * (n + gapStickers) * cell;
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        tiles.push(
-          <Rect
-            key={`${face}${i}-${j}`}
-            x={originX + j * cell + inset}
-            y={originY + i * cell + inset}
-            width={cell - inset * 2}
-            height={cell - inset * 2}
-            rx={radius}
-            fill={STICKER_COLOR[state.faces[face][i * n + j]]}
-          />,
-        );
-      }
+  useEffect(() => {
+    // Loading a puzzle's artwork is async (it pulls a dynamic chunk the first
+    // time). `cancelled` keeps a slow first load from painting over a newer
+    // scramble that resolved ahead of it.
+    let cancelled = false;
+    if (!scramble || !hasScrambleImage(eventId)) {
+      setImage(null);
+      return;
     }
+    renderScrambleImage(eventId, scramble).then((img) => {
+      if (!cancelled) setImage(img);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately not clearing the previous image first. Between solves the
+    // puzzle is already loaded and the next drawing arrives in a frame or two,
+    // so blanking would only flash the tile empty and jog the layout; holding
+    // the old one until the new one is ready is steadier. It IS cleared when the
+    // event changes, since a different puzzle has a different aspect ratio and
+    // showing the old cube at the new one's size would be visibly wrong.
+  }, [eventId, scramble]);
+
+  useEffect(() => {
+    setImage(null);
+  }, [eventId]);
+
+  // Before the first drawing for a puzzle arrives, show a spinner in the space
+  // the image will occupy. The caller fixes the tile's width, so nothing moves
+  // when the drawing lands; this just avoids an empty tile in the meantime.
+  if (!image) {
+    return (
+      <View style={{ width: size, height: maxHeight ?? size, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="small" color={p.textMuted} />
+      </View>
+    );
   }
 
-  return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={style}>
-      {tiles}
-    </Svg>
-  );
+  // Fit inside both budgets, preserving the drawing's own aspect ratio.
+  let width = size;
+  let height = width / image.aspect;
+  if (maxHeight !== undefined && height > maxHeight) {
+    height = maxHeight;
+    width = height * image.aspect;
+  }
+
+  return <SvgXml xml={image.xml} width={width} height={height} />;
 }
 
-/** Whether a scramble image can be drawn at all, so callers can lay out without a hole. */
+/** Whether an image can be drawn at all, so callers can lay out without a hole. */
 export function hasScrambleNet(eventId: string): boolean {
-  return cubeSizeForEvent(eventId) !== undefined;
+  return hasScrambleImage(eventId);
 }

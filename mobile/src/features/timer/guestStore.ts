@@ -53,9 +53,18 @@ function uid(): string {
   return 'g_' + Math.random().toString(36).slice(2, 10);
 }
 
+// Reads hand out copies, never live references into `data`.
+//
+// This store keeps its state in memory (unlike the web client's, which re-reads
+// and re-parses localStorage on every call and so returns fresh objects for
+// free). Returning the stored objects directly aliased them into React state,
+// and the mutating writers below then changed state out from under React. That
+// produced a real bug: addSolve incremented solveCount on the stored object, and
+// useTimerData's optimistic update then read that already-incremented value and
+// added one again, so a session with two solves reported four.
 export const guestStore = {
   listSessions(): SessionDTO[] {
-    return data.sessions;
+    return data.sessions.map((s) => ({ ...s }));
   },
   createSession(name: string, eventId: string, subset?: string): SessionDTO {
     const session: SessionDTO = {
@@ -70,7 +79,7 @@ export const guestStore = {
     data.sessions.unshift(session);
     data.solves[session.id] = [];
     write();
-    return session;
+    return { ...session };
   },
   renameSession(id: string, name: string): void {
     const s = data.sessions.find((x) => x.id === id);
@@ -83,7 +92,7 @@ export const guestStore = {
     write();
   },
   listSolves(sessionId: string): SolveDTO[] {
-    return data.solves[sessionId] ?? [];
+    return (data.solves[sessionId] ?? []).map((s) => ({ ...s }));
   },
   addSolve(
     sessionId: string,
@@ -108,7 +117,7 @@ export const guestStore = {
     const s = data.sessions.find((x) => x.id === sessionId);
     if (s) s.solveCount = (s.solveCount ?? 0) + 1;
     write();
-    return solve;
+    return { ...solve };
   },
   updatePenalty(sessionId: string, solveId: string, penalty: Penalty, plusTwoCount: number): void {
     const solve = data.solves[sessionId]?.find((x) => x.id === solveId);

@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   currentAverage,
   detectNewPBs,
+  type PbHit,
   formatMoveCount,
   formatTime,
   getEvent,
@@ -22,6 +23,7 @@ import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
 import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
+import { PbCelebration } from './PbCelebration';
 import { EventPickerSheet } from '../../components/EventPickerSheet';
 import { PenaltyRow } from './PenaltyRow';
 import { useTimerDataContext } from './TimerDataContext';
@@ -114,7 +116,7 @@ export default function TimerScreen({ navigation }: Props) {
   const [footerH, setFooterH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [pbNote, setPbNote] = useState<string | null>(null);
+  const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
 
   // FMC's whole flow (countdown, move entry, solution checking) is Timer-only
   // on web and isn't part of this pass; the event is still selectable but routes
@@ -141,14 +143,8 @@ export default function TimerScreen({ navigation }: Props) {
         scr.advance();
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
-          if (hits.length > 0) {
-            setPbNote(
-              hits
-                .map((h) => `${h.label} ${isFmc ? formatMoveCount(h.value, 'NONE', 2) : formatTime(h.value, 'NONE', solvePrecision)}`)
-                .join('  ·  '),
-            );
-            setTimeout(() => setPbNote(null), 4000);
-          }
+          // The overlay owns its own dismissal timing, so no timeout here.
+          if (hits.length > 0) setPbHits(hits);
         }
         return true;
       } catch (e) {
@@ -493,28 +489,6 @@ export default function TimerScreen({ navigation }: Props) {
             image and stats entirely and handed their space to the timer. */}
         {!immersive && (
           <View style={{ flex: FOOTER_FLEX, gap: space.sm }}>
-            {pbNote && (
-              <View
-                style={{
-                  backgroundColor: p.accent,
-                  borderRadius: radius.sm,
-                  paddingVertical: 8,
-                  paddingHorizontal: space.md,
-                }}
-              >
-                <Text
-                  style={{
-                    color: '#fff',
-                    fontFamily: font.sansBold,
-                    fontSize: 13,
-                    textAlign: 'center',
-                  }}
-                >
-                  New PB: {pbNote}
-                </Text>
-              </View>
-            )}
-
             {/* Penalties get their own tile rather than sitting loose above the
                 footer: they act on the last solve, not on the timer, and a
                 surface of their own is what makes that separation legible. */}
@@ -545,24 +519,34 @@ export default function TimerScreen({ navigation }: Props) {
               style={{ flex: 1, minHeight: 104, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
               onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             >
+              {/* Fixed width, so the tile is the same size before the drawing
+                  arrives as after. Sizing it to its contents meant that during
+                  the async load (a puzzle's artwork is a dynamic chunk on first
+                  use) the tile collapsed to a thin sliver and the stats tile
+                  beside it stretched to fill the gap, then both jumped back on
+                  arrival. Not tappable: the scramble image is something to look
+                  at, and it used to open Statistics, which is the stats tile's
+                  job and surprising from a picture of a cube. */}
               {hasScrambleNet(scrambleEventId) && scr.scramble ? (
-                <Tile style={{ padding: space.sm, justifyContent: 'center' }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Scramble image"
-                    onPress={() => navigation.navigate('Stats')}
-                  >
-                    <ScrambleNet
-                      eventId={scrambleEventId}
-                      scramble={scr.scramble}
-                      size={SCRAMBLE_NET_MAX_W}
-                      maxHeight={footerH > 0 ? footerH - space.sm * 2 : undefined}
-                    />
-                  </Pressable>
+                <Tile
+                  style={{
+                    width: SCRAMBLE_NET_MAX_W + space.sm * 2,
+                    padding: space.sm,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ScrambleNet
+                    eventId={scrambleEventId}
+                    scramble={scr.scramble}
+                    size={SCRAMBLE_NET_MAX_W}
+                    maxHeight={footerH > 0 ? footerH - space.sm * 2 : undefined}
+                  />
                 </Tile>
               ) : null}
 
               <StatsBlock
+                onPress={() => navigation.navigate('Stats')}
                 rows={[
                   [
                     { label: 'Ao5', value: fmtAvg(footerStats.ao5) },
@@ -589,6 +573,18 @@ export default function TimerScreen({ navigation }: Props) {
         onSelect={settings.setCurrentEvent}
         onClose={() => setShowEventPicker(false)}
       />
+
+      {/* Last child, so it draws over everything, and absolutely positioned so
+          it takes no space in the column: a PB no longer shoves the scramble
+          image and stats down the screen. */}
+      {pbHits && (
+        <PbCelebration
+          hits={pbHits}
+          precision={solvePrecision}
+          isFmc={isFmc}
+          onDone={() => setPbHits(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -599,32 +595,60 @@ export default function TimerScreen({ navigation }: Props) {
 // a hairline-bordered content card with generous padding, which is right for a
 // settings or detail screen but too soft and too padded for panels that sit
 // edge to edge and have to hold their own next to 84pt digits.
-function Tile({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+function Tile({
+  children,
+  style,
+  as = 'view',
+  onPress,
+  accessibilityLabel,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  /** A tile that opens something is a Pressable; the rest stay plain Views. */
+  as?: 'view' | 'pressable';
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}) {
   const p = usePalette();
-  return (
-    <View
-      style={[
-        {
-          backgroundColor: p.card,
-          borderColor: p.border,
-          borderWidth: 1,
-          borderRadius: radius.md,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+  const base: ViewStyle = {
+    backgroundColor: p.card,
+    borderColor: p.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+  };
+  if (as === 'pressable') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={onPress}
+        style={({ pressed }) => [base, style, pressed ? { opacity: 0.7 } : null]}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={[base, style]}>{children}</View>;
 }
 
 // The compact label/value grid beside the scramble image. Two columns so six
 // stats fit in the footer without crowding the timer, and every value is
 // tabular so the columns don't jitter as times change.
-function StatsBlock({ rows }: { rows: { label: string; value: string }[][] }) {
+function StatsBlock({
+  rows,
+  onPress,
+}: {
+  rows: { label: string; value: string }[][];
+  onPress?: () => void;
+}) {
   const p = usePalette();
   return (
+    // This is the tile that opens Statistics: these are the numbers, so it's the
+    // one you'd tap wanting more of them.
     <Tile
+      as={onPress ? 'pressable' : 'view'}
+      onPress={onPress}
+      accessibilityLabel="Statistics"
       style={{
         flex: 1,
         paddingVertical: space.sm,

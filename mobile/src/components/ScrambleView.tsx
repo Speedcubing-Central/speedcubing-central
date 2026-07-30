@@ -16,7 +16,7 @@ import { Icon, type IconName } from './Icon';
 // than stacked under the scramble text where it would compete with the timer for
 // vertical space. Web draws its diagram with a cubing.js <twisty-player>, which
 // has no React Native equivalent, so ScrambleNet renders the net natively
-// instead. See components/ScrambleNet.tsx and lib/cubeNet.ts.
+// instead. See components/ScrambleNet.tsx and lib/cubingSvg.ts.
 export function ScrambleView({
   eventId,
   scramble,
