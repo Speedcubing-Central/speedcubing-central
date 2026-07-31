@@ -111,7 +111,7 @@ const SCRAMBLE_NET_MAX_W = 132;
 // off the bottom of a screen that deliberately doesn't scroll. Giving the footer
 // a floor makes the timer absorb the shortfall instead, which it can do
 // gracefully because its digits already auto-shrink to fit.
-const FOOTER_ROW_MIN_H = 100;
+const FOOTER_ROW_MIN_H = 64;
 const PENALTY_TILE_H = 56;
 
 export default function TimerScreen({ navigation }: Props) {
@@ -510,7 +510,10 @@ export default function TimerScreen({ navigation }: Props) {
               flex: TIMER_FLEX,
               overflow: 'hidden',
               borderRadius: radius.lg,
-              backgroundColor: surfaceTint,
+              // No fill. The digits are the focal point of the screen, and a
+              // panel behind them puts a box in the way of that: a surface says
+              // "this is one thing among several", which is exactly the reading
+              // to avoid here. The whole area stays the touch target.
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
@@ -753,40 +756,26 @@ export default function TimerScreen({ navigation }: Props) {
                   the row that survives is the one you actually watch between
                   attempts, plus the best, rather than six figures too small to
                   read. */}
+              {/* Three figures on one line, not six in a grid.
+                  The six-figure grid was the single biggest reason the footer
+                  looked heavy: three stacked rows of label-over-value took as
+                  much height as the timer, so the screen read as two equal
+                  halves. Ao5, Ao12 and best are the ones you actually glance at
+                  between attempts; ao100, mean and the solve count are session
+                  totals that belong on the Statistics screen, one tap away. */}
               <StatsBlock
                 joined={!!newest}
-                rows={
-                  density === 'minimal'
-                    ? [
-                        [
-                          { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
-                          { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
-                          {
-                            label: 'Best',
-                            value: footerStats.best === null ? '—' : fmt(footerStats.best),
-                            onPress: () => openBestSolve(),
-                          },
-                        ],
-                      ]
-                    : [
-                        [
-                          { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
-                          { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
-                        ],
-                        [
-                          { label: 'Ao100', value: fmtAvg(footerStats.ao100), onPress: () => openCurrentAverage(100) },
-                          { label: 'Mean', value: fmtAvg(footerStats.meanValue) },
-                        ],
-                        [
-                          {
-                            label: 'Best',
-                            value: footerStats.best === null ? '—' : fmt(footerStats.best),
-                            onPress: () => openBestSolve(),
-                          },
-                          { label: 'Solves', value: String(footerStats.count) },
-                        ],
-                      ]
-                }
+                rows={[
+                  [
+                    { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
+                    { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
+                    {
+                      label: 'Best',
+                      value: footerStats.best === null ? '—' : fmt(footerStats.best),
+                      onPress: () => openBestSolve(),
+                    },
+                  ],
+                ]}
               />
             </View>
           </View>
