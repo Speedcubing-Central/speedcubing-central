@@ -374,11 +374,10 @@ export default function TimerScreen({ navigation }: Props) {
                   flex: 1,
                   minWidth: 0,
                   paddingVertical: 8,
-                  paddingHorizontal: space.xs,
+                  paddingHorizontal: 2,
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <Icon name="layers" size={16} color={p.textMuted} />
                 <Text
                   numberOfLines={1}
                   style={{ color: p.textMuted, fontFamily: font.sansSemi, fontSize: 13, flexShrink: 1 }}
@@ -720,11 +719,22 @@ function StatsBlock({ rows }: { rows: { label: string; value: string; onPress?: 
         flex: 1,
         paddingVertical: space.sm,
         paddingHorizontal: space.md,
-        justifyContent: 'space-evenly',
+        // Clipped, so a row that still can't fit is visibly cut at the tile edge
+        // rather than drawn over the tab bar below it.
+        overflow: 'hidden',
       }}
     >
       {rows.map((row, i) => (
-        <View key={i} style={{ flexDirection: 'row' }}>
+        // Each row takes an equal share of the tile rather than its natural
+        // height. Stacking the label over the value doubled the lines each row
+        // needs, and three of those overflowed the tile's bottom edge (the last
+        // row, BEST/SOLVES, was drawn outside it). Sharing the height means the
+        // rows fit whatever the tile actually is, and the value's own
+        // adjustsFontSizeToFit takes care of the rest.
+        <View
+          key={i}
+          style={{ flex: 1, flexDirection: 'row', columnGap: space.md, justifyContent: 'center' }}
+        >
           {row.map((cell) => (
             <StatCell key={cell.label} label={cell.label} value={cell.value} onPress={cell.onPress} />
           ))}
@@ -744,9 +754,9 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         style={{
           color: p.textMuted,
           fontFamily: font.sansSemi,
-          fontSize: 10,
+          fontSize: 9,
           textTransform: 'uppercase',
-          letterSpacing: 0.5,
+          letterSpacing: 0.4,
         }}
         numberOfLines={1}
       >
@@ -759,7 +769,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         style={{
           color: tappable ? p.accent : p.text,
           fontFamily: MONO_BOLD,
-          fontSize: 15,
+          fontSize: 14,
           fontVariant: ['tabular-nums'],
         }}
       >
@@ -773,7 +783,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
   // needs only as much width as the wider of the two lines. A long value shrinks
   // its own font rather than losing digits, since a truncated time is worse than
   // a small one.
-  const style = { flex: 1, minWidth: 0 };
+  const style = { flex: 1, minWidth: 0, justifyContent: 'center' as const };
   if (!tappable) return <View style={style}>{body}</View>;
   return (
     <Pressable
