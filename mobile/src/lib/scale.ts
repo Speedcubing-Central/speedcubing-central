@@ -1,0 +1,57 @@
+import { useWindowDimensions } from 'react-native';
+
+// Type and spacing scaled to the screen it's actually on.
+//
+// Every size in this app was a fixed point value tuned against one phone, which
+// is why the Timer kept breaking in a different place on each report: a layout
+// that exactly fits a 6.1" screen has nothing left to give on a 4.7" one, so
+// whichever element happened to be last in the column got clipped. Scaling the
+// type moves that from a per-symptom fix to a property of the screen.
+//
+// The baseline is the iPhone 14/15 Pro, which is what the layout was designed
+// against. An iPhone SE is about 78% of its height; a Pro Max about 109%.
+const BASE_HEIGHT = 852;
+const BASE_WIDTH = 393;
+
+// Bounds, because neither direction should run away: below ~0.82 text stops
+// being comfortably readable at arm's length, and above ~1.1 a big screen just
+// looks like a zoomed-in small one rather than showing more.
+const MIN_SCALE = 0.82;
+const MAX_SCALE = 1.1;
+
+// Below this the screen is short enough that vertical budget, not readability,
+// is the binding constraint (iPhone SE and the older 4.7" bodies).
+const SHORT_SCREEN_HEIGHT = 700;
+
+export interface ScreenScale {
+  /** Multiplier for type and spacing on this screen. */
+  scale: number;
+  /** Scale a point value designed at the baseline, rounded to whole points. */
+  s: (n: number) => number;
+  /** Scale a value but never below `min`, for things with a legibility floor. */
+  sMin: (n: number, min: number) => number;
+  /** True on a short screen, where the column has to give something up. */
+  isShort: boolean;
+  width: number;
+  height: number;
+}
+
+export function useScreenScale(): ScreenScale {
+  // useWindowDimensions, not Dimensions.get: this re-renders on rotation, on an
+  // iPad split view, and on a foldable, where a value read once at module load
+  // would be silently wrong for the rest of the session.
+  const { width, height } = useWindowDimensions();
+  // The smaller of the two ratios, so scaled text never outgrows the axis that
+  // is actually tight. Taking height alone would overscale a tall narrow screen
+  // and push wide rows (the stats tile, the header) back into truncation.
+  const raw = Math.min(height / BASE_HEIGHT, width / BASE_WIDTH);
+  const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, raw));
+  return {
+    scale,
+    s: (n: number) => Math.round(n * scale),
+    sMin: (n: number, min: number) => Math.max(min, Math.round(n * scale)),
+    isShort: height < SHORT_SCREEN_HEIGHT,
+    width,
+    height,
+  };
+}

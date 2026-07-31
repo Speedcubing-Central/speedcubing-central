@@ -31,6 +31,7 @@ import {
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { eventBadge } from '../../lib/scramble';
+import { useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
@@ -115,6 +116,7 @@ const PENALTY_TILE_H = 56;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
+  const { s: sc, isShort } = useScreenScale();
   const settings = useSettings();
   const {
     inspection,
@@ -320,8 +322,11 @@ export default function TimerScreen({ navigation }: Props) {
   // floor keeps them legible on the shortest tile a long Square-1 scramble
   // leaves; below that the tile clips, which is at least visibly wrong rather
   // than silently unreadable.
-  const digitCeiling = immersive ? 84 : 64;
-  const digitFontSize = timerTileH > 0 ? Math.max(30, Math.min(digitCeiling, timerTileH * 0.4)) : digitCeiling;
+  const digitCeiling = sc(immersive ? 84 : 64);
+  // The measured-tile share still governs (it is what stopped the clipping);
+  // the screen scale only lowers the ceiling, so a small phone never starts
+  // from a size it has no room for.
+  const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.4)) : digitCeiling;
 
   const hint = (() => {
     switch (engine.phase) {
@@ -567,7 +572,7 @@ export default function TimerScreen({ navigation }: Props) {
               // Floor covering the row plus, when it's showing, the penalty tile
               // and the gap above it. Without this the footer shrinks below its
               // own contents and they spill off the bottom of the screen.
-              minHeight: FOOTER_ROW_MIN_H + (newest ? PENALTY_TILE_H + space.sm : 0),
+              minHeight: sc(FOOTER_ROW_MIN_H) + (newest ? sc(PENALTY_TILE_H) + space.sm : 0),
               gap: space.sm,
             }}
           >
@@ -598,7 +603,7 @@ export default function TimerScreen({ navigation }: Props) {
               // banner) never give way, and on a short screen this row is the
               // only thing that can shrink. Without a floor it shrinks to
               // nothing and the scramble image and stats vanish.
-              style={{ flex: 1, minHeight: FOOTER_ROW_MIN_H, flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
+              style={{ flex: 1, minHeight: sc(FOOTER_ROW_MIN_H), flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
               onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             >
               {/* Fixed width, so the tile is the same size before the drawing
@@ -612,7 +617,7 @@ export default function TimerScreen({ navigation }: Props) {
               {hasScrambleNet(scrambleEventId) && scr.scramble ? (
                 <Tile
                   style={{
-                    width: SCRAMBLE_NET_MAX_W + space.sm * 2,
+                    width: sc(SCRAMBLE_NET_MAX_W) + space.sm * 2,
                     padding: space.sm,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -621,7 +626,7 @@ export default function TimerScreen({ navigation }: Props) {
                   <ScrambleNet
                     eventId={scrambleEventId}
                     scramble={scr.scramble}
-                    size={SCRAMBLE_NET_MAX_W}
+                    size={sc(SCRAMBLE_NET_MAX_W)}
                     maxHeight={footerH > 0 ? footerH - space.sm * 2 : undefined}
                   />
                 </Tile>
@@ -785,6 +790,7 @@ function StatsBlock({ rows }: { rows: { label: string; value: string; onPress?: 
 
 function StatCell({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
   const p = usePalette();
+  const { s: sc } = useScreenScale();
   // An em dash means there's no such average yet, so there's nothing to open.
   const tappable = !!onPress && value !== '—';
   const body = (
@@ -793,7 +799,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         style={{
           color: p.textMuted,
           fontFamily: font.sansSemi,
-          fontSize: 9,
+          fontSize: Math.max(8, sc(9)),
           textTransform: 'uppercase',
           letterSpacing: 0.4,
         }}
@@ -808,7 +814,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         style={{
           color: tappable ? p.accent : p.text,
           fontFamily: MONO_BOLD,
-          fontSize: 14,
+          fontSize: Math.max(11, sc(14)),
           fontVariant: ['tabular-nums'],
         }}
       >

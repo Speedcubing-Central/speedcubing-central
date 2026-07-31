@@ -7,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { usePalette } from '../store/settings';
@@ -30,7 +31,11 @@ import { font, radius, space } from '../theme';
 // but has no GestureHandlerRootView, and Reanimated isn't installed at all), and
 // a single-axis drag-to-dismiss doesn't need either. No new native dependency.
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+// Read at module load, so it is whatever the screen was when the JS bundle first
+// evaluated: wrong after a rotation, on an iPad split view, and on a foldable.
+// It survives only as the value the animation starts from before the component
+// has measured anything; every use that matters reads the live height below.
+const INITIAL_SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // Past this much downward travel, release dismisses instead of springing back.
 const DISMISS_DISTANCE = 110;
@@ -58,16 +63,19 @@ export function Sheet({
   fillHeight?: boolean;
 }) {
   const p = usePalette();
+  // Live, so a sheet opened after a rotation slides the right distance and caps
+  // at the right height.
+  const { height: screenHeight } = useWindowDimensions();
   // Kept mounted through the exit animation so the panel can slide out rather
   // than vanishing the instant `visible` flips.
   const [mounted, setMounted] = useState(visible);
-  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(INITIAL_SCREEN_HEIGHT)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      translateY.setValue(SCREEN_HEIGHT);
+      translateY.setValue(screenHeight);
       backdrop.setValue(0);
       Animated.parallel([
         Animated.spring(translateY, {
@@ -86,7 +94,7 @@ export function Sheet({
     // lands here, so there's only one exit animation to reason about. A drag
     // release animates from wherever the finger left the panel, not from 0.
     Animated.parallel([
-      Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: screenHeight, duration: 200, useNativeDriver: true }),
       Animated.timing(backdrop, { toValue: 0, duration: 160, useNativeDriver: true }),
     ]).start(({ finished }) => {
       if (finished) setMounted(false);
@@ -140,8 +148,8 @@ export function Sheet({
         <Animated.View
           style={{
             transform: [{ translateY }],
-            maxHeight: SCREEN_HEIGHT * maxHeightRatio,
-            height: fillHeight ? SCREEN_HEIGHT * maxHeightRatio : undefined,
+            maxHeight: screenHeight * maxHeightRatio,
+            height: fillHeight ? screenHeight * maxHeightRatio : undefined,
             backgroundColor: p.card,
             borderTopLeftRadius: radius.lg,
             borderTopRightRadius: radius.lg,

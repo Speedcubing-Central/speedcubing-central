@@ -3,6 +3,7 @@ import { usePalette, useSettings } from '../store/settings';
 import { carrotScramble, formatScramble, isSquareOne, sq1Pairs } from '../lib/scramble';
 import { font, radius, space } from '../theme';
 import { MONO } from './ui';
+import { useScreenScale } from '../lib/scale';
 import { Icon, type IconName } from './Icon';
 
 // Scramble display, matching the web ScramblePanel's text rules (which is the
@@ -36,6 +37,7 @@ export function ScrambleView({
 }) {
   const p = usePalette();
   const carrot = useSettings((s) => s.carrotNotation);
+  const { s: sc, isShort } = useScreenScale();
 
   // Scale with the scramble's own length rather than by event. A 7x7 scramble is
   // ~100 moves and at 17pt wrapped to a dozen lines, which ate enough of the
@@ -50,7 +52,11 @@ export function ScrambleView({
   // 12-pair scramble wrapped to six lines at the size its length asked for,
   // which squeezed the timer and clipped the hint underneath it.
   const pairs = isSq1 ? sq1Pairs(scramble) : null;
-  const fontSize = compact
+  // Two independent pressures, applied in order. First the scramble's own size
+  // (a 7x7 or a 13-pair Square-1 needs smaller type than a 3x3), then the
+  // screen's, so the same scramble is smaller on a shorter phone rather than
+  // pushing the timer below it off the bottom.
+  const byContent = compact
     ? 14
     : isSq1
       ? (pairs!.length > 10 ? 13 : 15)
@@ -61,6 +67,9 @@ export function ScrambleView({
           : len > 70
             ? 15
             : 17;
+  // A floor of 10: below that a scramble stops being reliably readable at
+  // arm's length, which defeats the point of showing it.
+  const fontSize = Math.max(10, sc(byContent) - (isShort && !compact ? 1 : 0));
 
   let body: React.ReactNode;
   if (loading && !scramble) {
@@ -108,7 +117,7 @@ export function ScrambleView({
         gap: space.xs,
       }}
     >
-      <View style={{ minHeight: compact ? 24 : 34, justifyContent: 'center' }}>{body}</View>
+      <View style={{ minHeight: compact ? 24 : sc(34), justifyContent: 'center' }}>{body}</View>
       {(onRefresh || onGoBack) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
