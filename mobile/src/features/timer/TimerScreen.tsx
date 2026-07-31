@@ -1,5 +1,14 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Alert, Pressable, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewProps,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
@@ -136,6 +145,12 @@ export default function TimerScreen({ navigation }: Props) {
   // area. The net needs that number to fit itself to it. No feedback loop, since
   // the row's height is decided by flex before its contents are drawn.
   const [footerH, setFooterH] = useState(0);
+  // Measured for the same reason as the footer: the timer tile's height is
+  // whatever the flex split leaves after a scramble of unknown depth, and the
+  // digits have to be sized to it. adjustsFontSizeToFit cannot do this job: it
+  // fits text to its WIDTH only, so on a short tile the glyphs kept full height
+  // and were sliced by the tile's clipped edge, top and bottom.
+  const [timerTileH, setTimerTileH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
@@ -299,6 +314,14 @@ export default function TimerScreen({ navigation }: Props) {
   const immersive =
     engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
 
+  // The digits take a fixed share of the tile, leaving room for the hint beneath
+  // them, and never exceed the size they had when there was space to spare. The
+  // floor keeps them legible on the shortest tile a long Square-1 scramble
+  // leaves; below that the tile clips, which is at least visibly wrong rather
+  // than silently unreadable.
+  const digitCeiling = immersive ? 84 : 64;
+  const digitFontSize = timerTileH > 0 ? Math.max(30, Math.min(digitCeiling, timerTileH * 0.46)) : digitCeiling;
+
   const hint = (() => {
     switch (engine.phase) {
       case 'idle':
@@ -418,7 +441,10 @@ export default function TimerScreen({ navigation }: Props) {
             see and the area that starts a solve are the same rectangle, which
             matters more here than on any other panel. */}
         {entryMode === 'keyboard' && !isFmc ? (
-          <Tile style={{ flex: TIMER_FLEX, overflow: 'hidden' }}>
+          <Tile
+            style={{ flex: TIMER_FLEX, overflow: 'hidden' }}
+            onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
+          >
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Timer. Touch and hold, then release to start."
@@ -676,12 +702,15 @@ export default function TimerScreen({ navigation }: Props) {
 function Tile({
   children,
   style,
+  onLayout,
   as = 'view',
   onPress,
   accessibilityLabel,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** Forwarded so a caller can size its contents to the tile it actually got. */
+  onLayout?: ViewProps['onLayout'];
   /** A tile that opens something is a Pressable; the rest stay plain Views. */
   as?: 'view' | 'pressable';
   onPress?: () => void;
@@ -700,13 +729,18 @@ function Tile({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={onPress}
+        onLayout={onLayout}
         style={({ pressed }) => [base, style, pressed ? { opacity: 0.7 } : null]}
       >
         {children}
       </Pressable>
     );
   }
-  return <View style={[base, style]}>{children}</View>;
+  return (
+    <View style={[base, style]} onLayout={onLayout}>
+      {children}
+    </View>
+  );
 }
 
 // The compact label/value grid beside the scramble image. Two columns so six
