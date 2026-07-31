@@ -10,6 +10,13 @@ import { loadTokens, saveTokens, clearTokens, type TokenPair } from '../lib/toke
 // the scheme rather than hardcoded so the two can't drift apart silently.
 const WCA_RETURN_URL = Linking.createURL('wca-auth');
 
+// Logged in development because this value is not guessable from the outside: a
+// standalone build produces `speedcubingcentral://wca-auth`, while Expo Go
+// produces `exp://<dev-host>:<port>/--/wca-auth`. Running against a *deployed*
+// server needs that exact string in its WCA_MOBILE_DEV_RETURN, and a near-miss
+// fails as a redirect mismatch rather than anything more helpful.
+if (__DEV__) console.log('[wca] this build returns to:', WCA_RETURN_URL);
+
 // Mobile counterpart of client/src/store/auth.ts. Same endpoints and the same
 // resulting PublicUser (including its `betaAccess` flag, which the beta gate
 // reads). The difference is that login/register also persist the returned JWT

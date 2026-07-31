@@ -293,6 +293,10 @@ const EXCHANGE_TTL_MS = 2 * 60 * 1000;
 function safeMobileReturn(raw: unknown): string | null {
   if (typeof raw !== 'string' || raw.length > 300) return null;
   if (raw.startsWith('speedcubingcentral://')) return raw;
+  // An operator-configured exact match, for running Expo Go against a deployed
+  // server. Compared whole, never by prefix, so it can't be extended into
+  // another host. See env.ts for why this is opt-in rather than a pattern.
+  if (env.WCA_MOBILE_DEV_RETURN && raw === env.WCA_MOBILE_DEV_RETURN) return raw;
   if (!isProd && /^exp(\+[a-z0-9-]+)?:\/\//i.test(raw)) return raw;
   return null;
 }
