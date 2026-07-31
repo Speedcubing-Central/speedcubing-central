@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { usePalette } from '../../store/settings';
 import { validateScramble } from '../../lib/cubingSvg';
-import { Button, MONO, Muted } from '../../components/ui';
+import { Button, Input, Muted } from '../../components/ui';
 import { Sheet } from '../../components/Sheet';
-import { font, radius, space } from '../../theme';
+import { font, space } from '../../theme';
 
 // Enter a scramble by hand, the mobile counterpart of the web ScramblePanel's
 // pencil action.
@@ -52,7 +52,10 @@ export function EditScrambleSheet({
   return (
     <Sheet visible={visible} onClose={onClose} title="Custom scramble">
       <View style={{ gap: space.md, paddingBottom: space.md }}>
-        <TextInput
+        {/* This input's treatment (page background plus a border, rather than a
+            lighter fill) became the app-wide `Input`, because it was the one
+            that already matched the web client's `.input`. */}
+        <Input
           value={draft}
           onChangeText={(t) => {
             setDraft(t);
@@ -60,6 +63,8 @@ export function EditScrambleSheet({
             // stale complaint about text that is no longer there.
             if (error) setError(null);
           }}
+          invalid={!!error}
+          mono
           multiline
           autoCapitalize="characters"
           autoCorrect={false}
@@ -67,22 +72,7 @@ export function EditScrambleSheet({
           // prose, and a scramble is not prose.
           spellCheck={false}
           placeholder="R U R' U'"
-          placeholderTextColor={p.textMuted}
-          style={{
-            color: p.text,
-            fontFamily: MONO,
-            fontSize: 15,
-            lineHeight: 22,
-            minHeight: 96,
-            textAlignVertical: 'top',
-            padding: space.md,
-            borderRadius: radius.sm,
-            // Inset, darker than the sheet, the same relationship the web
-            // client's inputs have to the card they sit in.
-            backgroundColor: p.bg,
-            borderWidth: 1,
-            borderColor: error ? p.red : p.border,
-          }}
+          style={{ lineHeight: 22, minHeight: 96, textAlignVertical: 'top' }}
         />
 
         {error ? (

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
 import { formatMoveCount, formatTime, type PbHit } from '@scc/shared';
-import { font, radius, space } from '../../theme';
+import { usePalette, useSettings } from '../../store/settings';
+import { font, radius, space, stroke } from '../../theme';
 import { MONO_BOLD } from '../../components/ui';
 
 // The mobile PB celebration, matching the web client's PbCelebration.tsx: the
@@ -22,7 +23,11 @@ import { MONO_BOLD } from '../../components/ui';
 // job is timing.
 const CELEBRATION_MS = 2800;
 const CONFETTI_COUNT = 48;
-const CONFETTI_COLORS = ['#2b72ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#facc15'];
+// Fixed festive colours that are nobody's theme: confetti is confetti, and a
+// single-hue shower reads as a loading bar rather than a celebration. The two
+// brand slots are filled from the palette at render time (see `confettiColors`)
+// so the celebration still belongs to whatever accent the user picked.
+const CONFETTI_FIXED = ['#f59e0b', '#8b5cf6', '#facc15', '#ef4444'];
 
 interface Piece {
   id: number;
@@ -47,7 +52,18 @@ export function PbCelebration({
   onDone: () => void;
 }) {
   const { width, height } = Dimensions.get('window');
+  const p = usePalette();
+  const theme = useSettings((s) => s.theme);
   const progress = useRef(new Animated.Value(0)).current;
+
+  // Depends on the colour STRINGS, never on `p`. usePalette() builds a fresh
+  // object every render, so a dependency on `p` itself would regenerate the
+  // confetti on every frame and the fall would restart forever. Same hazard the
+  // hard-coded colours this replaced were quietly avoiding.
+  const confettiColors = useMemo(
+    () => [p.accent, p.green, ...CONFETTI_FIXED],
+    [p.accent, p.green],
+  );
 
   // Regenerated only when a new set of hits arrives, not on every render, so the
   // confetti never restarts or jumps mid-fall.
@@ -58,12 +74,12 @@ export function PbCelebration({
         left: Math.random() * width,
         delay: Math.random() * 0.3,
         duration: 1.4 + Math.random() * 0.8,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        color: confettiColors[i % confettiColors.length],
         rotate: 180 + Math.random() * 540,
         drift: (Math.random() - 0.5) * 140,
         size: 7 + Math.random() * 5,
       })),
-    [hits, width],
+    [hits, width, confettiColors],
   );
 
   useEffect(() => {
@@ -120,7 +136,12 @@ export function PbCelebration({
       <View style={{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg }}>
         <View
           style={{
-            backgroundColor: 'rgba(0,0,0,0.7)',
+            // A dark scrim over a light theme is a black box in the middle of a
+            // white screen. The card tracks the theme; the border is what keeps
+            // it readable against a background of nearly its own value.
+            backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.7)',
+            borderWidth: stroke.hairline,
+            borderColor: p.border,
             borderRadius: radius.lg,
             paddingHorizontal: space.xl,
             paddingVertical: space.lg,
@@ -158,6 +179,7 @@ function PbLine({
   isFmc?: boolean;
   progress: Animated.Value;
 }) {
+  const p = usePalette();
   // Web staggers by 0.12s per line; same here, as a fraction of the timeline.
   const start = (index * 0.12) / (CELEBRATION_MS / 1000);
   const end = start + 0.35 / (CELEBRATION_MS / 1000);
@@ -177,8 +199,8 @@ function PbLine({
         transform: [{ translateY: progress.interpolate({ ...range, outputRange: [14, 14, 0, 0] }) }],
       }}
     >
-      <Text style={{ color: '#fff', fontFamily: MONO_BOLD, fontSize: 26, fontVariant: ['tabular-nums'] }}>{value}</Text>
-      <Text style={{ color: '#2b72ff', fontFamily: font.sansBlack, fontSize: 17 }}>PB {hit.label}</Text>
+      <Text style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: 26, fontVariant: ['tabular-nums'] }}>{value}</Text>
+      <Text style={{ color: p.accent, fontFamily: font.sansBlack, fontSize: 17 }}>PB {hit.label}</Text>
     </Animated.View>
   );
 }

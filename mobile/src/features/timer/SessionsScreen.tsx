@@ -1,13 +1,22 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { getEvent, SUBSET_EVENTS } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { usePalette, useSettings } from '../../store/settings';
-import { Button, EmptyState, IconButton, Muted } from '../../components/ui';
+import {
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Muted,
+  Pill,
+  Screen,
+  ScreenTitle,
+  Surface,
+} from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { useTimerDataContext } from './TimerDataContext';
-import { font, radius, space } from '../../theme';
+import { font, space, stroke } from '../../theme';
 
 // Session management for the current event. The mobile equivalent of the web
 // SessionManager modal: pick, create, rename, delete. Same server endpoints, so
@@ -67,10 +76,9 @@ export default function SessionsScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={{ flex: 1, backgroundColor: p.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.md, gap: space.md, paddingBottom: space.xl }}>
-        {/* "3x3 Sessions", not "3x3 sessions". It's the name of the collection. */}
-        <Text style={{ color: p.text, fontSize: 20, fontFamily: font.sansBlack }}>{eventName} Sessions</Text>
+    <Screen scroll edges={[]}>
+      {/* "3x3 Sessions", not "3x3 sessions". It's the name of the collection. */}
+      <ScreenTitle>{eventName} Sessions</ScreenTitle>
 
         {data.sessions.length === 0 ? (
           <EmptyState
@@ -78,15 +86,7 @@ export default function SessionsScreen() {
             body="Create one below, or just start solving. A session is created automatically."
           />
         ) : (
-          <View
-            style={{
-              backgroundColor: p.card,
-              borderColor: p.border,
-              borderWidth: 1,
-              borderRadius: radius.md,
-              overflow: 'hidden',
-            }}
-          >
+          <Surface padding="none" style={{ overflow: 'hidden' }}>
             {data.sessions.map((s, i) => {
               const active = s.id === data.currentId;
               const isRenaming = renamingId === s.id;
@@ -103,11 +103,11 @@ export default function SessionsScreen() {
                       flexDirection: 'row',
                       gap: space.sm,
                       padding: space.md,
-                      borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
+                      borderTopWidth: i === 0 ? 0 : stroke.hairline,
                       borderTopColor: p.border,
                     }}
                   >
-                    <TextInput
+                    <Input
                       value={renameDraft}
                       onChangeText={setRenameDraft}
                       autoFocus
@@ -117,15 +117,7 @@ export default function SessionsScreen() {
                         if (name) await data.renameSession(s.id, name);
                         setRenamingId(null);
                       }}
-                      style={{
-                        flex: 1,
-                        color: p.text,
-                        fontFamily: font.sansMedium,
-                        backgroundColor: p.cardHover,
-                        borderRadius: radius.sm,
-                        paddingHorizontal: space.md,
-                        paddingVertical: 9,
-                      }}
+                      style={{ flex: 1 }}
                     />
                     <Button
                       label="Save"
@@ -153,7 +145,7 @@ export default function SessionsScreen() {
                     paddingHorizontal: space.md,
                     paddingVertical: 12,
                     backgroundColor: pressed ? p.cardHover : 'transparent',
-                    borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
+                    borderTopWidth: i === 0 ? 0 : stroke.hairline,
                     borderTopColor: p.border,
                   })}
                 >
@@ -199,23 +191,14 @@ export default function SessionsScreen() {
                 </Pressable>
               );
             })}
-          </View>
+          </Surface>
         )}
 
         {/* New session. Collapsed to a single button until wanted, so the list
             of existing sessions isn't pushed off screen by a form nobody asked
             for yet. */}
         {creating ? (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: p.border,
-              backgroundColor: p.card,
-              borderRadius: radius.md,
-              padding: space.md,
-              gap: space.sm,
-            }}
-          >
+          <Surface style={{ gap: space.sm }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={{ color: p.text, fontFamily: font.sansBold, fontSize: 15, flex: 1 }}>New session</Text>
               <IconButton
@@ -230,58 +213,29 @@ export default function SessionsScreen() {
                 }}
               />
             </View>
-            <TextInput
+            <Input
               value={newName}
               onChangeText={setNewName}
               autoFocus
               placeholder={`${eventName} Session`}
-              placeholderTextColor={p.textMuted}
               onSubmitEditing={create}
-              style={{
-                color: p.text,
-                fontFamily: font.sansMedium,
-                backgroundColor: p.cardHover,
-                borderRadius: radius.sm,
-                paddingHorizontal: space.md,
-                paddingVertical: 11,
-              }}
             />
             {canSubset && (
               <View style={{ gap: space.xs }}>
                 <Muted>Scramble subset (optional)</Muted>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-                  <SubsetChip label="Full 3x3" active={subset === null} onPress={() => setSubset(null)} />
+                  <Pill label="Full 3x3" selected={subset === null} onPress={() => setSubset(null)} />
                   {SUBSET_EVENTS.map((e) => (
-                    <SubsetChip key={e.id} label={e.name} active={subset === e.id} onPress={() => setSubset(e.id)} />
+                    <Pill key={e.id} label={e.name} selected={subset === e.id} onPress={() => setSubset(e.id)} />
                   ))}
                 </View>
               </View>
             )}
             <Button label="Create session" variant="primary" onPress={create} />
-          </View>
+          </Surface>
         ) : (
           <Button label="New session" onPress={() => setCreating(true)} />
         )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function SubsetChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  const p = usePalette();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={{
-        backgroundColor: active ? p.accent : p.cardHover,
-        borderRadius: radius.pill,
-        paddingVertical: 7,
-        paddingHorizontal: 13,
-      }}
-    >
-      <Text style={{ color: active ? '#fff' : p.text, fontSize: 12, fontFamily: font.sansSemi }}>{label}</Text>
-    </Pressable>
+    </Screen>
   );
 }

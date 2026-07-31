@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { UNOFFICIAL_EVENTS, WCA_EVENTS, type WcaEvent } from '@scc/shared';
 import { usePalette } from '../store/settings';
+import { Label } from './ui';
 import { Sheet } from './Sheet';
 import { font, radius, space } from '../theme';
 
@@ -28,18 +29,7 @@ export function EventPickerSheet({
 
   const renderGroup = (label: string, events: WcaEvent[]) => (
     <View style={{ gap: space.xs }}>
-      <Text
-        style={{
-          color: p.textMuted,
-          fontSize: 11,
-          fontFamily: font.sansBold,
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-          marginTop: space.sm,
-        }}
-      >
-        {label}
-      </Text>
+      <Label style={{ marginTop: space.sm }}>{label}</Label>
       {events.map((e) => {
         const selected = e.id === value;
         return (

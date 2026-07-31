@@ -1,3 +1,5 @@
+import { StyleSheet } from 'react-native';
+
 // The web client's theme presets, as plain values.
 //
 // On web these live in client/src/store/settings.ts and are applied as CSS
@@ -73,6 +75,16 @@ export function getPalette(themeId: string, theme: 'dark' | 'light', accentOverr
 // Shared spacing/typography scale, so screens don't each invent their own.
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
+
+// Border weights. Two values, one rule: the OUTER edge of a surface is `thin`
+// (1dp, matching the web client's `.card`, which is a 1px border), and every
+// rule drawn INSIDE a surface is `hairline`.
+//
+// The app previously mixed the two arbitrarily: the Statistics table's row rules
+// and the settings rows used 1dp while the solves list, the sessions list and
+// the sheet's top edge used hairlineWidth, so two lists a tap apart drew
+// visibly different dividers. Naming the rule is what stops that recurring.
+export const stroke = { hairline: StyleSheet.hairlineWidth, thin: 1 } as const;
 
 // ── Type families, matching the web client ────────────────────────────────
 //

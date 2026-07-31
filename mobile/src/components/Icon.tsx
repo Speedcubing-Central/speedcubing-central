@@ -56,7 +56,8 @@ export type IconName =
   | 'chart'
   | 'list'
   | 'layers'
-  | 'chevronDown';
+  | 'chevronDown'
+  | 'more';
 
 function Paths({ name, color }: { name: IconName; color: string }) {
   switch (name) {
@@ -327,6 +328,19 @@ function Paths({ name, color }: { name: IconName; color: string }) {
     // to draw a disclosure arrow itself.
     case 'chevronDown':
       return <Path d="m6 9.5 6 6 6-6" />;
+    // The first icon with no web counterpart at all. The web nav has room to
+    // name every destination, so it never needs an overflow; a phone header
+    // holding an event, a session name and three actions does. Drawn as filled
+    // circles because the shared 1.75 stroke would make 2px dots look like
+    // rings at this size.
+    case 'more':
+      return (
+        <>
+          <Circle cx={5.5} cy={12} r={1.6} fill={color} stroke="none" />
+          <Circle cx={12} cy={12} r={1.6} fill={color} stroke="none" />
+          <Circle cx={18.5} cy={12} r={1.6} fill={color} stroke="none" />
+        </>
+      );
   }
 }
 

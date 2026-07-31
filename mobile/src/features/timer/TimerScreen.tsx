@@ -1,48 +1,36 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import {
-  Alert,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewProps,
-  type ViewStyle,
-} from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
-  bestSingleIndex,
-  currentAverage,
   detectNewPBs,
-  makeAverageView,
-  type AvgSize,
-  type SolveAverage,
-  type PbHit,
   formatMoveCount,
   formatTime,
   getEvent,
-  mean,
-  singleStats,
+  normalizeScramble,
   SUBSET_EVENTS,
   TIMER_ONLY_EVENT_IDS,
+  type PbHit,
   type Penalty,
+  type SolveAverage,
 } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { eventBadge } from '../../lib/scramble';
-import { densityFor, useScreenScale } from '../../lib/scale';
+import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
-import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
+import { Button, IconButton, Input, MONO_BOLD, Muted } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
-import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { PbCelebration } from './PbCelebration';
 import { EventPickerSheet } from '../../components/EventPickerSheet';
-import { PenaltyRow } from './PenaltyRow';
 import { AverageDetailSheet } from './AverageDetailSheet';
 import { SolveDetailSheet } from './SolveDetailSheet';
+import { EditScrambleSheet } from './EditScrambleSheet';
+import { TimerMenuSheet, type TimerMenuItem } from './TimerMenuSheet';
+import { StatsPanel } from './StatsPanel';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
@@ -51,72 +39,53 @@ import { font, radius, space } from '../../theme';
 
 // ── The mobile Timer ──────────────────────────────────────────────────────
 //
-// The web Timer page is a two-column desktop layout: scramble + timer +
-// last-solve on the left, and a permanently-visible Statistics table
-// (single/mo3/ao5/ao12/ao50/ao100/ao1000 x Current/Best/BPA/WPA/Target) plus the
-// full Solves list on the right. That's roughly 40 numbers and an unbounded list
-// competing with the timer for a phone screen, so the phone layout is organised
-// around what you look at between attempts instead, in the shape the established
-// mobile timers (CubeTime, Twisty Timer) converged on:
+// The web Timer is a two-column desktop layout: scramble, timer and last-solve
+// on the left, a permanently-visible statistics table and the full solves list
+// on the right. That is roughly 40 numbers and an unbounded list competing with
+// the timer for a phone screen.
 //
-//   header      session and event, plus the three sub-screen entry points
-//   scramble    the text, with previous/new controls
-//   timer       the digits, taking every pixel left over
-//   footer      scramble image beside a compact stats block, then penalties
+// The direction here is "Focus": the timer is an instrument, not a card in a
+// grid. So the column is only ever four things:
 //
-// The footer is the substantive change from the first pass, which showed only
-// Last and Ao5. A scramble image matters because it's how you check your cube is
-// actually scrambled right, and it can't come from web's cubing.js
-// <twisty-player> (a DOM element), so it's drawn natively, see
-// components/ScrambleNet.tsx. Alongside it the stats block carries Ao5, Ao12,
-// Ao100, session mean, best and count, which is the set worth glancing at
-// without leaving the timer. The exhaustive table stays one tap away in Stats.
+//   header      the event, the session it scopes, and one overflow
+//   scramble    text on the page, with its controls beneath
+//   timer       the digits, on no surface at all, taking everything left over
+//   panel       a strip you glance at, which drags up into everything else
+//
+// The panel (StatsPanel.tsx) is the substantive change from the previous pass,
+// which had three separate boxes at the bottom glued into a fake single card
+// with corner-radius surgery. It is also what brings the web layout's
+// right-hand column back within thumb reach: the pushed Statistics and Solves
+// screens are still there for browsing, but checking your ao12 no longer means
+// leaving the screen you are using.
 //
 // Every number here comes from @scc/shared, the same functions the web client
-// calls, so nothing displayed is computed a second way.
-//
-// The underlying behaviour is unchanged: same engine phases, same WCA inspection
+// calls, so nothing displayed is computed a second way. The underlying
+// behaviour is unchanged throughout: same engine phases, same WCA inspection
 // penalties, same scramble prefetching, same input blocking while solves and
 // scrambles load, same PB detection, same server round-trips.
 type Props = NativeStackScreenProps<TimerStackParamList, 'TimerHome'>;
 
 const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
 
-// How the leftover column height splits between the timer and the footer. The
-// timer still gets the larger share (it's the thing you aim a thumb at), but no
-// longer takes literally everything the footer doesn't claim, which is what made
-// it tower over a scramble image and stats squeezed into the last ~100px.
-//
-// 3:1 works now that the footer has a floor (below): the share decides how
-// *spare* space is split, and the floor guarantees the footer's contents fit
-// regardless, so the timer can take the lion's share without squeezing the
-// scramble image and stats. An earlier 2:1 without the floor was what let them
-// be pushed off screen.
-const TIMER_FLEX = 3;
-const FOOTER_FLEX = 1;
+// The timer is now the column's only flexible child, so there is no share to
+// negotiate: this exists to hold that fact where the next person will read it.
+// The previous 3:1 split against a footer sibling is gone along with the footer.
+const TIMER_FLEX = 1;
 
-// Width budget for the scramble net. Held to a constant rather than growing with
-// the tile because the net is four faces wide: every pixel it gains horizontally
-// comes out of the stats tile sharing the row.
-const SCRAMBLE_NET_MAX_W = 132;
-
-// The scramble/stats row's floor, and the footer's floor including the penalty
-// tile above it.
-//
-// The flex split alone isn't enough. On a big cube the scramble text is long
-// enough to wrap several lines, which leaves less for the timer and footer to
-// share, and the footer's share can fall below what its own contents need. React
-// Native leaves flexShrink at 0, so the penalty tile never gives way and the row
-// is squeezed instead; on 5x5 and up that pushed the scramble image and stats
-// off the bottom of a screen that deliberately doesn't scroll. Giving the footer
-// a floor makes the timer absorb the shortfall instead, which it can do
-// gracefully because its digits already auto-shrink to fit.
-const FOOTER_ROW_MIN_H = 64;
-const PENALTY_TILE_H = 56;
+// A floor on the timer tile, and deliberately a DIAGNOSTIC one. The old
+// arrangement had the floor on the footer and let the timer absorb any
+// shortfall; now the timer holds the floor and a shortfall has nowhere to go,
+// because the scramble is auto-height and React Native leaves flexShrink at 0.
+// So if this binds, the column overflows, and the Yoga harness fails on its
+// explicit overflow assertion rather than a clipped screen reaching a phone.
+// The real relief valves are ScrambleView's content-length font ladder and
+// `density` dropping content.
+const TIMER_MIN_H = 140;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
-  const { s: sc, isShort, fontScale, maxFontMultiplier } = useScreenScale();
+  const { s: sc, fontScale, maxFontMultiplier } = useScreenScale();
   const settings = useSettings();
   const {
     inspection,
@@ -136,51 +105,42 @@ export default function TimerScreen({ navigation }: Props) {
   // Shared with the Stats / Solves / Sessions sub-screens, see TimerDataContext.
   const data = useTimerDataContext();
   // A session scoped to a 3x3 practice subset (LSLL/LL/CLS) pulls scrambles from
-  // that subset's scramble type instead of the raw event, eventId stays '333'
+  // that subset's scramble type instead of the raw event; eventId stays '333'
   // throughout. Same rule as the web Timer.
   const currentSession = data.sessions.find((s) => s.id === data.currentId);
   const scrambleEventId = currentSession?.subset || event;
   const scr = useScrambler(scrambleEventId, data.currentId);
 
   const [showEventPicker, setShowEventPicker] = useState(false);
-  // Measured, not assumed: the footer's height comes from the flex split, which
-  // depends on screen size, whether the penalty tile is present, and the safe
-  // area. The net needs that number to fit itself to it. No feedback loop, since
-  // the row's height is decided by flex before its contents are drawn.
-  const [footerH, setFooterH] = useState(0);
-  // Measured for the same reason as the footer: the timer tile's height is
-  // whatever the flex split leaves after a scramble of unknown depth, and the
-  // digits have to be sized to it. adjustsFontSizeToFit cannot do this job: it
-  // fits text to its WIDTH only, so on a short tile the glyphs kept full height
-  // and were sliced by the tile's clipped edge, top and bottom.
-  const [timerTileH, setTimerTileH] = useState(0);
-  // The column's own height, which is what density is decided from: the window
-  // height would be wrong by the safe area and the tab bar, and those differ per
-  // device by more than the gap between two tiers.
+  const [showMenu, setShowMenu] = useState(false);
+  const [showEditScramble, setShowEditScramble] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  // Measured, not assumed. The column's own height is what density is decided
+  // from: the window height would be wrong by the safe area and the tab bar,
+  // and those differ per device by more than the gap between two tiers.
   const [columnH, setColumnH] = useState(0);
+  // Measured for the same reason: the timer tile's height is whatever the flex
+  // split leaves after a scramble of unknown depth, and the digits have to be
+  // sized to it. adjustsFontSizeToFit cannot do this job, since it fits text to
+  // its WIDTH only, so on a short tile the glyphs kept full height and were
+  // sliced by the tile's clipped edge, top and bottom.
+  const [timerTileH, setTimerTileH] = useState(0);
+  // How much of the column the collapsed panel occupies. Reported by the panel
+  // from its own measurement, and reserved here by a spacer so the timer's tap
+  // target and the panel never overlap.
+  const [panelCollapsedH, setPanelCollapsedH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
-  // The stats tile's figures open the same sheets the Stats and Solves screens
-  // use, rather than navigating away: you tapped a number on the timer screen,
-  // so the answer belongs over the timer screen.
+  // The panel's figures open the same sheets the Stats and Solves screens use,
+  // rather than navigating away: you tapped a number on the timer screen, so the
+  // answer belongs over the timer screen.
   const [avgView, setAvgView] = useState<SolveAverage | null>(null);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
-  // The *current* rolling average of this size, i.e. the one ending on the most
-  // recent solve, which is the figure shown in the tile.
-  const openCurrentAverage = (size: AvgSize) => {
-    const v = makeAverageView(data.solves, 0, size);
-    if (v) setAvgView(v);
-  };
-  const openBestSolve = () => {
-    const i = bestSingleIndex(data.solves);
-    if (i !== null) setDetailIndex(i);
-  };
-
-  // FMC's whole flow (countdown, move entry, solution checking) is Timer-only
-  // on web and isn't part of this pass; the event is still selectable but routes
-  // to manual entry rather than pretending to run an attempt.
+  // FMC's whole flow (countdown, move entry, solution checking) is Timer-only on
+  // web and isn't part of this pass; the event is still selectable but routes to
+  // manual entry rather than pretending to run an attempt.
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
 
   // Same gate as the web Timer's `inputBlocked`: a solve cannot start until the
@@ -216,8 +176,21 @@ export default function TimerScreen({ navigation }: Props) {
         setSubmitting(false);
       }
     },
-    [data, scr, event, celebratePBs, isFmc, solvePrecision],
+    [data, scr, event, celebratePBs],
   );
+
+  // Guard 3 of the three that keep the panel and the timer from fighting over a
+  // touch (see StatsPanel's header for the other two). The engine already
+  // cancels an in-flight attempt when `enabled` goes false, so opening the panel
+  // mid-attempt reuses a tested path rather than needing new machinery.
+  const engineEnabled =
+    !isFmc &&
+    entryMode === 'keyboard' &&
+    !showEventPicker &&
+    !showMenu &&
+    !showEditScramble &&
+    !panelOpen &&
+    !inputBlocked;
 
   const engine = useTimerEngine({
     inspection,
@@ -226,7 +199,7 @@ export default function TimerScreen({ navigation }: Props) {
     holdToStart,
     holdDuration,
     startSound,
-    enabled: !isFmc && entryMode === 'keyboard' && !showEventPicker && !inputBlocked,
+    enabled: engineEnabled,
     onComplete,
   });
 
@@ -257,32 +230,6 @@ export default function TimerScreen({ navigation }: Props) {
       ? formatMoveCount(ms, penalty, 0, plusTwoCount)
       : formatTime(ms, penalty, solvePrecision, plusTwoCount);
   };
-
-  // Same convention as StatsScreen and the web StatsTable: an average is
-  // rounded to whole milliseconds before formatting. Kept identical so a number
-  // shown in two places is never rounded two different ways.
-  const fmtAvg = (v: number | null): string => {
-    if (v === null) return '—';
-    if (!isFinite(v)) return 'DNF';
-    return isFmc ? formatMoveCount(v, 'NONE', 2) : formatTime(Math.round(v), 'NONE', solvePrecision);
-  };
-
-  // The footer's stats block. Recomputed only when the solve list changes, not
-  // on every timer frame; currentAverage is O(size) and the mean is O(n), but
-  // the timer re-renders ~60x a second while running and none of this changes
-  // mid-attempt.
-  const footerStats = useMemo(() => {
-    const single = singleStats(data.solves);
-    const sessionMean = mean(data.solves);
-    return {
-      ao5: currentAverage(data.solves, 5),
-      ao12: currentAverage(data.solves, 12),
-      ao100: currentAverage(data.solves, 100),
-      meanValue: sessionMean.isDNF ? Infinity : sessionMean.value,
-      best: single.best,
-      count: single.count,
-    };
-  }, [data.solves]);
 
   const display = useMemo(() => {
     const phase = engine.phase;
@@ -317,12 +264,14 @@ export default function TimerScreen({ navigation }: Props) {
 
   // A Stackmat tells you where you are in the attempt by colour before you read
   // anything: red under your hands, green when it will start. The timer surface
-  // borrows that. The whole area you are touching carries a wash of the phase
-  // colour, so the state is legible from the edge of your vision at the moment
-  // your eyes are on the cube rather than the phone.
+  // borrows that, so the state is legible from the edge of your vision at the
+  // moment your eyes are on the cube rather than the phone.
   //
   // Held at 12% so it reads as a tint on the background rather than a filled
   // panel; at full strength it would compete with the digits sitting on it.
+  // This was previously computed and then applied only to the manual-entry
+  // branch, so the touch timer, the one the comment is actually about, never
+  // had it.
   const surfaceTint = (() => {
     const phase = engine.phase;
     if (phase === 'ready') return `${p.green}1F`;
@@ -331,44 +280,25 @@ export default function TimerScreen({ navigation }: Props) {
     return 'transparent';
   })();
 
-  // While an attempt is live the screen goes immersive: chrome hidden so
-  // nothing but the digits is on screen (and nothing but the digits is
-  // touchable) at the moment your hands are leaving the phone for the cube.
+  // While an attempt is live the screen goes immersive: chrome hidden so nothing
+  // but the digits is on screen (and nothing but the digits is touchable) at the
+  // moment your hands are leaving the phone for the cube.
   const immersive =
     engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
 
-  // The digits take a fixed share of the tile, leaving room for the hint beneath
-  // them, and never exceed the size they had when there was space to spare. The
-  // floor keeps them legible on the shortest tile a long Square-1 scramble
-  // leaves; below that the tile clips, which is at least visibly wrong rather
-  // than silently unreadable.
-  // One decision, read by the header, the footer and the stats block, so they
-  // cannot disagree about how much room there is.
+  // One decision, read by the header and the panel, so they cannot disagree
+  // about how much room there is.
   const density = columnH > 0 ? densityFor(columnH, fontScale) : 'comfortable';
-  // Tied to the measured footer, not to density. Density is computed from the
-  // column's total height, which cannot know how much of it the scramble took:
-  // by that rule an iPhone SE was 'compact' even on a 3x3, so those users never
-  // saw the cube image although the footer had ~160pt to draw it in. The row's
-  // own height already accounts for everything above it.
-  //
-  // No feedback loop: the row's height comes from the flex split, which is
-  // settled before its contents draw, so including or excluding the image cannot
-  // change it. Optimistic before the first measurement, so it doesn't flash in.
-  const showScrambleImage = footerH === 0 || footerH >= sc(76);
-  const statRows: ('primary' | 'secondary' | 'tertiary')[] =
-    density === 'minimal' ? ['primary'] : ['primary', 'secondary', 'tertiary'];
+  const rhythm = useRhythm(density);
 
   // Raised well past the old 64: that ceiling was set when the timer was a
   // bordered card competing with four others, and it left the digits at ~53pt
-  // inside a 320pt surface, six times their own height in empty space. With the
-  // card gone the time is the screen, so the ceiling is the width of the phone
-  // rather than an arbitrary point size, and the measured-tile share still
-  // governs on short screens. adjustsFontSizeToFit handles the long values
-  // ("1:23.45" is seven characters where "25.05" is five).
+  // inside a 320pt surface. With the card gone the time is the screen, so the
+  // ceiling is the width of the phone rather than an arbitrary point size, and
+  // the measured-tile share still governs on short screens.
+  // adjustsFontSizeToFit handles the long values ("1:23.45" is seven characters
+  // where "25.05" is five).
   const digitCeiling = sc(immersive ? 128 : 104);
-  // The measured-tile share still governs (it is what stopped the clipping);
-  // the screen scale only lowers the ceiling, so a small phone never starts
-  // from a size it has no room for.
   const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.46)) : digitCeiling;
 
   const hint = (() => {
@@ -394,10 +324,41 @@ export default function TimerScreen({ navigation }: Props) {
     ? `${currentSession.name}${currentSession.subset ? ` (${SUBSET_NAME[currentSession.subset] ?? currentSession.subset})` : ''}`
     : 'No session';
 
+  const menuItems: TimerMenuItem[] = [
+    {
+      key: 'stats',
+      label: 'Statistics',
+      hint: 'Every average, current and best',
+      icon: 'chart',
+      onPress: () => navigation.navigate('Stats'),
+    },
+    {
+      key: 'solves',
+      label: 'Solves',
+      hint: 'Browse, sort and delete this session',
+      icon: 'list',
+      onPress: () => navigation.navigate('Solves'),
+    },
+    {
+      key: 'sessions',
+      label: 'Sessions',
+      hint: 'Switch, rename or start a new one',
+      icon: 'book',
+      onPress: () => navigation.navigate('Sessions'),
+    },
+    {
+      key: 'settings',
+      label: 'Timer settings',
+      hint: 'Inspection, hold to start, precision',
+      icon: 'gear',
+      onPress: () => navigation.navigate('TimerSettings'),
+    },
+  ];
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
       <View
-        style={{ flex: 1, paddingHorizontal: space.md, paddingBottom: space.sm, gap: space.sm }}
+        style={{ flex: 1, paddingHorizontal: space.md }}
         onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}
       >
         {!immersive && (
@@ -405,11 +366,24 @@ export default function TimerScreen({ navigation }: Props) {
             {/* ── Header ──
                 Event first, then the session it scopes: a session belongs to an
                 event (the Sessions screen is titled "3x3 Sessions"), so reading
-                left to right now goes broad to narrow. The event keeps the
-                filled pill because it's the primary selector, and the session
-                sits next to it as plain text so the pair doesn't read as two
-                competing buttons. The three sub-screens stay on the right. */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                left to right goes broad to narrow. The event keeps the filled
+                pill because it's the primary selector, and the session sits
+                beside it as plain text so the pair doesn't read as two
+                competing buttons.
+
+                Three identical grey icon buttons used to follow. Three
+                same-weight glyphs in a row read as noise rather than as three
+                choices, and they squeezed the session name badly enough that
+                HANDOFF lists the truncation as an open issue. One overflow
+                returns about 76pt to the name. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: rhythm.tight,
+                marginBottom: rhythm.section,
+              }}
+            >
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Change event"
@@ -447,12 +421,9 @@ export default function TimerScreen({ navigation }: Props) {
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 6,
                   // Takes the spare width itself instead of a separate spacer
-                  // doing it. Previously a <View flex:1 /> sat between this and
-                  // the icons and absorbed everything, leaving the session name
-                  // to shrink to "s..". minWidth 0 is what actually lets a flex
-                  // child narrow enough to ellipsize instead of overflowing.
+                  // doing it. minWidth 0 is what actually lets a flex child
+                  // narrow enough to ellipsize instead of overflowing.
                   flex: 1,
                   minWidth: 0,
                   paddingVertical: 8,
@@ -469,51 +440,59 @@ export default function TimerScreen({ navigation }: Props) {
                 </Text>
               </Pressable>
 
-              <IconButton name="chart" accessibilityLabel="Statistics" onPress={() => navigation.navigate('Stats')} />
-              <IconButton name="list" accessibilityLabel="Solves" onPress={() => navigation.navigate('Solves')} />
-              <IconButton
-                name="gear"
-                accessibilityLabel="Timer settings"
-                onPress={() => navigation.navigate('TimerSettings')}
-              />
+              <IconButton name="more" accessibilityLabel="Timer menu" onPress={() => setShowMenu(true)} />
             </View>
 
-            {!user && (
+            {/* Dropped at the tightest tier rather than shrunk: on a short
+                screen this line costs the digits more than it is worth. */}
+            {!user && density === 'comfortable' && (
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={maxFontMultiplier}
-                style={{ color: p.textMuted, fontFamily: font.sans, fontSize: sc(11), textAlign: 'center' }}
+                style={{
+                  color: p.textMuted,
+                  fontFamily: font.sans,
+                  fontSize: sc(11),
+                  textAlign: 'center',
+                  marginBottom: rhythm.item,
+                }}
               >
                 Not signed in. Solves are saved on this device only.
               </Text>
             )}
 
-            <ScrambleView
-              eventId={scrambleEventId}
-              scramble={scr.scramble}
-              loading={scr.loading}
-              onRefresh={() => scr.refresh()}
-              onGoBack={scr.goBack}
-              canGoBack={scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped')}
-            />
+            <View style={{ marginBottom: rhythm.group }}>
+              <ScrambleView
+                eventId={scrambleEventId}
+                scramble={scr.scramble}
+                loading={scr.loading}
+                onRefresh={() => scr.refresh()}
+                onGoBack={scr.goBack}
+                canGoBack={scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped')}
+                onEdit={() => setShowEditScramble(true)}
+                onCopy={() => Clipboard.setStringAsync(normalizeScramble(scr.scramble))}
+              />
+            </View>
           </>
         )}
 
         {/* ── The timer surface ──
-            In its own tile, with no padding of its own and overflow clipped to
-            the radius, so the Pressable fills the tile exactly: the panel you
-            see and the area that starts a solve are the same rectangle, which
-            matters more here than on any other panel. */}
+            No fill of its own. The digits are the focal point of the screen,
+            and a panel behind them puts a box in the way of that: a surface
+            says "this is one thing among several", which is exactly the reading
+            to avoid. The tint is the phase colour, not a surface.
+
+            Overflow is clipped to the radius so the Pressable fills the tile
+            exactly: the area you see and the area that starts a solve are the
+            same rectangle, which matters more here than anywhere else. */}
         {entryMode === 'keyboard' && !isFmc ? (
           <View
             style={{
               flex: TIMER_FLEX,
+              minHeight: sc(TIMER_MIN_H),
               overflow: 'hidden',
               borderRadius: radius.lg,
-              // No fill. The digits are the focal point of the screen, and a
-              // panel behind them puts a box in the way of that: a surface says
-              // "this is one thing among several", which is exactly the reading
-              // to avoid here. The whole area stays the touch target.
+              backgroundColor: surfaceTint,
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
@@ -521,17 +500,12 @@ export default function TimerScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Timer. Touch and hold, then release to start."
               onPressIn={() => {
-                if (!showEventPicker && !inputBlocked) engine.press();
+                if (engineEnabled) engine.press();
               }}
               onPressOut={() => {
-                if (!showEventPicker && !inputBlocked) engine.release();
+                if (engineEnabled) engine.release();
               }}
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space.md,
-              }}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md }}
             >
               <Text
                 adjustsFontSizeToFit
@@ -578,6 +552,7 @@ export default function TimerScreen({ navigation }: Props) {
           <View
             style={{
               flex: TIMER_FLEX,
+              minHeight: sc(TIMER_MIN_H),
               alignItems: 'center',
               justifyContent: 'center',
               gap: space.lg,
@@ -585,220 +560,107 @@ export default function TimerScreen({ navigation }: Props) {
               borderRadius: radius.lg,
               backgroundColor: surfaceTint,
             }}
+            onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
             <Text
               adjustsFontSizeToFit
               numberOfLines={1}
               allowFontScaling={false}
-              style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: sc(52) }}
+              style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: sc(52), fontVariant: ['tabular-nums'] }}
             >
               {typed || (isFmc ? 'moves' : formatTime(0, 'NONE', solvePrecision))}
             </Text>
             <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
-              <TextInput
+              <Input
                 value={typed}
                 onChangeText={setTyped}
                 onSubmitEditing={addTyped}
+                // The panel is position:absolute against the bottom edge and
+                // nothing here manages the keyboard, so an open panel would sit
+                // underneath it. Collapsing on focus is the cheap fix.
+                onFocus={() => setPanelOpen(false)}
                 editable={!inputBlocked}
                 placeholder={isFmc ? '28' : '10.00'}
-                placeholderTextColor={p.textMuted}
                 keyboardType="numbers-and-punctuation"
                 returnKeyType="done"
-                style={{
-                  color: p.text,
-                  fontFamily: MONO,
-                  fontSize: 20,
-                  textAlign: 'center',
-                  width: 140,
-                  paddingVertical: 10,
-                  borderRadius: radius.sm,
-                  backgroundColor: p.cardHover,
-                }}
+                mono
+                align="center"
+                style={{ fontSize: 20, width: 140 }}
               />
-              <Pressable
-                accessibilityRole="button"
-                onPress={addTyped}
-                disabled={inputBlocked}
-                style={({ pressed }) => ({
-                  backgroundColor: p.accent,
-                  borderRadius: radius.sm,
-                  paddingVertical: 12,
-                  paddingHorizontal: space.lg,
-                  opacity: inputBlocked ? 0.4 : pressed ? 0.75 : 1,
-                })}
-              >
-                <Text style={{ color: '#fff', fontFamily: font.sansBold }}>Add</Text>
-              </Pressable>
+              <Button label="Add" variant="primary" onPress={addTyped} disabled={inputBlocked} />
             </View>
           </View>
         )}
 
-        {/* ── Footer: scramble image, stats, penalties ──
-            The flex share belongs on this wrapper, not on the scramble/stats row
-            inside it. That row is the thing being sized, but `flex` only draws
-            space from a parent that has a definite height to give: this wrapper
-            is the timer tile's actual sibling in the column, so it's the one that
-            can claim a share. Putting flex on the inner row instead collapsed it
-            to zero height (flexBasis 0 inside an auto-height parent contributes
-            nothing and has no free space to grow into), which hid the scramble
-            image and stats entirely and handed their space to the timer. */}
-        {!immersive && (
-          <View
-            style={{
-              flex: FOOTER_FLEX,
-              // No gap when the penalty row is showing: the two halves are one
-              // panel, split by a rule rather than by space.
-              gap: newest ? 0 : space.sm,
-              // Floor covering the row plus, when it's showing, the penalty tile
-              // and the gap above it. Without this the footer shrinks below its
-              // own contents and they spill off the bottom of the screen.
-              minHeight:
-                sc(density === 'minimal' ? 56 : FOOTER_ROW_MIN_H) +
-                (newest ? sc(PENALTY_TILE_H) : 0),
-            }}
-          >
-            {/* The result and what you can do to it, on one line: the time this
-                acts on sits beside the buttons that change it, rather than the
-                buttons floating in a panel with no subject. Reads as the top
-                half of a single card, joined to the averages below by a rule. */}
-            {newest && (
-              <Tile
-                style={{
-                  paddingHorizontal: space.md,
-                  paddingVertical: space.sm,
-                  borderBottomLeftRadius: 0,
-                  borderBottomRightRadius: 0,
-                  borderBottomWidth: 0,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: space.md,
-                }}
-              >
-                <Text
-                  numberOfLines={1}
-                  allowFontScaling={false}
-                  style={{
-                    color: newest.penalty === 'DNF' ? p.red : p.text,
-                    fontFamily: MONO_BOLD,
-                    fontSize: sc(19),
-                    fontVariant: ['tabular-nums'],
-                  }}
-                >
-                  {fmt(newest.time, newest.penalty, newest.plusTwoCount)}
-                </Text>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <PenaltyRow
-                    penalty={newest.penalty}
-                    plusTwoCount={newest.plusTwoCount}
-                    onChange={(pen, count) => data.updatePenalty(newest.id, pen, count)}
-                    hidePlusTwo={isFmc}
-                  />
-                </View>
-              </Tile>
-            )}
-
-            {/* The footer claims a share of the column rather than being sized
-                by its contents, which is what shortens the timer: previously the
-                timer was `flex: 1` against a content-sized footer, so it took
-                every pixel the footer didn't need. The net then fits itself to
-                the row's measured height (see ScrambleNet's maxHeight), because
-                it can't simply be made wider: it's four faces across, so extra
-                width comes straight out of the stats tile beside it. */}
-            <View
-              // minHeight is a floor, not a size: React Native leaves flexShrink
-              // at 0, so the auto-height siblings above (the penalty tile, a PB
-              // banner) never give way, and on a short screen this row is the
-              // only thing that can shrink. Without a floor it shrinks to
-              // nothing and the scramble image and stats vanish.
-              style={{
-                flex: 1,
-                minHeight: sc(density === 'minimal' ? 56 : FOOTER_ROW_MIN_H),
-                flexDirection: 'row',
-                gap: space.sm,
-                alignItems: 'stretch',
-              }}
-              onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
-            >
-              {/* Fixed width, so the tile is the same size before the drawing
-                  arrives as after. Sizing it to its contents meant that during
-                  the async load (a puzzle's artwork is a dynamic chunk on first
-                  use) the tile collapsed to a thin sliver and the stats tile
-                  beside it stretched to fill the gap, then both jumped back on
-                  arrival. Not tappable: the scramble image is something to look
-                  at, and it used to open Statistics, which is the stats tile's
-                  job and surprising from a picture of a cube. */}
-              {showScrambleImage && hasScrambleNet(scrambleEventId) && scr.scramble ? (
-                <Tile
-                  style={{
-                    width: sc(SCRAMBLE_NET_MAX_W) + space.sm * 2,
-                    padding: space.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    ...(newest ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : null),
-                  }}
-                >
-                  <ScrambleNet
-                    eventId={scrambleEventId}
-                    scramble={scr.scramble}
-                    size={sc(SCRAMBLE_NET_MAX_W)}
-                    maxHeight={footerH > 0 ? footerH - space.sm * 2 : undefined}
-                  />
-                </Tile>
-              ) : null}
-
-              {/* Individual figures open what they name: an average opens the
-                  solves it was made of, Best opens that solve. Tapping the whole
-                  tile used to open Statistics, which meant the one gesture
-                  available went somewhere more general than the number under
-                  your thumb. Mean and Solves aren't a window onto anything, so
-                  they stay plain. */}
-              {/* Rows are shed by density, not squeezed. At the tightest tier
-                  the row that survives is the one you actually watch between
-                  attempts, plus the best, rather than six figures too small to
-                  read. */}
-              {/* Three figures on one line, not six in a grid.
-                  The six-figure grid was the single biggest reason the footer
-                  looked heavy: three stacked rows of label-over-value took as
-                  much height as the timer, so the screen read as two equal
-                  halves. Ao5, Ao12 and best are the ones you actually glance at
-                  between attempts; ao100, mean and the solve count are session
-                  totals that belong on the Statistics screen, one tap away. */}
-              <StatsBlock
-                joined={!!newest}
-                rows={[
-                  [
-                    { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
-                    { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
-                    {
-                      label: 'Best',
-                      value: footerStats.best === null ? '—' : fmt(footerStats.best),
-                      onPress: () => openBestSolve(),
-                    },
-                  ],
-                ]}
-              />
-            </View>
-          </View>
-        )}
+        {/* Reserves the collapsed panel's rectangle. This is guard 1 of the
+            three that keep the panel from stealing a touch meant for the timer:
+            the tile's box ends exactly where this begins, so the two never
+            overlap and there is no hit-test ambiguity to resolve. */}
+        {!immersive && <View style={{ height: panelCollapsedH }} />}
       </View>
 
-      {avgView && <AverageDetailSheet view={avgView} event={event} onClose={() => setAvgView(null)} />}
-      {detailIndex !== null && (
-        <SolveDetailSheet
-          solves={data.solves}
-          index={detailIndex}
-          event={event}
-          onClose={() => setDetailIndex(null)}
-          onUpdatePenalty={data.updatePenalty}
-          onUpdateTime={data.updateTime}
-          onUpdateComment={data.updateComment}
-          onDelete={data.deleteSolve}
-          onOpenAverage={(v) => {
-            setDetailIndex(null);
-            setAvgView(v);
-          }}
+      {/* While the panel is open the timer above it must not start a solve, and
+          there has to be an obvious way back. `engineEnabled` already handles
+          the first, but a tap that silently does nothing is a worse answer than
+          a tap that closes the thing covering the screen. */}
+      {panelOpen && !immersive && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Collapse statistics"
+          onPress={() => setPanelOpen(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000059' }}
         />
       )}
+
+      {/* Never unmounted, only hidden. It owns the measurement that sizes the
+          spacer above, plus its own scroll position and whether its body has
+          been built; unmounting it for the duration of every attempt would
+          throw all of that away and re-measure on the way back. It goes inert
+          under `immersive` on its own (see StatsPanel). */}
+      <StatsPanel
+        solves={data.solves}
+        event={event}
+        scrambleEventId={scrambleEventId}
+        scramble={scr.scramble}
+        columnH={columnH}
+        density={density}
+        immersive={immersive}
+        open={panelOpen}
+        onOpenChange={setPanelOpen}
+        onCollapsedHeight={setPanelCollapsedH}
+        onUpdatePenalty={data.updatePenalty}
+        onDeleteSolves={data.deleteSolves}
+        onOpenAverage={setAvgView}
+        onOpenSolve={setDetailIndex}
+        onOpenStatsScreen={() => navigation.navigate('Stats')}
+        onOpenSolvesScreen={() => navigation.navigate('Solves')}
+      />
+
+      {/* Both sheets stay mounted and are driven by `visible`, so they can play
+          their exit animation. Conditionally mounting them meant the parent
+          unmounted the sheet the instant onClose fired, so it vanished rather
+          than sliding away. */}
+      <AverageDetailSheet
+        view={avgView}
+        event={event}
+        visible={avgView !== null}
+        onClose={() => setAvgView(null)}
+      />
+      <SolveDetailSheet
+        solves={data.solves}
+        index={detailIndex}
+        event={event}
+        visible={detailIndex !== null}
+        onClose={() => setDetailIndex(null)}
+        onUpdatePenalty={data.updatePenalty}
+        onUpdateTime={data.updateTime}
+        onUpdateComment={data.updateComment}
+        onDelete={data.deleteSolve}
+        onOpenAverage={(v) => {
+          setDetailIndex(null);
+          setAvgView(v);
+        }}
+      />
 
       <EventPickerSheet
         visible={showEventPicker}
@@ -807,9 +669,19 @@ export default function TimerScreen({ navigation }: Props) {
         onClose={() => setShowEventPicker(false)}
       />
 
+      <TimerMenuSheet visible={showMenu} items={menuItems} onClose={() => setShowMenu(false)} />
+
+      <EditScrambleSheet
+        visible={showEditScramble}
+        eventId={scrambleEventId}
+        current={scr.scramble}
+        onApply={scr.setCustom}
+        onClose={() => setShowEditScramble(false)}
+      />
+
       {/* Last child, so it draws over everything, and absolutely positioned so
-          it takes no space in the column: a PB no longer shoves the scramble
-          image and stats down the screen. */}
+          it takes no space in the column: a PB no longer shoves the panel down
+          the screen. */}
       {pbHits && (
         <PbCelebration
           hits={pbHits}
@@ -819,157 +691,5 @@ export default function TimerScreen({ navigation }: Props) {
         />
       )}
     </SafeAreaView>
-  );
-}
-
-// The screen's one surface treatment, shared by every panel on it (timer,
-// penalties, scramble image, stats) so they read as one set rather than four
-// separately-styled boxes. Deliberately local and not ui.tsx's Card: that one is
-// a hairline-bordered content card with generous padding, which is right for a
-// settings or detail screen but too soft and too padded for panels that sit
-// edge to edge and have to hold their own next to 84pt digits.
-function Tile({
-  children,
-  style,
-  onLayout,
-  as = 'view',
-  onPress,
-  accessibilityLabel,
-}: {
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  /** Forwarded so a caller can size its contents to the tile it actually got. */
-  onLayout?: ViewProps['onLayout'];
-  /** A tile that opens something is a Pressable; the rest stay plain Views. */
-  as?: 'view' | 'pressable';
-  onPress?: () => void;
-  accessibilityLabel?: string;
-}) {
-  const p = usePalette();
-  const base: ViewStyle = {
-    backgroundColor: p.card,
-    borderColor: p.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-  };
-  if (as === 'pressable') {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        onPress={onPress}
-        onLayout={onLayout}
-        style={({ pressed }) => [base, style, pressed ? { opacity: 0.7 } : null]}
-      >
-        {children}
-      </Pressable>
-    );
-  }
-  return (
-    <View style={[base, style]} onLayout={onLayout}>
-      {children}
-    </View>
-  );
-}
-
-// The compact label/value grid beside the scramble image. Two columns so six
-// stats fit in the footer without crowding the timer, and every value is
-// tabular so the columns don't jitter as times change.
-function StatsBlock({
-  rows,
-  joined,
-}: {
-  rows: { label: string; value: string; onPress?: () => void }[][];
-  /** True when it sits directly under the penalty row, sharing its edge. */
-  joined?: boolean;
-}) {
-  return (
-    <Tile
-      style={[
-        {
-          flex: 1,
-          paddingVertical: space.sm,
-          paddingHorizontal: space.md,
-          // Clipped, so a row that still can't fit is visibly cut at the tile
-          // edge rather than drawn over the tab bar below it.
-          overflow: 'hidden',
-        },
-        joined ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : null,
-      ]}
-    >
-      {rows.map((row, i) => (
-        // Each row takes an equal share of the tile rather than its natural
-        // height. Stacking the label over the value doubled the lines each row
-        // needs, and three of those overflowed the tile's bottom edge (the last
-        // row, BEST/SOLVES, was drawn outside it). Sharing the height means the
-        // rows fit whatever the tile actually is, and the value's own
-        // adjustsFontSizeToFit takes care of the rest.
-        <View
-          key={i}
-          style={{ flex: 1, flexDirection: 'row', columnGap: space.md, justifyContent: 'center' }}
-        >
-          {row.map((cell) => (
-            <StatCell key={cell.label} label={cell.label} value={cell.value} onPress={cell.onPress} />
-          ))}
-        </View>
-      ))}
-    </Tile>
-  );
-}
-
-function StatCell({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
-  const p = usePalette();
-  const { s: sc, maxFontMultiplier } = useScreenScale();
-  // An em dash means there's no such average yet, so there's nothing to open.
-  const tappable = !!onPress && value !== '—';
-  const body = (
-    <>
-      <Text
-        style={{
-          color: p.textMuted,
-          fontFamily: font.sansSemi,
-          fontSize: Math.max(8, sc(9)),
-          textTransform: 'uppercase',
-          letterSpacing: 0.4,
-        }}
-        numberOfLines={1}
-        maxFontSizeMultiplier={maxFontMultiplier}
-      >
-        {label}
-      </Text>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-        maxFontSizeMultiplier={maxFontMultiplier}
-        style={{
-          color: tappable ? p.accent : p.text,
-          fontFamily: MONO_BOLD,
-          fontSize: Math.max(11, sc(14)),
-          fontVariant: ['tabular-nums'],
-        }}
-      >
-        {value}
-      </Text>
-    </>
-  );
-  // Stacked, not side by side: a label beside a mono time needs about 100pt, and
-  // two of those don't fit once the scramble image has taken its share of the
-  // row, which is what left every figure ellipsized ("21.…", "6.41s."). Stacking
-  // needs only as much width as the wider of the two lines. A long value shrinks
-  // its own font rather than losing digits, since a truncated time is worse than
-  // a small one.
-  const style = { flex: 1, minWidth: 0, justifyContent: 'center' as const };
-  if (!tappable) return <View style={style}>{body}</View>;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label} ${value}`}
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => ({ ...style, opacity: pressed ? 0.55 : 1 })}
-    >
-      {body}
-    </Pressable>
   );
 }

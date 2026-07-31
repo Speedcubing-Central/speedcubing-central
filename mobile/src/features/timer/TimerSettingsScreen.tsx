@@ -1,7 +1,5 @@
-import { ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { usePalette, useSettings } from '../../store/settings';
-import { Muted } from '../../components/ui';
+import { useSettings } from '../../store/settings';
+import { Muted, Screen } from '../../components/ui';
 import { OptionRow, SettingsGroup, SettingsRow, Toggle } from '../../components/settingsUi';
 import { space } from '../../theme';
 
@@ -9,12 +7,10 @@ import { space } from '../../theme';
 // hints, options and defaults. These all feed the shared engine/stats logic, so
 // a phone configured the same way behaves the same way.
 export default function TimerSettingsScreen() {
-  const p = usePalette();
   const s = useSettings();
 
   return (
-    <SafeAreaView edges={[]} style={{ flex: 1, backgroundColor: p.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.md, paddingBottom: space.xl }}>
+    <Screen scroll edges={[]} gap={0}>
         <SettingsGroup title="Inspection">
           <SettingsRow label="Inspection" hint="15-second WCA inspection before each solve" inline>
             <Toggle value={s.inspection} onChange={(v) => s.set({ inspection: v })} />
@@ -128,7 +124,6 @@ export default function TimerSettingsScreen() {
           These preferences are stored on this device, the same way the web client stores them per browser. Your
           solves and sessions live on the server and are shared across both.
         </Muted>
-      </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }

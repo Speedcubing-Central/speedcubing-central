@@ -1,57 +1,33 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, View } from 'react-native';
+import { sortedSolveIndices, type SolveAverage, type SolveSortBy } from '@scc/shared';
+import { useSettings } from '../../store/settings';
 import {
-  formatMoveCount,
-  formatTime,
-  makeAverageView,
-  sortedSolveIndices,
-  TIMER_ONLY_EVENT_IDS,
-  type SolveAverage,
-  type SolveSortBy,
-} from '@scc/shared';
-import { usePalette, useSettings } from '../../store/settings';
-import { EmptyState, Muted, Segmented } from '../../components/ui';
+  EmptyState,
+  Muted,
+  Screen,
+  ScreenTitle,
+  Segmented,
+  Surface,
+  TextButton,
+} from '../../components/ui';
 import { SolveDetailSheet } from './SolveDetailSheet';
 import { AverageDetailSheet } from './AverageDetailSheet';
+import { SolvesList } from './SolvesList';
+import { SolvesTrend } from './SolvesTrend';
 import { useTimerDataContext } from './TimerDataContext';
-import { font, radius, space } from '../../theme';
+import { space } from '../../theme';
 
 // The session's solves, on their own screen.
 //
-// On desktop this list shares the right-hand column with the stats table; on a
-// phone it gets the whole screen, which is what makes a long session actually
-// browsable. Same sort options as web (Date / Single / Ao5 / Ao12, via
-// @scc/shared's sortedSolveIndices) and the same multi-select bulk delete.
-//
-// The list is a real table with a pinned header rather than rows that each label
-// their own values. Repeating "ao5" on every row spends horizontal space on the
-// same word over and over, and it reads as a property of that one row instead of
-// a column you can compare down. The header sits outside the FlatList so it stays
-// put while the rows scroll under it, which is the whole point of naming the
-// columns once.
-//
-// FlatList rather than the web version's hand-rolled virtualization. Same
-// reason, since a session can hold thousands of solves, just handled by the
-// platform.
-
-// Column geometry, declared once and used by both the header and every row so
-// they cannot drift apart.
-const COL = {
-  // Fits a five-digit solve number. At 30 a four-digit one wrapped its last
-  // digit onto a second line, which also jogged the row height.
-  index: { width: 46 },
-  time: { flex: 1.25 },
-  ao5: { flex: 1 },
-  ao12: { flex: 1 },
-} as const;
-
+// This is the *browse* surface: the whole screen, pull-to-refresh, and bulk
+// select. The Timer's stats panel renders the same SolvesList as a *glance*
+// surface, with a constrained height and no pull-to-refresh (which would fight
+// the panel's drag). Same rows either way, so a solve never looks like two
+// different things.
 export default function SolvesScreen() {
-  const p = usePalette();
   const data = useTimerDataContext();
   const event = useSettings((s) => s.currentEvent);
-  const solvePrecision = useSettings((s) => s.solvePrecision);
-  const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
 
   const [sortBy, setSortBy] = useState<SolveSortBy>('date');
   const [selectMode, setSelectMode] = useState(false);
@@ -60,7 +36,7 @@ export default function SolvesScreen() {
   const [avgView, setAvgView] = useState<SolveAverage | null>(null);
 
   const solves = data.solves;
-  // Indices into `solves` in display order. `solves` itself is never reordered,
+  // Indices into `solves` in display order. `solves` itself is never reordered:
   // ao5/ao12 windows depend on its chronological adjacency, so the array order
   // is load-bearing, not a display choice.
   const order = useMemo(() => sortedSolveIndices(solves, sortBy), [solves, sortBy]);
@@ -74,6 +50,13 @@ export default function SolvesScreen() {
     });
   }, []);
 
+  const enterSelectMode = useCallback(() => setSelectMode(true), []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
   function confirmBulkDelete() {
     const count = selectedIds.size;
     if (count === 0) return;
@@ -84,305 +67,104 @@ export default function SolvesScreen() {
         style: 'destructive',
         onPress: async () => {
           await data.deleteSolves(Array.from(selectedIds));
-          setSelectedIds(new Set());
-          setSelectMode(false);
+          exitSelectMode();
         },
       },
     ]);
   }
 
-  const fmt = (index: number): string => {
-    const s = solves[index];
-    return isFmc
-      ? formatMoveCount(s.time, s.penalty, 0, s.plusTwoCount)
-      : formatTime(s.time, s.penalty, solvePrecision, s.plusTwoCount);
-  };
-
-  // Opens the rolling average that ended on this solve, the same view the stats
-  // table opens for its Current/Best cells.
-  const openAverage = (index: number, size: 5 | 12) => {
-    const v = makeAverageView(solves, index, size);
-    if (v) setAvgView(v);
-  };
-
-  // The rolling average of `size` that ended on this solve. Same
-  // makeAverageView the stats screen and the web list use, and the same
-  // round-then-format so a value shown in two places matches.
-  const avgText = (index: number, size: 5 | 12): string => {
-    const view = makeAverageView(solves, index, size);
-    if (!view) return '·';
-    const v = view.value;
-    if (v === null) return '·';
-    if (!isFinite(v)) return 'DNF';
-    return isFmc ? formatMoveCount(v, 'NONE', 2) : formatTime(Math.round(v), 'NONE', solvePrecision);
-  };
-
   return (
-    <SafeAreaView edges={[]} style={{ flex: 1, backgroundColor: p.bg }}>
-      <View style={{ flex: 1, paddingHorizontal: space.md, paddingTop: space.md, gap: space.sm }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ color: p.text, fontSize: 20, fontFamily: font.sansBlack }}>
-            Solves ({solves.length})
-          </Text>
-          {solves.length > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setSelectMode((m) => !m);
-                setSelectedIds(new Set());
-              }}
-              hitSlop={8}
-            >
-              <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 13 }}>
-                {selectMode ? 'Cancel' : 'Select'}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-
-        {!selectMode && solves.length > 0 && (
-          <Segmented
-            value={sortBy}
-            onChange={setSortBy}
-            options={[
-              { value: 'date', label: 'Date' },
-              { value: 'single', label: 'Single' },
-              { value: 'ao5', label: 'Ao5' },
-              { value: 'ao12', label: 'Ao12' },
-            ]}
+    <Screen edges={[]} gap={space.sm}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <ScreenTitle>Solves ({solves.length})</ScreenTitle>
+        {solves.length > 0 && (
+          <TextButton
+            label={selectMode ? 'Cancel' : 'Select'}
+            onPress={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
           />
-        )}
-
-        {selectMode && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <Muted>{selectedIds.size} selected</Muted>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                setSelectedIds((prev) =>
-                  prev.size === solves.length ? new Set() : new Set(solves.map((s) => s.id)),
-                )
-              }
-            >
-              <Text style={{ color: p.text, fontSize: 13, fontFamily: font.sansSemi }}>
-                {selectedIds.size === solves.length ? 'Deselect all' : 'Select all'}
-              </Text>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            <Pressable
-              accessibilityRole="button"
-              onPress={confirmBulkDelete}
-              disabled={selectedIds.size === 0}
-              style={{ opacity: selectedIds.size === 0 ? 0.4 : 1 }}
-            >
-              <Text style={{ color: p.red, fontFamily: font.sansBold, fontSize: 13 }}>
-                Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {solves.length === 0 ? (
-          <EmptyState title="No solves yet" body="Start the timer to record your first solve." />
-        ) : (
-          <>
-            {/* Pinned column headers. Outside the FlatList, so they stay visible
-                for the whole scroll instead of only at the top. */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.sm,
-                paddingHorizontal: space.sm,
-                paddingBottom: space.xs,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: p.border,
-              }}
-            >
-              {selectMode && <View style={{ width: 20 }} />}
-              <HeaderLabel style={COL.index} align="left">
-                #
-              </HeaderLabel>
-              <HeaderLabel style={COL.time} align="left">
-                Time
-              </HeaderLabel>
-              <HeaderLabel style={COL.ao5}>Ao5</HeaderLabel>
-              <HeaderLabel style={COL.ao12}>Ao12</HeaderLabel>
-            </View>
-
-            <FlatList
-              data={order}
-              keyExtractor={(index) => solves[index].id}
-              refreshing={data.solvesLoading}
-              onRefresh={() => data.reload()}
-              ItemSeparatorComponent={() => (
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: p.border }} />
-              )}
-              renderItem={({ item: index, index: position }) => {
-                const solve = solves[index];
-                const selected = selectedIds.has(solve.id);
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => (selectMode ? toggleOne(solve.id) : setDetailIndex(index))}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: space.sm,
-                      paddingVertical: 11,
-                      paddingHorizontal: space.sm,
-                      borderRadius: radius.sm,
-                      backgroundColor: selected ? `${p.accent}22` : pressed ? p.cardHover : 'transparent',
-                    })}
-                  >
-                    {selectMode && (
-                      <View
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 4,
-                          borderWidth: 2,
-                          borderColor: selected ? p.accent : p.border,
-                          backgroundColor: selected ? p.accent : 'transparent',
-                        }}
-                      />
-                    )}
-                    {/* The solve's own number in the session, never its rank in
-                        the current sort. Sorting by single used to renumber
-                        everything 1..n, so the fastest solve became "1" and the
-                        number stopped identifying the solve at all. `solves` is
-                        newest-first, so this counts back from the total. */}
-                    <Text
-                      numberOfLines={1}
-                      style={[COL.index, { color: p.textMuted, fontFamily: font.mono, fontSize: 11 }]}
-                    >
-                      {solves.length - index}
-                    </Text>
-                    <View style={COL.time}>
-                      <Text
-                        style={{
-                          color: solve.penalty === 'DNF' ? p.red : p.text,
-                          fontFamily: font.monoBold,
-                          fontSize: 16,
-                          fontVariant: ['tabular-nums'],
-                        }}
-                      >
-                        {fmt(index)}
-                      </Text>
-                      {solve.comment ? (
-                        <Text numberOfLines={1} style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 10 }}>
-                          {solve.comment}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {/* Tappable like the single beside them: these name a real
-                        average, and the sheet showing what it was made of is the
-                        obvious thing to want from them. */}
-                    <AvgCell
-                      style={COL.ao5}
-                      value={avgText(index, 5)}
-                      onPress={selectMode ? undefined : () => openAverage(index, 5)}
-                    />
-                    <AvgCell
-                      style={COL.ao12}
-                      value={avgText(index, 12)}
-                      onPress={selectMode ? undefined : () => openAverage(index, 12)}
-                    />
-                  </Pressable>
-                );
-              }}
-            />
-          </>
         )}
       </View>
 
-      {detailIndex !== null && (
-        <SolveDetailSheet
-          solves={solves}
-          index={detailIndex}
-          event={event}
-          onClose={() => setDetailIndex(null)}
-          onUpdatePenalty={data.updatePenalty}
-          onUpdateTime={data.updateTime}
-          onUpdateComment={data.updateComment}
-          onDelete={data.deleteSolve}
-          onOpenAverage={(v) => {
-            setDetailIndex(null);
-            setAvgView(v);
-          }}
+      {/* Hidden in select mode: you are doing bulk surgery on the list, not
+          reading its shape, and the rows are what need the height. */}
+      {!selectMode && <SolvesTrend solves={solves} event={event} />}
+
+      {!selectMode && solves.length > 0 && (
+        <Segmented
+          value={sortBy}
+          onChange={setSortBy}
+          options={[
+            { value: 'date', label: 'Date' },
+            { value: 'single', label: 'Single' },
+            { value: 'ao5', label: 'Ao5' },
+            { value: 'ao12', label: 'Ao12' },
+          ]}
         />
       )}
-      {avgView && <AverageDetailSheet view={avgView} event={event} onClose={() => setAvgView(null)} />}
-    </SafeAreaView>
-  );
-}
 
-function HeaderLabel({
-  children,
-  style,
-  align = 'right',
-}: {
-  children: string;
-  style: { width: number } | { flex: number };
-  align?: 'left' | 'right';
-}) {
-  const p = usePalette();
-  return (
-    <Text
-      style={[
-        style,
-        {
-          color: p.textMuted,
-          fontFamily: font.sansBold,
-          fontSize: 10,
-          textTransform: 'uppercase',
-          letterSpacing: 0.7,
-          textAlign: align,
-        },
-      ]}
-    >
-      {children}
-    </Text>
-  );
-}
+      {selectMode && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Muted>{selectedIds.size} selected</Muted>
+          <TextButton
+            tone="default"
+            label={selectedIds.size === solves.length ? 'Deselect all' : 'Select all'}
+            onPress={() =>
+              setSelectedIds((prev) =>
+                prev.size === solves.length ? new Set() : new Set(solves.map((s) => s.id)),
+              )
+            }
+          />
+          <View style={{ flex: 1 }} />
+          <TextButton
+            tone="danger"
+            label={`Delete${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
+            onPress={confirmBulkDelete}
+            disabled={selectedIds.size === 0}
+          />
+        </View>
+      )}
 
-function AvgCell({
-  value,
-  style,
-  onPress,
-}: {
-  value: string;
-  style: { flex: number };
-  onPress?: () => void;
-}) {
-  // An em dash means the average doesn't exist yet, so there is nothing to open.
-  // '·' is this list's placeholder for "no average here yet" (the stats table
-  // uses an em dash); neither is worth a tap target.
-  const tappable = !!onPress && value !== '·' && value !== '—' && value !== '';
-  if (!tappable) return <Cell style={style}>{value}</Cell>;
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={style} hitSlop={4}>
-      <Cell style={{ flex: 1 }}>{value}</Cell>
-    </Pressable>
-  );
-}
+      {solves.length === 0 ? (
+        <EmptyState title="No solves yet" body="Start the timer to record your first solve." />
+      ) : (
+        <Surface padding="none" style={{ flex: 1, overflow: 'hidden' }}>
+          <SolvesList
+            solves={solves}
+            event={event}
+            order={order}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleOne}
+            onEnterSelectMode={enterSelectMode}
+            onOpenSolve={setDetailIndex}
+            onOpenAverage={setAvgView}
+            onRefresh={() => data.reload()}
+            refreshing={data.solvesLoading}
+          />
+        </Surface>
+      )}
 
-function Cell({ children, style }: { children: string; style: { flex: number } }) {
-  const p = usePalette();
-  return (
-    <Text
-      style={[
-        style,
-        {
-          color: p.textMuted,
-          fontFamily: font.mono,
-          fontSize: 13,
-          fontVariant: ['tabular-nums'],
-          textAlign: 'right',
-        },
-      ]}
-    >
-      {children}
-    </Text>
+      <SolveDetailSheet
+        solves={solves}
+        index={detailIndex}
+        event={event}
+        visible={detailIndex !== null}
+        onClose={() => setDetailIndex(null)}
+        onUpdatePenalty={data.updatePenalty}
+        onUpdateTime={data.updateTime}
+        onUpdateComment={data.updateComment}
+        onDelete={data.deleteSolve}
+        onOpenAverage={(v) => {
+          setDetailIndex(null);
+          setAvgView(v);
+        }}
+      />
+      <AverageDetailSheet
+        view={avgView}
+        event={event}
+        visible={avgView !== null}
+        onClose={() => setAvgView(null)}
+      />
+    </Screen>
   );
 }

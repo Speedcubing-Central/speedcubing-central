@@ -1,10 +1,9 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { usePalette, useSettings } from '../store/settings';
 import { carrotScramble, formatScramble, isSquareOne, sq1Pairs } from '../lib/scramble';
-import { font, radius, space } from '../theme';
-import { MONO } from './ui';
+import { space } from '../theme';
+import { IconPill, MONO } from './ui';
 import { useScreenScale } from '../lib/scale';
-import { Icon, type IconName } from './Icon';
 
 // Scramble display, matching the web ScramblePanel's text rules (which is the
 // part that actually matters for correctness): megaminx broken into one row per
@@ -122,65 +121,41 @@ export function ScrambleView({
       }}
     >
       <View style={{ minHeight: compact ? 24 : sc(34), justifyContent: 'center' }}>{body}</View>
+      {/* Icon-only, with the words moved to the accessibility label: the four
+          controls are unambiguous as glyphs, and spelling them out would crowd
+          the scramble they sit under. IconPill is the app-wide shape, so this
+          row and any future one agree without either knowing about the other. */}
       {(onRefresh || onGoBack || onEdit || onCopy) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
-            <ScrambleAction
-              icon="skipBack"
-              label="Previous scramble"
+            <IconPill
+              name="skipBack"
+              accessibilityLabel="Previous scramble"
               onPress={onGoBack}
               disabled={!canGoBack}
             />
           )}
           {onRefresh && (
-            <ScrambleAction icon="refresh" label="New scramble" onPress={onRefresh} disabled={loading} />
+            <IconPill name="refresh" accessibilityLabel="New scramble" onPress={onRefresh} disabled={loading} />
           )}
           {onEdit && (
-            <ScrambleAction icon="pencil" label="Enter a custom scramble" onPress={onEdit} disabled={loading} />
+            <IconPill
+              name="pencil"
+              accessibilityLabel="Enter a custom scramble"
+              onPress={onEdit}
+              disabled={loading}
+            />
           )}
           {onCopy && (
-            <ScrambleAction icon="copy" label="Copy scramble" onPress={onCopy} disabled={loading || !scramble} />
+            <IconPill
+              name="copy"
+              accessibilityLabel="Copy scramble"
+              onPress={onCopy}
+              disabled={loading || !scramble}
+            />
           )}
         </View>
       )}
     </View>
-  );
-}
-
-// Icon-only, with the words moved to the accessibility label. The two controls
-// are unambiguous as glyphs and this keeps the row from crowding the scramble it
-// sits under.
-function ScrambleAction({
-  icon,
-  label,
-  onPress,
-  disabled,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const p = usePalette();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={8}
-      style={({ pressed }) => ({
-        width: 38,
-        height: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: radius.pill,
-        backgroundColor: p.cardHover,
-        opacity: disabled ? 0.35 : pressed ? 0.7 : 1,
-      })}
-    >
-      <Icon name={icon} size={16} color={p.text} />
-    </Pressable>
   );
 }

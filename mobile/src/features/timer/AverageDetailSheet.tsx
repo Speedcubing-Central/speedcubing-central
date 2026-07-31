@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { useMemo, useRef } from 'react';
+import { FlatList, Text, View } from 'react-native';
 import {
   formatAverageCopy,
   formatMoveCount,
@@ -10,9 +9,9 @@ import {
   type SolveAverage,
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
-import { MONO } from '../../components/ui';
+import { ColumnLabel, CopyButton, Divider, EMPTY, MONO, Surface } from '../../components/ui';
 import { Sheet } from '../../components/Sheet';
-import { font, radius, space } from '../../theme';
+import { font, space } from '../../theme';
 
 // One average, broken out into the solves that made it. The mobile equivalent
 // of the web AverageDetail modal.
@@ -27,58 +26,69 @@ import { font, radius, space } from '../../theme';
 export function AverageDetailSheet({
   view,
   event,
+  visible,
   onClose,
 }: {
-  view: SolveAverage;
+  /** Null before anything has been opened, and again while the sheet exits. */
+  view: SolveAverage | null;
   event: string;
+  visible: boolean;
   onClose: () => void;
 }) {
   const p = usePalette();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
-  const droppedSet = useMemo(() => new Set(view.droppedIndices), [view.droppedIndices]);
+
+  // The sheet now stays mounted so it can play its 200ms exit animation, which
+  // means `view` goes null while it is still on screen. Rendering the last
+  // non-null one keeps the content in place all the way out instead of the
+  // sheet flashing empty as it slides away.
+  const lastRef = useRef<SolveAverage | null>(null);
+  if (view) lastRef.current = view;
+  const shown = view ?? lastRef.current;
+
+  const droppedSet = useMemo(() => new Set(shown?.droppedIndices ?? []), [shown]);
+
+  if (!shown) return null;
 
   const value =
-    view.value === null
-      ? '—'
-      : !isFinite(view.value)
+    shown.value === null
+      ? EMPTY
+      : !isFinite(shown.value)
         ? 'DNF'
         : isFmc
-          ? formatMoveCount(view.value, 'NONE', 2)
-          : formatTime(Math.round(view.value), 'NONE', solvePrecision);
-  const label = view.size === 3 ? 'mo3' : `ao${view.size}`;
-  const [copied, setCopied] = useState(false);
-
-  // formatAverageCopy is @scc/shared's, the same function the web client uses,
-  // so an average pasted from either platform is byte-identical: same header,
-  // same numbering, same parenthesised drops.
-  const copyAverage = async () => {
-    await Clipboard.setStringAsync(formatAverageCopy(view, event, solvePrecision));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+          ? formatMoveCount(shown.value, 'NONE', 2)
+          : formatTime(Math.round(shown.value), 'NONE', solvePrecision);
+  const label = shown.size === 3 ? 'mo3' : `ao${shown.size}`;
 
   return (
     <Sheet
-      visible
+      visible={visible}
       onClose={onClose}
       title={label}
       fillHeight
       maxHeightRatio={0.78}
       headerRight={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <Pressable accessibilityRole="button" onPress={copyAverage} hitSlop={8}>
-            <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 12 }}>
-              {copied ? 'Copied' : 'Copy'}
-            </Text>
-          </Pressable>
+          {/* formatAverageCopy is @scc/shared's, the same function the web
+              client uses, so an average pasted from either platform is
+              byte-identical: same header, same numbering, same drops. */}
+          <CopyButton
+            getText={() => formatAverageCopy(shown, event, solvePrecision)}
+            accessibilityLabel="Copy this average"
+          />
           <Text style={{ color: p.accent, fontSize: 20, fontFamily: font.monoBold }}>{value}</Text>
         </View>
       }
     >
-      <FlatList
-          data={view.window}
+      {/* One Surface with rules between the rows, rather than a bordered mini
+          card per row. Twenty stacked boxes read as twenty things; one list of
+          twenty rows reads as one average, which is what it is. */}
+      <Surface padding="none" style={{ flex: 1, overflow: 'hidden' }}>
+        <FlatList
+          data={shown.window}
           keyExtractor={(s) => s.id}
+          ItemSeparatorComponent={Divider}
           renderItem={({ item, index }) => {
             const dropped = droppedSet.has(index);
             return (
@@ -87,17 +97,21 @@ export function AverageDetailSheet({
                   flexDirection: 'row',
                   gap: space.sm,
                   alignItems: 'baseline',
-                  borderWidth: 1,
-                  borderColor: p.border,
-                  borderRadius: radius.sm,
                   paddingHorizontal: space.md,
                   paddingVertical: 9,
-                  marginBottom: 6,
                   opacity: dropped ? 0.5 : 1,
                 }}
               >
-                <Text style={{ color: p.textMuted, fontSize: 11, width: 28 }}>{index + 1}.</Text>
-                <Text style={{ color: p.text, fontFamily: MONO, fontSize: 14, width: 78 }}>
+                <ColumnLabel style={{ width: 28 }}>{index + 1}.</ColumnLabel>
+                <Text
+                  style={{
+                    color: p.text,
+                    fontFamily: MONO,
+                    fontSize: 14,
+                    width: 78,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                >
                   {dropped ? '(' : ''}
                   {isFmc
                     ? formatMoveCount(item.time, item.penalty)
@@ -105,16 +119,17 @@ export function AverageDetailSheet({
                   {dropped ? ')' : ''}
                 </Text>
                 <Text style={{ color: p.textMuted, fontFamily: MONO, fontSize: 10, flex: 1 }}>
-                  {normalizeScramble(item.scramble) || '—'}
+                  {normalizeScramble(item.scramble) || EMPTY}
                 </Text>
               </View>
             );
           }}
         />
+      </Surface>
 
-      {view.droppedIndices.length > 0 && (
+      {shown.droppedIndices.length > 0 && (
         <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 11, marginTop: space.sm }}>
-          Dropped solves (best &amp; worst) are dimmed and shown in parentheses.
+          Dropped solves (best and worst) are dimmed and shown in parentheses.
         </Text>
       )}
     </Sheet>

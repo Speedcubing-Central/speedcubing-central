@@ -94,3 +94,60 @@ export function densityFor(available: number, fontScale: number): Density {
   if (effective < 640) return 'compact';
   return 'comfortable';
 }
+
+// ── Vertical rhythm ───────────────────────────────────────────────────────
+//
+// Every gap in this app was `space.sm` (8). A single repeated gap is the reason
+// the Timer read as cluttered even when nothing on it was wrong: if the space
+// between the header and the scramble equals the space between a label and its
+// own value, nothing groups, and the eye has to read all of it to find out what
+// belongs to what. Grouping is done with space or it is not done at all.
+//
+// So these are named by *relationship*, not by size, and a caller picks the one
+// that describes what the two things are to each other. That way a later edit
+// changes one number here rather than guessing at a literal on the spot.
+export interface Rhythm {
+  /** Inside one cell: a label sitting directly above its own value. */
+  hair: number;
+  /** Parts of a single control: an icon beside its text. */
+  tight: number;
+  /** Siblings in a list or a row of figures. */
+  item: number;
+  /** Between groups that still belong to the same block. */
+  group: number;
+  /** Between the major blocks of a screen. */
+  section: number;
+}
+
+// The two larger steps compress by density, the three smaller ones don't: below
+// about 8pt a gap stops reading as separation at all, so shrinking `hair` and
+// `tight` would cost legibility and buy back almost no height. What actually
+// buys height on a short screen is `group` and `section`, which are also the
+// two that can afford it.
+const RHYTHM_GROUP: Record<Density, number> = { comfortable: 14, compact: 10, minimal: 8 };
+const RHYTHM_SECTION: Record<Density, number> = { comfortable: 22, compact: 14, minimal: 10 };
+const RHYTHM_ITEM: Record<Density, number> = { comfortable: 8, compact: 8, minimal: 6 };
+
+/**
+ * Vertical rhythm for this screen, scaled by `useScreenScale`.
+ *
+ * Budget, load bearing on the Timer column: the sum of every inter-element
+ * margin must stay under sc(48) at comfortable, sc(28) at compact and sc(16) at
+ * minimal. Each point of gap is a point the timer digits do not get, and the
+ * Yoga harness asserts the timer's resulting height rather than this sum, so an
+ * edit that blows the budget shows up there as a failure and not here.
+ *
+ * @param density Pass the tier when the caller has already computed one (the
+ *   Timer does, from its measured column height). Screens that scroll can
+ *   ignore it: they have no fixed budget to blow.
+ */
+export function useRhythm(density: Density = 'comfortable'): Rhythm {
+  const { s } = useScreenScale();
+  return {
+    hair: s(2),
+    tight: s(4),
+    item: s(RHYTHM_ITEM[density]),
+    group: s(RHYTHM_GROUP[density]),
+    section: s(RHYTHM_SECTION[density]),
+  };
+}

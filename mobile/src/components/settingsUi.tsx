@@ -1,10 +1,17 @@
 import type { ReactNode } from 'react';
-import { Pressable, Switch, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Switch, Text } from 'react-native';
 import { usePalette } from '../store/settings';
-import { font, radius, space } from '../theme';
+import { font, space, stroke } from '../theme';
+import { Label, Pill, Surface } from './ui';
 
 // Settings row primitives, mirroring client/src/components/settingsUi.tsx so the
 // two apps present the same options with the same labels and hints.
+//
+// This stays a thin domain layer over ui.tsx rather than folding into it: these
+// four exports are used by exactly two screens, and ui.tsx is already the
+// general vocabulary. What changed is only what they are built from, so no
+// screen that renders them needed an edit.
 
 export function SettingsRow({
   label,
@@ -31,7 +38,9 @@ export function SettingsRow({
       style={{
         opacity: disabled ? 0.45 : 1,
         paddingVertical: space.md,
-        borderBottomWidth: 1,
+        // Hairline, not 1dp. At 1dp a rule between two rows reads as a border
+        // around each of them rather than as a separation between them.
+        borderBottomWidth: stroke.hairline,
         borderBottomColor: p.border,
         gap: space.sm,
       }}
@@ -70,32 +79,15 @@ export function Toggle({
 }
 
 export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
-  const p = usePalette();
   return (
     <View style={{ gap: space.xs }}>
-      <Text
-        style={{
-          color: p.textMuted,
-          fontSize: 11,
-          fontFamily: font.sansBold,
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-          marginTop: space.md,
-        }}
-      >
-        {title}
-      </Text>
-      <View
-        style={{
-          backgroundColor: p.card,
-          borderColor: p.border,
-          borderWidth: 1,
-          borderRadius: radius.md,
-          paddingHorizontal: space.md,
-        }}
-      >
+      <Label style={{ marginTop: space.md }}>{title}</Label>
+      {/* padding="none" because each SettingsRow supplies its own vertical
+          padding and its rule needs to run to the card's edges. The horizontal
+          inset is the group's, not the row's, so a rule is never inset. */}
+      <Surface padding="none" style={{ paddingHorizontal: space.md }}>
         {children}
-      </View>
+      </Surface>
     </View>
   );
 }
@@ -114,31 +106,17 @@ export function OptionRow<T extends string | number>({
   onChange: (v: T) => void;
   disabled?: boolean;
 }) {
-  const p = usePalette();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-      {options.map((o) => {
-        const selected = o.value === value;
-        return (
-          <Pressable
-            key={String(o.value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected, disabled: !!disabled }}
-            disabled={disabled}
-            onPress={() => onChange(o.value)}
-            style={{
-              backgroundColor: selected ? p.accent : p.cardHover,
-              borderRadius: radius.pill,
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-            }}
-          >
-            <Text style={{ color: selected ? '#fff' : p.text, fontSize: 12, fontFamily: font.sansSemi }}>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {options.map((o) => (
+        <Pill
+          key={String(o.value)}
+          label={o.label}
+          selected={o.value === value}
+          disabled={disabled}
+          onPress={() => onChange(o.value)}
+        />
+      ))}
     </View>
   );
 }
