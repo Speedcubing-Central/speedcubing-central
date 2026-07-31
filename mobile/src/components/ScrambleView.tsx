@@ -43,15 +43,32 @@ export function ScrambleView({
   // that deliberately doesn't scroll. Megaminx used to be special-cased here for
   // exactly this reason; length covers it and every other long scramble too.
   const len = scramble?.length ?? 0;
-  const fontSize = compact ? 14 : len > 190 ? 12 : len > 120 ? 13 : len > 70 ? 15 : 17;
+  const isSq1 = isSquareOne(eventId);
+  // Square-1 is sized by pair count, not character count. Its pairs are atomic
+  // (a line may never break inside "(4, 0) /"), so characters don't predict how
+  // many lines you get the way they do for a stream of individual moves: a
+  // 12-pair scramble wrapped to six lines at the size its length asked for,
+  // which squeezed the timer and clipped the hint underneath it.
+  const pairs = isSq1 ? sq1Pairs(scramble) : null;
+  const fontSize = compact
+    ? 14
+    : isSq1
+      ? (pairs!.length > 10 ? 13 : 15)
+      : len > 190
+        ? 12
+        : len > 120
+          ? 13
+          : len > 70
+            ? 15
+            : 17;
 
   let body: React.ReactNode;
   if (loading && !scramble) {
     body = <ActivityIndicator color={p.accent} />;
-  } else if (isSquareOne(eventId)) {
+  } else if (pairs) {
     body = (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 8, rowGap: 4 }}>
-        {sq1Pairs(scramble).map((pair, i) => (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 6, rowGap: 3 }}>
+        {pairs.map((pair, i) => (
           <Text
             key={`${i}-${pair}`}
             style={{ color: p.text, fontFamily: MONO, fontSize, lineHeight: fontSize * 1.28 }}

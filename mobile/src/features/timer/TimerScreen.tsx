@@ -366,7 +366,13 @@ export default function TimerScreen({ navigation }: Props) {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  flexShrink: 1,
+                  // Takes the spare width itself instead of a separate spacer
+                  // doing it. Previously a <View flex:1 /> sat between this and
+                  // the icons and absorbed everything, leaving the session name
+                  // to shrink to "s..". minWidth 0 is what actually lets a flex
+                  // child narrow enough to ellipsize instead of overflowing.
+                  flex: 1,
+                  minWidth: 0,
                   paddingVertical: 8,
                   paddingHorizontal: space.xs,
                   opacity: pressed ? 0.6 : 1,
@@ -381,7 +387,6 @@ export default function TimerScreen({ navigation }: Props) {
                 </Text>
               </Pressable>
 
-              <View style={{ flex: 1 }} />
               <IconButton name="chart" accessibilityLabel="Statistics" onPress={() => navigation.navigate('Stats')} />
               <IconButton name="list" accessibilityLabel="Solves" onPress={() => navigation.navigate('Solves')} />
               <IconButton
@@ -739,13 +744,9 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         style={{
           color: p.textMuted,
           fontFamily: font.sansSemi,
-          fontSize: 11,
+          fontSize: 10,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
-          // The label gave itself a minimum width and never yielded, so a
-          // five-figure solve count was truncated to its first digits while the
-          // word "SOLVES" kept its space. It shrinks first now.
-          flexShrink: 1,
         }}
         numberOfLines={1}
       >
@@ -753,21 +754,26 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
       </Text>
       <Text
         numberOfLines={1}
-        // Never shrinks: the number is the point of the row, and it is what got
-        // cut off before.
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
         style={{
           color: tappable ? p.accent : p.text,
           fontFamily: MONO_BOLD,
-          fontSize: 16,
+          fontSize: 15,
           fontVariant: ['tabular-nums'],
-          flexShrink: 0,
         }}
       >
         {value}
       </Text>
     </>
   );
-  const style = { flex: 1, flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 5 };
+  // Stacked, not side by side: a label beside a mono time needs about 100pt, and
+  // two of those don't fit once the scramble image has taken its share of the
+  // row, which is what left every figure ellipsized ("21.…", "6.41s."). Stacking
+  // needs only as much width as the wider of the two lines. A long value shrinks
+  // its own font rather than losing digits, since a truncated time is worse than
+  // a small one.
+  const style = { flex: 1, minWidth: 0 };
   if (!tappable) return <View style={style}>{body}</View>;
   return (
     <Pressable
