@@ -25,6 +25,8 @@ export function ScrambleView({
   onRefresh,
   onGoBack,
   canGoBack,
+  onEdit,
+  onCopy,
   compact = false,
 }: {
   eventId: string;
@@ -33,6 +35,8 @@ export function ScrambleView({
   onRefresh?: () => void;
   onGoBack?: () => void;
   canGoBack?: boolean;
+  onEdit?: () => void;
+  onCopy?: () => void;
   compact?: boolean;
 }) {
   const p = usePalette();
@@ -59,14 +63,14 @@ export function ScrambleView({
   const byContent = compact
     ? 14
     : isSq1
-      ? (pairs!.length > 10 ? 13 : 15)
+      ? (pairs!.length > 10 ? 14 : 17)
       : len > 190
-        ? 12
+        ? 13
         : len > 120
-          ? 13
+          ? 15
           : len > 70
-            ? 15
-            : 17;
+            ? 18
+            : 22;
   // A floor of 10: below that a scramble stops being reliably readable at
   // arm's length, which defeats the point of showing it.
   const fontSize = Math.max(10, sc(byContent) - (isShort && !compact ? 1 : 0));
@@ -118,7 +122,7 @@ export function ScrambleView({
       }}
     >
       <View style={{ minHeight: compact ? 24 : sc(34), justifyContent: 'center' }}>{body}</View>
-      {(onRefresh || onGoBack) && (
+      {(onRefresh || onGoBack || onEdit || onCopy) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
             <ScrambleAction
@@ -130,6 +134,12 @@ export function ScrambleView({
           )}
           {onRefresh && (
             <ScrambleAction icon="refresh" label="New scramble" onPress={onRefresh} disabled={loading} />
+          )}
+          {onEdit && (
+            <ScrambleAction icon="pencil" label="Enter a custom scramble" onPress={onEdit} disabled={loading} />
+          )}
+          {onCopy && (
+            <ScrambleAction icon="copy" label="Copy scramble" onPress={onCopy} disabled={loading || !scramble} />
           )}
         </View>
       )}

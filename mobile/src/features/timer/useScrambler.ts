@@ -103,5 +103,17 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     setPrevious(null);
   }, [sessionId]);
 
-  return { scramble, previous, loading, refresh, advance, goBack };
+  // Replaces the current scramble with one the user typed. The queue is left
+  // alone on purpose: the custom scramble applies to this attempt only, and the
+  // already-prefetched next one is still perfectly good. Bumping reqId cancels
+  // any generation still in flight, so a slow fetch can't land afterwards and
+  // overwrite what was just entered.
+  const setCustom = useCallback((value: string) => {
+    reqId.current++;
+    setPrevious(scrambleRef.current);
+    setScramble(value);
+    setLoading(false);
+  }, []);
+
+  return { scramble, previous, loading, refresh, advance, goBack, setCustom };
 }

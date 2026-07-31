@@ -569,14 +569,18 @@ export default function TimerScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : (
-          // Manual entry, also the path FMC takes in this pass.
-          <Tile
+          // Manual entry, also the path FMC takes in this pass. Same surface as
+          // the touch timer above, so switching input mode doesn't change what
+          // the screen looks like, only what it accepts.
+          <View
             style={{
               flex: TIMER_FLEX,
               alignItems: 'center',
               justifyContent: 'center',
               gap: space.lg,
               padding: space.lg,
+              borderRadius: radius.lg,
+              backgroundColor: surfaceTint,
             }}
           >
             <Text
@@ -623,7 +627,7 @@ export default function TimerScreen({ navigation }: Props) {
                 <Text style={{ color: '#fff', fontFamily: font.sansBold }}>Add</Text>
               </Pressable>
             </View>
-          </Tile>
+          </View>
         )}
 
         {/* ── Footer: scramble image, stats, penalties ──
@@ -650,17 +654,43 @@ export default function TimerScreen({ navigation }: Props) {
                 (newest ? sc(PENALTY_TILE_H) : 0),
             }}
           >
-            {/* Penalties get their own tile rather than sitting loose above the
-                footer: they act on the last solve, not on the timer, and a
-                surface of their own is what makes that separation legible. */}
+            {/* The result and what you can do to it, on one line: the time this
+                acts on sits beside the buttons that change it, rather than the
+                buttons floating in a panel with no subject. Reads as the top
+                half of a single card, joined to the averages below by a rule. */}
             {newest && (
-              <Tile style={{ padding: space.sm, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 }}>
-                <PenaltyRow
-                  penalty={newest.penalty}
-                  plusTwoCount={newest.plusTwoCount}
-                  onChange={(pen, count) => data.updatePenalty(newest.id, pen, count)}
-                  hidePlusTwo={isFmc}
-                />
+              <Tile
+                style={{
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.sm,
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                  borderBottomWidth: 0,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.md,
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                  style={{
+                    color: newest.penalty === 'DNF' ? p.red : p.text,
+                    fontFamily: MONO_BOLD,
+                    fontSize: sc(19),
+                    fontVariant: ['tabular-nums'],
+                  }}
+                >
+                  {fmt(newest.time, newest.penalty, newest.plusTwoCount)}
+                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <PenaltyRow
+                    penalty={newest.penalty}
+                    plusTwoCount={newest.plusTwoCount}
+                    onChange={(pen, count) => data.updatePenalty(newest.id, pen, count)}
+                    hidePlusTwo={isFmc}
+                  />
+                </View>
               </Tile>
             )}
 

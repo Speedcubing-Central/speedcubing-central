@@ -367,3 +367,41 @@ export async function renderScrambleImage(eventId: string, scramble: string): Pr
 
   return { xml, aspect: loaded.aspect };
 }
+
+export interface ScrambleValidation {
+  ok: boolean;
+  /** The cleaned-up scramble, when valid. */
+  scramble: string;
+  error?: string;
+}
+
+/**
+ * Validates a user-typed scramble before it is allowed to become the active one.
+ *
+ * Two distinct failure modes both have to be caught, and neither is worth a
+ * regex: notation that doesn't parse at all, and notation that parses fine but
+ * is illegal for this particular puzzle (a wrong face name, a move type this
+ * puzzle doesn't have). cubing.js's own parser and move application are the
+ * source of truth for both, which is the same reasoning as the web client's
+ * client/src/lib/customScramble.ts.
+ *
+ * This reuses the KPuzzle already cached for the scramble image, so it costs
+ * nothing beyond the first load of that puzzle.
+ */
+export async function validateScramble(eventId: string, input: string): Promise<ScrambleValidation> {
+  const trimmed = input.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return { ok: false, scramble: '', error: 'Enter a scramble' };
+
+  const puzzleId = EVENT_PUZZLE[eventId];
+  if (!puzzleId) return { ok: false, scramble: '', error: "This event doesn't support custom scrambles" };
+
+  const loaded = await loadCached(puzzleId);
+  if (!loaded) return { ok: false, scramble: '', error: 'Could not load this puzzle' };
+
+  // applyAlg returns null on any parse or application failure, which is exactly
+  // the pair of cases that make a scramble unusable here.
+  if (!loaded.applyAlg(trimmed)) {
+    return { ok: false, scramble: '', error: 'That is not a valid scramble for this puzzle' };
+  }
+  return { ok: true, scramble: trimmed };
+}
