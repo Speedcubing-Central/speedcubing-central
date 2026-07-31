@@ -320,14 +320,14 @@ export default function TimerScreen({ navigation }: Props) {
   // leaves; below that the tile clips, which is at least visibly wrong rather
   // than silently unreadable.
   const digitCeiling = immersive ? 84 : 64;
-  const digitFontSize = timerTileH > 0 ? Math.max(30, Math.min(digitCeiling, timerTileH * 0.46)) : digitCeiling;
+  const digitFontSize = timerTileH > 0 ? Math.max(30, Math.min(digitCeiling, timerTileH * 0.4)) : digitCeiling;
 
   const hint = (() => {
     switch (engine.phase) {
       case 'idle':
-        return inspection ? 'Tap to start inspection' : 'Touch and hold, release to start';
+        return inspection ? 'Tap to inspect' : 'Hold, then release';
       case 'inspecting':
-        return 'Inspecting: hold to get ready';
+        return 'Hold to get ready';
       case 'holding':
         return 'Keep holding…';
       case 'ready':
