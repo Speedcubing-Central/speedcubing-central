@@ -23,7 +23,7 @@ import {
   type SolveSortBy,
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
-import { useScreenScale, type Density } from '../../lib/scale';
+import { useScreenScale } from '../../lib/scale';
 import {
   ColumnLabel,
   Divider,
@@ -34,7 +34,6 @@ import {
   Segmented,
   TextButton,
 } from '../../components/ui';
-import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { PenaltyRow } from './PenaltyRow';
 import { StatRows } from './StatRows';
 import { SolvesList, SolvesColumnHeader } from './SolvesList';
@@ -82,17 +81,14 @@ const HANDLE_H = 22;
 // are what stop a long scramble's knock-on effects from squeezing the strip's
 // contents to nothing (trap 3).
 const SUMMARY_PENALTY_ROW_MIN_H = 48;
-const SUMMARY_STATS_ROW_MIN_H = 66;
-// Down from the old footer's 132: the net now sits beside three figures in a
-// strip rather than owning half a footer.
+// The scramble image used to sit in this row, which is why it was 66. It has
+// moved up to the scramble zone, where it belongs: it answers "is my cube
+// scrambled right", which is a question about the scramble, not about how the
+// session is going. Filing it beside ao5/ao12/best is what made a 50pt box look
+// defensible, and 50pt is 2.4pt per sticker on a 7x7.
 //
-// Both dimensions are fixed rather than measured. The old footer sized the net
-// from its row's measured height, which meant the first paint drew it at its
-// natural size and the second shrank it, so the strip visibly jumped every time
-// the event changed. A constant box cannot do that, and ScrambleNet already
-// fits itself inside whatever box it is given, preserving aspect.
-const SUMMARY_NET_W = 88;
-const SUMMARY_NET_H = SUMMARY_STATS_ROW_MIN_H - space.sm * 2;
+// The three figures get the whole strip width back as a result.
+const SUMMARY_STATS_ROW_MIN_H = 52;
 // Clamp on the measured collapsed height. Not a size, a safety net: at an
 // extreme OS font scale the strip could otherwise grow until the timer had
 // nothing left.
@@ -107,11 +103,8 @@ const PANEL_TOGGLE_VELOCITY = 0.7;
 export interface StatsPanelProps {
   solves: SolveDTO[];
   event: string;
-  scrambleEventId: string;
-  scramble: string;
   /** The measured height of the Timer column, never the window height. */
   columnH: number;
-  density: Density;
   /** True while an attempt is live: the panel force-collapses and goes inert. */
   immersive: boolean;
   open: boolean;
@@ -129,10 +122,7 @@ export interface StatsPanelProps {
 export function StatsPanel({
   solves,
   event,
-  scrambleEventId,
-  scramble,
   columnH,
-  density,
   immersive,
   open,
   onOpenChange,
@@ -344,12 +334,6 @@ export function StatsPanel({
     ]);
   }
 
-  // Decided from the density tier rather than from a measurement. The old
-  // footer worked this out from its own measured height, which made the net's
-  // presence depend on a value that arrived a frame late; at the tightest tier
-  // the strip has no room for a picture and at the others it always does.
-  const netVisible = density !== 'minimal' && hasScrambleNet(scrambleEventId) && !!scramble;
-
   return (
     <Animated.View
       // pointerEvents rather than unmounting, so an attempt starting mid-drag
@@ -455,24 +439,6 @@ export function StatsPanel({
             paddingVertical: space.sm,
           }}
         >
-          {netVisible ? (
-            <View
-              style={{
-                width: sc(SUMMARY_NET_W),
-                height: sc(SUMMARY_NET_H),
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <ScrambleNet
-                eventId={scrambleEventId}
-                scramble={scramble}
-                size={sc(SUMMARY_NET_W)}
-                maxHeight={sc(SUMMARY_NET_H)}
-              />
-            </View>
-          ) : null}
-
           {/* Three figures, not six. Six took as much height as the timer, so
               the screen read as two equal halves and nothing looked important.
               Ao100, mean and the solve count are session totals: they are a

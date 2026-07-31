@@ -1,5 +1,6 @@
 import { getEvent, normalizeScramble } from '@scc/shared';
 import { api } from './api';
+import type { Density } from './scale';
 
 // Scramble sourcing for mobile.
 //
@@ -135,4 +136,73 @@ export function eventBadge(eventId: string): string {
   // Falls back to the full name rather than the raw id, so an event added to
   // shared/ without a badge here degrades to something readable.
   return EVENT_BADGE[eventId] ?? eventName(eventId);
+}
+
+// ── Scramble image size ───────────────────────────────────────────────────
+//
+// One constant cannot serve every puzzle, which is what the previous version of
+// this got wrong. cubing.js draws every NxN from 4x4 up into the same viewBox
+// (800x500, aspect 1.600), so a 7x7 net is exactly the same *shape* as a 4x4
+// and differs only in how many stickers are packed into it. In a fixed box that
+// means a 7x7's stickers are 4/7 the size of a 4x4's and 3/7 of a 3x3's; at the
+// 50pt box this replaces, a 7x7 sticker was 2.4pt, which is not a picture of
+// anything.
+//
+// So the height scales with how many sticker rows the drawing has to fit down
+// it (3 faces stacked, so 3N for an NxN), targeting roughly 8pt per sticker or
+// better on a baseline phone.
+//
+// Height, not width, because a puzzle's `aspect` is only known after cubing.js
+// resolves the drawing. Reserving the box by the dimension known up front is
+// what keeps the column from reflowing when the image finally lands; the width
+// is then whatever the aspect makes it, which on a phone always fits.
+const IMAGE_BASE_H: Record<string, number> = {
+  '222': 100,
+  '333': 116,
+  '333oh': 116,
+  '333bf': 116,
+  '333ft': 116,
+  '333fm': 116,
+  lsll: 116,
+  ll: 116,
+  cls: 116,
+  '444': 150,
+  '444bf': 150,
+  '555': 150,
+  '555bf': 150,
+  // 18 and 21 sticker rows: the two that most need the room.
+  '666': 168,
+  '777': 168,
+  minx: 150,
+  // Aspect 0.652, the one puzzle taller than it is wide, so a height budget is
+  // the *only* thing that decides how big it gets.
+  sq1: 150,
+  // Aspect 2.000 and only four dial rows, so it reads fine short and would
+  // otherwise be drawn absurdly wide.
+  clock: 100,
+  pyram: 116,
+  skewb: 116,
+  kilominx: 150,
+  fto: 150,
+  redi_cube: 116,
+};
+
+// The tightest tier still shows the image. An earlier pass hid it there, and
+// the arithmetic showed an iPhone SE at large text reaching `minimal` with over
+// 200pt of timer height going spare, so hiding bought nothing and cost the one
+// thing the image exists for.
+const IMAGE_DENSITY_FACTOR: Record<Density, number> = {
+  comfortable: 1,
+  compact: 0.85,
+  minimal: 0.7,
+};
+
+/**
+ * Height to give the scramble image for this event, in points.
+ *
+ * @param s The screen-scale helper from `useScreenScale`.
+ */
+export function scrambleImageHeight(eventId: string, density: Density, s: (n: number) => number): number {
+  const base = IMAGE_BASE_H[eventId] ?? IMAGE_BASE_H['333'];
+  return Math.round(s(base) * IMAGE_DENSITY_FACTOR[density]);
 }

@@ -111,7 +111,6 @@ export function SolvesList({
   pinnedHeader?: boolean;
   ListHeaderComponent?: ReactElement | null;
 }) {
-  const p = usePalette();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
 

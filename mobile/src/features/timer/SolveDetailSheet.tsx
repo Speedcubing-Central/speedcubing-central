@@ -13,6 +13,8 @@ import {
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
 import { parseTimeInput } from '../../lib/timeInput';
+import { scrambleImageHeight } from '../../lib/scramble';
+import { useScreenScale } from '../../lib/scale';
 import {
   Button,
   ColumnLabel,
@@ -58,8 +60,12 @@ export function SolveDetailSheet({
   onOpenAverage: (view: SolveAverage) => void;
 }) {
   const p = usePalette();
+  const { s: sc } = useScreenScale();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
+  // 'comfortable' unconditionally: this sheet scrolls, so it has no height
+  // budget to trade against and there is nothing to be gained by shrinking.
+  const netH = scrambleImageHeight(event, 'comfortable', sc);
 
   // The sheet stays mounted so it can play its exit animation, so `index` goes
   // null while it is still on screen. Hold the last real one so the content
@@ -191,7 +197,16 @@ export function SolveDetailSheet({
               {normalizeScramble(solve.scramble) || EMPTY}
             </Text>
             {hasScrambleNet(event) && solve.scramble ? (
-              <ScrambleNet eventId={event} scramble={solve.scramble} size={104} />
+              // Same per-puzzle sizing the Timer uses. A 7x7's scramble was
+              // exactly as unreadable at a flat 104 here as it was in the old
+              // 50pt strip box, and this sheet scrolls, so there is no column
+              // budget to protect.
+              <ScrambleNet
+                eventId={event}
+                scramble={solve.scramble}
+                size={netH}
+                maxHeight={netH}
+              />
             ) : null}
           </View>
         </View>

@@ -10,7 +10,6 @@ import {
   type SolveDTO,
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
-import { useScreenScale } from '../../lib/scale';
 import { ColumnLabel, MONO, Surface } from '../../components/ui';
 import { space } from '../../theme';
 
@@ -35,7 +34,6 @@ const CHART_H = 96;
 
 export function SolvesTrend({ solves, event }: { solves: SolveDTO[]; event: string }) {
   const p = usePalette();
-  const { s: sc } = useScreenScale();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
   const [width, setWidth] = useState(0);

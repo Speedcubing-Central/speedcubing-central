@@ -17,7 +17,7 @@ import {
 } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
-import { eventBadge } from '../../lib/scramble';
+import { eventBadge, scrambleImageHeight } from '../../lib/scramble';
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
@@ -29,6 +29,7 @@ import { EventPickerSheet } from '../../components/EventPickerSheet';
 import { AverageDetailSheet } from './AverageDetailSheet';
 import { SolveDetailSheet } from './SolveDetailSheet';
 import { EditScrambleSheet } from './EditScrambleSheet';
+import { ScrambleImageSheet } from './ScrambleImageSheet';
 import { TimerMenuSheet, type TimerMenuItem } from './TimerMenuSheet';
 import { StatsPanel } from './StatsPanel';
 import { useTimerDataContext } from './TimerDataContext';
@@ -114,6 +115,7 @@ export default function TimerScreen({ navigation }: Props) {
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showEditScramble, setShowEditScramble] = useState(false);
+  const [showScrambleImage, setShowScrambleImage] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Measured, not assumed. The column's own height is what density is decided
   // from: the window height would be wrong by the safe area and the tab bar,
@@ -189,6 +191,7 @@ export default function TimerScreen({ navigation }: Props) {
     !showEventPicker &&
     !showMenu &&
     !showEditScramble &&
+    !showScrambleImage &&
     !panelOpen &&
     !inputBlocked;
 
@@ -290,6 +293,13 @@ export default function TimerScreen({ navigation }: Props) {
   // about how much room there is.
   const density = columnH > 0 ? densityFor(columnH, fontScale) : 'comfortable';
   const rhythm = useRhythm(density);
+
+  // Sized per puzzle, because every NxN from 4x4 up is drawn into the same
+  // 1.600 viewBox and differs only in how many stickers are packed into it: one
+  // constant that suits a 9-row 3x3 leaves a 21-row 7x7 unreadable. Scaled by
+  // the screen and then by density, so it is the events that need the room that
+  // spend the timer's height, and a 3x3 keeps its digits at their ceiling.
+  const imageHeight = scrambleImageHeight(scrambleEventId, density, sc);
 
   // Raised well past the old 64: that ceiling was set when the timer was a
   // bordered card competing with four others, and it left the digits at ~53pt
@@ -471,6 +481,8 @@ export default function TimerScreen({ navigation }: Props) {
                 canGoBack={scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped')}
                 onEdit={() => setShowEditScramble(true)}
                 onCopy={() => Clipboard.setStringAsync(normalizeScramble(scr.scramble))}
+                onOpenImage={() => setShowScrambleImage(true)}
+                imageHeight={imageHeight}
               />
             </View>
           </>
@@ -620,10 +632,7 @@ export default function TimerScreen({ navigation }: Props) {
       <StatsPanel
         solves={data.solves}
         event={event}
-        scrambleEventId={scrambleEventId}
-        scramble={scr.scramble}
         columnH={columnH}
-        density={density}
         immersive={immersive}
         open={panelOpen}
         onOpenChange={setPanelOpen}
@@ -677,6 +686,13 @@ export default function TimerScreen({ navigation }: Props) {
         current={scr.scramble}
         onApply={scr.setCustom}
         onClose={() => setShowEditScramble(false)}
+      />
+
+      <ScrambleImageSheet
+        visible={showScrambleImage}
+        eventId={scrambleEventId}
+        scramble={scr.scramble}
+        onClose={() => setShowScrambleImage(false)}
       />
 
       {/* Last child, so it draws over everything, and absolutely positioned so

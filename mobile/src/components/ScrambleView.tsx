@@ -1,8 +1,9 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { usePalette, useSettings } from '../store/settings';
 import { carrotScramble, formatScramble, isSquareOne, sq1Pairs } from '../lib/scramble';
 import { space } from '../theme';
 import { IconPill, MONO } from './ui';
+import { ScrambleNet, hasScrambleNet } from './ScrambleNet';
 import { useScreenScale } from '../lib/scale';
 
 // Scramble display, matching the web ScramblePanel's text rules (which is the
@@ -26,6 +27,8 @@ export function ScrambleView({
   canGoBack,
   onEdit,
   onCopy,
+  onOpenImage,
+  imageHeight,
   compact = false,
 }: {
   eventId: string;
@@ -36,11 +39,22 @@ export function ScrambleView({
   canGoBack?: boolean;
   onEdit?: () => void;
   onCopy?: () => void;
+  /** Opens the full-size view. Also what tapping the image itself does. */
+  onOpenImage?: () => void;
+  /**
+   * Height for the scramble image, or omitted to draw no image at all.
+   *
+   * A height and not a width: the drawing's aspect ratio is only known once
+   * cubing.js has resolved it, so reserving the box by the dimension known up
+   * front is what stops the column reflowing when the image lands. See
+   * `scrambleImageHeight` in lib/scramble.ts for how the number is chosen.
+   */
+  imageHeight?: number;
   compact?: boolean;
 }) {
   const p = usePalette();
   const carrot = useSettings((s) => s.carrotNotation);
-  const { s: sc, isShort } = useScreenScale();
+  const { s: sc, isShort, width: screenWidth } = useScreenScale();
 
   // Scale with the scramble's own length rather than by event. A 7x7 scramble is
   // ~100 moves and at 17pt wrapped to a dozen lines, which ate enough of the
@@ -125,7 +139,7 @@ export function ScrambleView({
           controls are unambiguous as glyphs, and spelling them out would crowd
           the scramble they sit under. IconPill is the app-wide shape, so this
           row and any future one agree without either knowing about the other. */}
-      {(onRefresh || onGoBack || onEdit || onCopy) && (
+      {(onRefresh || onGoBack || onEdit || onCopy || onOpenImage) && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }}>
           {onGoBack && (
             <IconPill
@@ -154,8 +168,53 @@ export function ScrambleView({
               disabled={loading || !scramble}
             />
           )}
+          {onOpenImage && (
+            <IconPill
+              name="cube"
+              accessibilityLabel="View the scrambled cube full size"
+              onPress={onOpenImage}
+              disabled={!scramble || !hasScrambleNet(eventId)}
+            />
+          )}
         </View>
       )}
+
+      {/* The image last, so it sits closest to the timer.
+          It is the thing you look at while checking your cube against the
+          scramble, and putting it here also leaves a large passive block
+          between the small action buttons and the tap-anywhere timer surface
+          below, rather than putting those buttons on that boundary.
+
+          Fixed height, derived width, centred. The height is the caller's and
+          is known before the drawing resolves, so this box never changes size;
+          only the drawing inside it does. */}
+      {imageHeight !== undefined && hasScrambleNet(eventId) && scramble ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View the scrambled cube full size"
+          onPress={onOpenImage}
+          disabled={!onOpenImage}
+          style={({ pressed }) => ({
+            height: imageHeight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            // xs, not sm: the parent already contributes `gap: space.xs`, so
+            // this lands on 8 in total, which is what the layout harness models
+            // between the action row and the image.
+            marginTop: space.xs,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <ScrambleNet
+            eventId={eventId}
+            scramble={scramble}
+            // The full usable width as the width budget, so the height below is
+            // always the binding constraint on a phone and the box stays put.
+            size={screenWidth - space.md * 2 - space.sm * 2}
+            maxHeight={imageHeight}
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
