@@ -98,3 +98,41 @@ export function isSquareOne(eventId: string): boolean {
 export function eventName(eventId: string): string {
   return getEvent(eventId)?.name ?? eventId;
 }
+
+// A compact badge for the event, for places that show *which* event is selected
+// rather than offering a choice between them.
+//
+// The web client uses @cubing/icons, a webfont, for this. It ships only .woff2,
+// which React Native's font loader cannot use (it wants TTF or OTF), so a
+// faithful icon isn't available here without a conversion step and a bundled
+// binary. The short forms below are what cubers actually write, so they read as
+// fast as a glyph and, unlike a generic cube icon, still say which event it is.
+//
+// The full name is never far: the picker this opens lists every event by name.
+const EVENT_BADGE: Record<string, string> = {
+  '222': '2x2',
+  '333': '3x3',
+  '444': '4x4',
+  '555': '5x5',
+  '666': '6x6',
+  '777': '7x7',
+  '333oh': 'OH',
+  '333bf': '3BLD',
+  '444bf': '4BLD',
+  '555bf': '5BLD',
+  '333fm': 'FMC',
+  minx: 'Minx',
+  pyram: 'Pyra',
+  clock: 'Clock',
+  skewb: 'Skewb',
+  sq1: 'SQ1',
+  kilominx: 'Kilo',
+  fto: 'FTO',
+  redi_cube: 'Redi',
+};
+
+export function eventBadge(eventId: string): string {
+  // Falls back to the full name rather than the raw id, so an event added to
+  // shared/ without a badge here degrades to something readable.
+  return EVENT_BADGE[eventId] ?? eventName(eventId);
+}

@@ -30,6 +30,7 @@ import {
 } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
+import { eventBadge } from '../../lib/scramble';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
@@ -374,8 +375,12 @@ export default function TimerScreen({ navigation }: Props) {
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 13 }}>
-                  {getEvent(event)?.name ?? event}
+                {/* The badge, not the full name: "3x3 Blindfolded" is fifteen
+                    characters and left the session beside it with room for
+                    about three. The picker this opens lists every event by
+                    name, so nothing is lost. */}
+                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 14 }}>
+                  {eventBadge(event)}
                 </Text>
                 {/* Down, not right: this opens a sheet up from the bottom. */}
                 <Icon name="chevronDown" size={14} color={p.accent} />
