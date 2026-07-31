@@ -205,9 +205,7 @@ There is no admin account or admin role — see Roles below.
   both clients compute (averaging, the Timer's whole stats table, scramble/alg types,
   socket event types) lives in `shared/`; `shared/src/timerStats.ts` was moved out of
   `client/src/features/timer/stats.ts` for exactly this reason, and that old path is now
-  a re-export so no web import changed. Note the web `fmt` helper double-rounds
-  (`formatTime(Math.round(v), …)`); mobile's `StatsScreen` copies that verbatim, since
-  identical maths displayed two different ways is still two different stats.
+  a re-export so no web import changed.
   The *interface* is deliberately not a port of the desktop layout: navigation is a
   bottom tab bar (Timer / Algorithms / Battle / Relays / More) with **no Home tab**
   (a sidebar needs a landing slot, a tab bar doesn't), and the desktop Timer's

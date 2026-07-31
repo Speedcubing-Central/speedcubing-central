@@ -56,10 +56,9 @@ const VALUE_W = 74;
 // count, but a mean/average is reported to 2 decimals. BPA/WPA count as
 // averages here too, being averages themselves.
 //
-// The Math.round before formatTime is the web StatsTable's behavior, copied
-// deliberately: it double-rounds a fractional-millisecond average (a raw
-// 9374.5ms WPA renders 9.38, not 9.37), and matching arithmetic displayed two
-// different ways would still be two different stats to the user.
+// The Math.round is a no-op now and kept only to match the web table
+// line-for-line: averaging.ts rounds every average to the hundredth (WCA 9f), so
+// the value arriving here is already an exact hundredth.
 function fmt(v: number | null, timeDecimals: number, isFmc: boolean, fmcDecimals: number): string {
   if (v === null) return '—';
   if (!isFinite(v)) return 'DNF';

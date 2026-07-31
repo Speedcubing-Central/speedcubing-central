@@ -266,6 +266,37 @@ export interface ClientToServerEvents extends RelayClientToServerEvents {
 }
 
 // Effective solve time given a penalty and any stacked +2s. DNF returns Infinity.
+// ── WCA rounding (Regulation 9f) ──────────────────────────────────────────
+//
+// A result and an average are rounded differently, and it is not a display
+// detail: it changes the number that gets recorded and compared.
+//
+//   results (singles)     truncated to the hundredth
+//   averages and means    rounded to the hundredth
+//
+// An average is also computed from the *recorded* singles, i.e. from the
+// truncated values, not from the raw timer readings. Averaging raw milliseconds
+// and rounding once at the end gives a different answer: five solves of exactly
+// 10.005s average to 10.01 that way, but 10.00 the way the WCA computes it.
+//
+// Deliberately NOT implemented: 9f's rule that results over 10 minutes are
+// reported to the nearest second. This is a practice timer, where hundredths
+// stay useful on a 12-minute 7x7 solve, and dropping them would only lose
+// information the user came here for.
+const CENTI_MS = 10;
+
+/** A raw reading as the WCA would record it: truncated to the hundredth. */
+export function wcaTruncate(ms: number): number {
+  if (!isFinite(ms)) return ms;
+  return Math.floor(ms / CENTI_MS) * CENTI_MS;
+}
+
+/** An average or mean as the WCA would report it: rounded to the hundredth. */
+export function wcaRound(ms: number): number {
+  if (!isFinite(ms)) return ms;
+  return Math.round(ms / CENTI_MS) * CENTI_MS;
+}
+
 export function effectiveTime(time: number, penalty: Penalty, plusTwoCount = 0): number {
   if (penalty === 'DNF') return Infinity;
   return time + plusTwoCount * 2000;
@@ -292,13 +323,19 @@ export function formatTime(
   if (penalty === 'DNF') return 'DNF';
   if (ms === null || ms === undefined || !isFinite(ms)) return 'DNF';
   const withPenalty = ms + plusTwoCount * 2000;
-  // Round to the displayed precision in whole milliseconds *before* splitting
-  // into minutes/seconds/fraction — rounding each piece independently (the
-  // previous approach) let a value like 59.9996s at 2 decimals round its
-  // seconds part up to "60" without carrying into minutes, e.g. "1:60.00"
-  // instead of "2:00.00". Rounding first means the carry always happens.
-  const roundTo = 10 ** (3 - decimals);
-  const rounded = Math.round(withPenalty / roundTo) * roundTo;
+  // TRUNCATED, not rounded: this formats a result, and WCA Regulation 9f
+  // truncates results to the hundredth (12.345s is recorded 12.34, not 12.35).
+  // Averages are rounded instead, but they arrive here already rounded to the
+  // hundredth by averaging.ts, so truncating an exact hundredth leaves them
+  // alone. One rule here, correct for both, rather than a mode every call site
+  // has to remember to pass.
+  //
+  // Applied to the whole value before it is split into minutes/seconds/fraction.
+  // Truncating each piece independently would be wrong at a boundary the same
+  // way rounding them independently was: 59.999s at 2 decimals has to become
+  // "59.99", never "59.100" or a carry into minutes that never happens.
+  const unit = 10 ** (3 - decimals);
+  const rounded = Math.floor(withPenalty / unit) * unit;
   const totalSeconds = Math.floor(rounded / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;

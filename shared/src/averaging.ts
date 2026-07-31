@@ -1,5 +1,5 @@
 // WCA-style average and mean computation, shared by the timer and the calculator.
-import type { Penalty } from './index.js';
+import { wcaRound, wcaTruncate, type Penalty } from './index.js';
 
 export interface TimedSolve {
   time: number; // milliseconds (raw, before penalty)
@@ -9,10 +9,18 @@ export interface TimedSolve {
   plusTwoCount?: number;
 }
 
-// Effective value for averaging: Infinity for DNF, time+2000*plusTwoCount otherwise.
+// Effective value for averaging: Infinity for DNF, time+2000*plusTwoCount
+// otherwise, truncated to the hundredth.
+//
+// The truncation is the point, not a detail: WCA Regulation 9f averages the
+// *recorded* results, and a recorded result is truncated. Averaging raw
+// milliseconds instead gives a different answer often enough to matter (five
+// solves of 10.005s average to 10.01 raw, 10.00 recorded). A +2 shifts the value
+// by a whole number of hundredths, so it makes no difference whether it is added
+// before or after.
 function eff(s: TimedSolve): number {
   if (s.penalty === 'DNF') return Infinity;
-  return s.time + (s.plusTwoCount ?? 0) * 2000;
+  return wcaTruncate(s.time) + (s.plusTwoCount ?? 0) * 2000;
 }
 
 export interface AverageResult {
@@ -63,7 +71,9 @@ export function trimmedAverage(solves: TimedSolve[]): AverageResult {
   }
 
   const sum = kept.reduce((acc, k) => acc + k.v, 0);
-  const value = sum / kept.length;
+  // Rounded here, once, so every consumer sees the reportable figure rather than
+  // a raw quotient each is free to round its own way.
+  const value = wcaRound(sum / kept.length);
   return { value, isDNF: false, best: bestOut, worst: worstOut, droppedIndices, counted: kept.length };
 }
 
@@ -90,7 +100,8 @@ export function mean(solves: TimedSolve[]): AverageResult {
   }
   const sum = values.reduce((a, b) => a + b, 0);
   return {
-    value: sum / n,
+    // Rounded like a trimmed average: 9f treats means the same way.
+    value: wcaRound(sum / n),
     isDNF: false,
     best: isFinite(best) ? best : null,
     worst: isFinite(worst) ? worst : null,
