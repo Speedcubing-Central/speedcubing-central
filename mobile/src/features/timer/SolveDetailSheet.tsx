@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import {
   averagesForSolve,
+  formatSolveCopy,
   formatMoveCount,
   formatTime,
   normalizeScramble,
@@ -14,6 +16,7 @@ import { usePalette, useSettings } from '../../store/settings';
 import { parseTimeInput } from '../../lib/timeInput';
 import { Button, MONO, MONO_BOLD, Muted } from '../../components/ui';
 import { Sheet } from '../../components/Sheet';
+import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { PenaltyRow } from './PenaltyRow';
 import { font, radius, space } from '../../theme';
 
@@ -45,7 +48,16 @@ export function SolveDetailSheet({
   const p = usePalette();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
+  const [copied, setCopied] = useState(false);
   const solve = solves[index];
+
+  // formatSolveCopy comes from @scc/shared, the same function the web client
+  // uses, so a solve pasted from either platform is byte-identical.
+  const copySolve = async () => {
+    await Clipboard.setStringAsync(formatSolveCopy(solve, event, solvePrecision));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const [editingTime, setEditingTime] = useState(false);
   const [timeDraft, setTimeDraft] = useState('');
@@ -137,12 +149,28 @@ export function SolveDetailSheet({
             hidePlusTwo={isFmc}
           />
 
-          {/* Scramble */}
+          {/* Scramble, with the image beside it. The Timer shows one for the
+              upcoming scramble, and this is the same question asked about a
+              solve already done, so it belongs here too. */}
           <View>
-            <Muted style={{ marginBottom: 4 }}>Scramble</Muted>
-            <Text style={{ color: p.text, fontFamily: MONO, fontSize: 12, lineHeight: 19 }}>
-              {normalizeScramble(solve.scramble) || '—'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <Muted style={{ marginBottom: 4 }}>Scramble</Muted>
+              <Pressable accessibilityRole="button" onPress={copySolve} hitSlop={8}>
+                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 12 }}>
+                  {copied ? 'Copied' : 'Copy solve'}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
+              <Text
+                style={{ color: p.text, fontFamily: MONO, fontSize: 12, lineHeight: 19, flex: 1 }}
+              >
+                {normalizeScramble(solve.scramble) || '—'}
+              </Text>
+              {hasScrambleNet(event) && solve.scramble ? (
+                <ScrambleNet eventId={event} scramble={solve.scramble} size={104} />
+              ) : null}
+            </View>
           </View>
 
           {/* Averages current at this solve */}

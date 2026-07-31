@@ -4,6 +4,7 @@ export * from './averaging.js';
 export * from './algScramble.js';
 export * from './relays.js';
 export * from './timerStats.js';
+export * from './copy.js';
 
 import type { RelayServerToClientEvents, RelayClientToServerEvents } from './relays.js';
 

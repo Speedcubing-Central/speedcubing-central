@@ -3,8 +3,12 @@ import { Alert, Pressable, Text, TextInput, View, type StyleProp, type ViewStyle
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
+  bestSingleIndex,
   currentAverage,
   detectNewPBs,
+  makeAverageView,
+  type AvgSize,
+  type SolveAverage,
   type PbHit,
   formatMoveCount,
   formatTime,
@@ -26,6 +30,8 @@ import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { PbCelebration } from './PbCelebration';
 import { EventPickerSheet } from '../../components/EventPickerSheet';
 import { PenaltyRow } from './PenaltyRow';
+import { AverageDetailSheet } from './AverageDetailSheet';
+import { SolveDetailSheet } from './SolveDetailSheet';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
 import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
@@ -133,6 +139,22 @@ export default function TimerScreen({ navigation }: Props) {
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
+  // The stats tile's figures open the same sheets the Stats and Solves screens
+  // use, rather than navigating away: you tapped a number on the timer screen,
+  // so the answer belongs over the timer screen.
+  const [avgView, setAvgView] = useState<SolveAverage | null>(null);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
+
+  // The *current* rolling average of this size, i.e. the one ending on the most
+  // recent solve, which is the figure shown in the tile.
+  const openCurrentAverage = (size: AvgSize) => {
+    const v = makeAverageView(data.solves, 0, size);
+    if (v) setAvgView(v);
+  };
+  const openBestSolve = () => {
+    const i = bestSingleIndex(data.solves);
+    if (i !== null) setDetailIndex(i);
+  };
 
   // FMC's whole flow (countdown, move entry, solution checking) is Timer-only
   // on web and isn't part of this pass; the event is still selectable but routes
@@ -570,19 +592,28 @@ export default function TimerScreen({ navigation }: Props) {
                 </Tile>
               ) : null}
 
+              {/* Individual figures open what they name: an average opens the
+                  solves it was made of, Best opens that solve. Tapping the whole
+                  tile used to open Statistics, which meant the one gesture
+                  available went somewhere more general than the number under
+                  your thumb. Mean and Solves aren't a window onto anything, so
+                  they stay plain. */}
               <StatsBlock
-                onPress={() => navigation.navigate('Stats')}
                 rows={[
                   [
-                    { label: 'Ao5', value: fmtAvg(footerStats.ao5) },
-                    { label: 'Ao12', value: fmtAvg(footerStats.ao12) },
+                    { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
+                    { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
                   ],
                   [
-                    { label: 'Ao100', value: fmtAvg(footerStats.ao100) },
+                    { label: 'Ao100', value: fmtAvg(footerStats.ao100), onPress: () => openCurrentAverage(100) },
                     { label: 'Mean', value: fmtAvg(footerStats.meanValue) },
                   ],
                   [
-                    { label: 'Best', value: footerStats.best === null ? '—' : fmt(footerStats.best) },
+                    {
+                      label: 'Best',
+                      value: footerStats.best === null ? '—' : fmt(footerStats.best),
+                      onPress: () => openBestSolve(),
+                    },
                     { label: 'Solves', value: String(footerStats.count) },
                   ],
                 ]}
@@ -591,6 +622,24 @@ export default function TimerScreen({ navigation }: Props) {
           </View>
         )}
       </View>
+
+      {avgView && <AverageDetailSheet view={avgView} event={event} onClose={() => setAvgView(null)} />}
+      {detailIndex !== null && (
+        <SolveDetailSheet
+          solves={data.solves}
+          index={detailIndex}
+          event={event}
+          onClose={() => setDetailIndex(null)}
+          onUpdatePenalty={data.updatePenalty}
+          onUpdateTime={data.updateTime}
+          onUpdateComment={data.updateComment}
+          onDelete={data.deleteSolve}
+          onOpenAverage={(v) => {
+            setDetailIndex(null);
+            setAvgView(v);
+          }}
+        />
+      )}
 
       <EventPickerSheet
         visible={showEventPicker}
@@ -659,21 +708,9 @@ function Tile({
 // The compact label/value grid beside the scramble image. Two columns so six
 // stats fit in the footer without crowding the timer, and every value is
 // tabular so the columns don't jitter as times change.
-function StatsBlock({
-  rows,
-  onPress,
-}: {
-  rows: { label: string; value: string }[][];
-  onPress?: () => void;
-}) {
-  const p = usePalette();
+function StatsBlock({ rows }: { rows: { label: string; value: string; onPress?: () => void }[][] }) {
   return (
-    // This is the tile that opens Statistics: these are the numbers, so it's the
-    // one you'd tap wanting more of them.
     <Tile
-      as={onPress ? 'pressable' : 'view'}
-      onPress={onPress}
-      accessibilityLabel="Statistics"
       style={{
         flex: 1,
         paddingVertical: space.sm,
@@ -684,35 +721,63 @@ function StatsBlock({
       {rows.map((row, i) => (
         <View key={i} style={{ flexDirection: 'row' }}>
           {row.map((cell) => (
-            <View key={cell.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
-              <Text
-                style={{
-                  color: p.textMuted,
-                  fontFamily: font.sansSemi,
-                  fontSize: 11,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  minWidth: 38,
-                }}
-              >
-                {cell.label}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: p.text,
-                  fontFamily: MONO_BOLD,
-                  fontSize: 16,
-                  fontVariant: ['tabular-nums'],
-                  flexShrink: 1,
-                }}
-              >
-                {cell.value}
-              </Text>
-            </View>
+            <StatCell key={cell.label} label={cell.label} value={cell.value} onPress={cell.onPress} />
           ))}
         </View>
       ))}
     </Tile>
+  );
+}
+
+function StatCell({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
+  const p = usePalette();
+  // An em dash means there's no such average yet, so there's nothing to open.
+  const tappable = !!onPress && value !== '—';
+  const body = (
+    <>
+      <Text
+        style={{
+          color: p.textMuted,
+          fontFamily: font.sansSemi,
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+          // The label gave itself a minimum width and never yielded, so a
+          // five-figure solve count was truncated to its first digits while the
+          // word "SOLVES" kept its space. It shrinks first now.
+          flexShrink: 1,
+        }}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text
+        numberOfLines={1}
+        // Never shrinks: the number is the point of the row, and it is what got
+        // cut off before.
+        style={{
+          color: tappable ? p.accent : p.text,
+          fontFamily: MONO_BOLD,
+          fontSize: 16,
+          fontVariant: ['tabular-nums'],
+          flexShrink: 0,
+        }}
+      >
+        {value}
+      </Text>
+    </>
+  );
+  const style = { flex: 1, flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 5 };
+  if (!tappable) return <View style={style}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} ${value}`}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => ({ ...style, opacity: pressed ? 0.55 : 1 })}
+    >
+      {body}
+    </Pressable>
   );
 }

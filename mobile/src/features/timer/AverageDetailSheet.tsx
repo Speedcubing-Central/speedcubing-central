@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { FlatList, Pressable, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import {
+  formatAverageCopy,
   formatMoveCount,
   formatTime,
   normalizeScramble,
@@ -45,6 +47,16 @@ export function AverageDetailSheet({
           ? formatMoveCount(view.value, 'NONE', 2)
           : formatTime(Math.round(view.value), 'NONE', solvePrecision);
   const label = view.size === 3 ? 'mo3' : `ao${view.size}`;
+  const [copied, setCopied] = useState(false);
+
+  // formatAverageCopy is @scc/shared's, the same function the web client uses,
+  // so an average pasted from either platform is byte-identical: same header,
+  // same numbering, same parenthesised drops.
+  const copyAverage = async () => {
+    await Clipboard.setStringAsync(formatAverageCopy(view, event, solvePrecision));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
     <Sheet
@@ -54,7 +66,14 @@ export function AverageDetailSheet({
       fillHeight
       maxHeightRatio={0.78}
       headerRight={
-        <Text style={{ color: p.accent, fontSize: 20, fontFamily: font.monoBold }}>{value}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Pressable accessibilityRole="button" onPress={copyAverage} hitSlop={8}>
+            <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 12 }}>
+              {copied ? 'Copied' : 'Copy'}
+            </Text>
+          </Pressable>
+          <Text style={{ color: p.accent, fontSize: 20, fontFamily: font.monoBold }}>{value}</Text>
+        </View>
       }
     >
       <FlatList

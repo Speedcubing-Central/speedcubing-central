@@ -143,16 +143,9 @@ export function carrotScramble(formatted: string): string {
 // newlines, unlike formatScramble), but with a comma inserted after each
 // megaminx row-ending move so rows are still visually separated once pasted
 // somewhere that won't render the multi-line display.
-export function formatScrambleForCopy(scramble: string, eventId: string): string {
-  const normalized = normalizeScramble(scramble);
-  if (!normalized) return normalized;
-
-  if (eventId === 'minx') {
-    return normalized.replace(/(U'?) (?=[RD])/g, '$1, ');
-  }
-
-  return normalized;
-}
+// Re-exported from shared, where it lives alongside the copy formatters that
+// use it, so mobile produces byte-identical clipboard text.
+export { formatScrambleForCopy } from '@scc/shared';
 
 // Splits a Square-1 scramble into its "(a,b)" pairs, appending a trailing
 // " /" to every pair except the last — UNLESS the raw scramble itself ends

@@ -38,7 +38,9 @@ import { font, radius, space } from '../../theme';
 // Column geometry, declared once and used by both the header and every row so
 // they cannot drift apart.
 const COL = {
-  index: { width: 30 },
+  // Fits a five-digit solve number. At 30 a four-digit one wrapped its last
+  // digit onto a second line, which also jogged the row height.
+  index: { width: 46 },
   time: { flex: 1.25 },
   ao5: { flex: 1 },
   ao12: { flex: 1 },
@@ -94,6 +96,13 @@ export default function SolvesScreen() {
     return isFmc
       ? formatMoveCount(s.time, s.penalty, 0, s.plusTwoCount)
       : formatTime(s.time, s.penalty, solvePrecision, s.plusTwoCount);
+  };
+
+  // Opens the rolling average that ended on this solve, the same view the stats
+  // table opens for its Current/Best cells.
+  const openAverage = (index: number, size: 5 | 12) => {
+    const v = makeAverageView(solves, index, size);
+    if (v) setAvgView(v);
   };
 
   // The rolling average of `size` that ended on this solve. Same
@@ -238,8 +247,16 @@ export default function SolvesScreen() {
                         }}
                       />
                     )}
-                    <Text style={[COL.index, { color: p.textMuted, fontFamily: font.mono, fontSize: 11 }]}>
-                      {sortBy === 'date' ? solves.length - index : position + 1}
+                    {/* The solve's own number in the session, never its rank in
+                        the current sort. Sorting by single used to renumber
+                        everything 1..n, so the fastest solve became "1" and the
+                        number stopped identifying the solve at all. `solves` is
+                        newest-first, so this counts back from the total. */}
+                    <Text
+                      numberOfLines={1}
+                      style={[COL.index, { color: p.textMuted, fontFamily: font.mono, fontSize: 11 }]}
+                    >
+                      {solves.length - index}
                     </Text>
                     <View style={COL.time}>
                       <Text
@@ -258,8 +275,19 @@ export default function SolvesScreen() {
                         </Text>
                       ) : null}
                     </View>
-                    <Cell style={COL.ao5}>{avgText(index, 5)}</Cell>
-                    <Cell style={COL.ao12}>{avgText(index, 12)}</Cell>
+                    {/* Tappable like the single beside them: these name a real
+                        average, and the sheet showing what it was made of is the
+                        obvious thing to want from them. */}
+                    <AvgCell
+                      style={COL.ao5}
+                      value={avgText(index, 5)}
+                      onPress={selectMode ? undefined : () => openAverage(index, 5)}
+                    />
+                    <AvgCell
+                      style={COL.ao12}
+                      value={avgText(index, 12)}
+                      onPress={selectMode ? undefined : () => openAverage(index, 12)}
+                    />
                   </Pressable>
                 );
               }}
@@ -315,6 +343,27 @@ function HeaderLabel({
     >
       {children}
     </Text>
+  );
+}
+
+function AvgCell({
+  value,
+  style,
+  onPress,
+}: {
+  value: string;
+  style: { flex: number };
+  onPress?: () => void;
+}) {
+  // An em dash means the average doesn't exist yet, so there is nothing to open.
+  // '·' is this list's placeholder for "no average here yet" (the stats table
+  // uses an em dash); neither is worth a tap target.
+  const tappable = !!onPress && value !== '·' && value !== '—' && value !== '';
+  if (!tappable) return <Cell style={style}>{value}</Cell>;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" style={style} hitSlop={4}>
+      <Cell style={{ flex: 1 }}>{value}</Cell>
+    </Pressable>
   );
 }
 

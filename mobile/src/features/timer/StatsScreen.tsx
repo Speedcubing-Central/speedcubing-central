@@ -46,7 +46,10 @@ import { font, radius, space } from '../../theme';
 // stay in register if both agree on an exact row height up front.
 const HEADER_H = 30;
 const ROW_H = 42;
-const NAME_W = 58;
+// Wide enough for the longest label, 'ao1000', which wrapped to a second line
+// at 58. The labels are also pinned to one line below, so a future longer one
+// truncates visibly rather than silently reflowing the row.
+const NAME_W = 68;
 const VALUE_W = 74;
 
 // Matches WCA's FMC convention, same as the web table: a single is a whole move
@@ -256,7 +259,9 @@ function RowLabel({ label, first }: { label: string; first?: boolean }) {
         borderTopColor: p.border,
       }}
     >
-      <Text style={{ color: p.text, fontFamily: font.sansBold, fontSize: 14 }}>{label}</Text>
+      <Text numberOfLines={1} style={{ color: p.text, fontFamily: font.sansBold, fontSize: 14 }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -322,7 +327,6 @@ function ValueCell({
         fontSize: muted ? 12 : 14,
         fontVariant: ['tabular-nums'],
         textAlign: 'right',
-        textDecorationLine: tappable ? 'underline' : 'none',
       }}
       numberOfLines={1}
     >
