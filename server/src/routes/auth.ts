@@ -256,99 +256,104 @@ const OAUTH_STATE_COOKIE = 'oauth_state';
 // has neither a cookie jar nor a page to land on, so it needs the JWT pair the
 // bearer path uses, delivered somewhere the app can pick it up.
 //
-// The app opens this same /wca endpoint with ?mobile=1 in a system auth browser
-// and waits for a redirect back to its own URL scheme. That flag rides in the
-// `state` parameter rather than a second cookie, because `state` is the one
-// value WCA is contractually obliged to hand back unchanged, and it's already
-// round-tripped and checked.
+// This does NOT redirect back into the app. The obvious design is a custom URL
+// scheme (speedcubingcentral://...), and it has two problems. It is an
+// open-redirect surface guarding a credential: the app must supply the return
+// URL, because it differs between a standalone build and Expo Go, and a crafted
+// link naming an attacker's host, completed by a signed-in victim, hands over
+// that victim's account. And it does not work in Expo Go at all, which owns no
+// custom scheme, so testing against a deployed server needed a standing
+// allowlist exception.
 //
-// The callback does NOT redirect with tokens in the URL. Instead it mints a
-// single-use, short-lived code, hands that to the app, and the app trades it for
-// tokens over POST (see /wca/exchange). A redirect URL is the most-logged,
-// most-observed string in an OAuth flow: it lands in browser history, and on
-// Android any app registering the same scheme can receive it. A code that is
-// useless seconds later and dies on first use is a much smaller thing to leak
-// than a 7-day refresh token.
+// Instead the app never leaves the conversation. It asks for a flow up front,
+// gets back an opaque id and the WCA URL to open, then polls for the result:
 //
-// Nothing about the web flow changes: no ?mobile=1 means no marker in the state,
-// and the callback takes exactly the branch it always did.
+//   POST /wca/start  ->  { flowId, authorizeUrl }
+//   (user approves at WCA; the callback resolves the flow and shows a plain page)
+//   POST /wca/poll   ->  202 while pending, then the token pair, once
+//
+// The flow id never appears in any URL, so it is not in browser history and not
+// deliverable to another app. There is no redirect target to validate, which
+// removes the open-redirect surface rather than guarding it, and the same code
+// path works in Expo Go, a dev build and a store build with no configuration.
+//
+// Nothing about the web flow changes: no mobile flow means no marker in the
+// state, and the callback takes exactly the branch it always did.
 const MOBILE_STATE_PREFIX = 'm.';
-const MOBILE_REDIRECT = 'speedcubingcentral://wca-auth';
-const OAUTH_RETURN_COOKIE = 'oauth_return';
-const EXCHANGE_TTL_MS = 2 * 60 * 1000;
+const FLOW_TTL_MS = 10 * 60 * 1000;
 
-// Where the callback may send a mobile client back to.
-//
-// The app has to supply this rather than the server hardcoding one address,
-// because the return URL genuinely differs by build: a standalone app owns
-// `speedcubingcentral://`, but the same code running in Expo Go during
-// development is reached at `exp://<dev-host>/--/...` instead.
-//
-// Which makes this an open-redirect surface, and the thing being redirected is a
-// code that can be traded for a session, so it's allowlisted rather than
-// trusted. The app's own scheme is always allowed. Expo's dev schemes are
-// allowed only outside production, where a dev server URL is meaningless anyway
-// and permitting it would let anyone who can craft a link have the code
-// delivered to a host of their choosing.
-function safeMobileReturn(raw: unknown): string | null {
-  if (typeof raw !== 'string' || raw.length > 300) return null;
-  if (raw.startsWith('speedcubingcentral://')) return raw;
-  // An operator-configured exact match, for running Expo Go against a deployed
-  // server. Compared whole, never by prefix, so it can't be extended into
-  // another host. See env.ts for why this is opt-in rather than a pattern.
-  if (env.WCA_MOBILE_DEV_RETURN && raw === env.WCA_MOBILE_DEV_RETURN) return raw;
-  if (!isProd && /^exp(\+[a-z0-9-]+)?:\/\//i.test(raw)) return raw;
-  return null;
-}
-
-interface PendingExchange {
-  userId: string;
+interface WcaFlow {
+  /** The `state` handed to WCA, and the only way back to this flow. */
+  state: string;
+  /** Set once WCA has been exchanged and the user resolved. */
+  userId: string | null;
   expiresAt: number;
 }
 
-// In-memory rather than Redis: these live for two minutes, are single-use, and a
-// lost one just means signing in again. Surviving a restart isn't worth a
-// dependency, and this deliberately doesn't use cache.ts, whose entries are
-// shared, long-lived WCA API responses.
-const pendingExchanges = new Map<string, PendingExchange>();
+// In-memory rather than Redis: these live ten minutes, are read once, and a lost
+// one just means signing in again. Surviving a restart isn't worth a dependency,
+// and this deliberately doesn't use cache.ts, whose entries are shared,
+// long-lived WCA API responses.
+const wcaFlows = new Map<string, WcaFlow>();
 
-function putExchange(userId: string): string {
-  const code = crypto.randomBytes(32).toString('hex');
-  pendingExchanges.set(code, { userId, expiresAt: Date.now() + EXCHANGE_TTL_MS });
-  // Opportunistic sweep, so an abandoned flow can't accumulate forever.
-  if (pendingExchanges.size > 64) {
-    const now = Date.now();
-    for (const [k, v] of pendingExchanges) if (v.expiresAt <= now) pendingExchanges.delete(k);
+function sweepFlows(): void {
+  const now = Date.now();
+  for (const [k, v] of wcaFlows) if (v.expiresAt <= now) wcaFlows.delete(k);
+}
+
+function findFlowByState(state: string): { flowId: string; flow: WcaFlow } | null {
+  for (const [flowId, flow] of wcaFlows) {
+    if (flow.state === state && flow.expiresAt > Date.now()) return { flowId, flow };
   }
-  return code;
+  return null;
 }
 
-function takeExchange(code: string): string | null {
-  const hit = pendingExchanges.get(code);
-  // Deleted on the first read whether or not it's still valid, so a code can
-  // never be redeemed twice.
-  if (hit) pendingExchanges.delete(code);
-  if (!hit || hit.expiresAt <= Date.now()) return null;
-  return hit.userId;
+function buildAuthorizeUrl(state: string): string {
+  const url = new URL(`${env.WCA_BASE}/oauth/authorize`);
+  url.searchParams.set('client_id', env.WCA_CLIENT_ID);
+  url.searchParams.set('redirect_uri', env.WCA_REDIRECT_URI);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
+  return url.toString();
 }
 
-// POST /api/auth/wca/exchange — trade a single-use code for the token pair.
-router.post('/wca/exchange', authLimiter, async (req, res, next) => {
+// POST /api/auth/wca/start — begin a native sign-in.
+router.post('/wca/start', authLimiter, (_req, res) => {
+  if (!env.WCA_CLIENT_ID) {
+    res.status(503).json({ error: 'WCA sign-in is not configured on this server.' });
+    return;
+  }
+  sweepFlows();
+  const state = MOBILE_STATE_PREFIX + crypto.randomBytes(24).toString('hex');
+  const flowId = crypto.randomBytes(32).toString('hex');
+  wcaFlows.set(flowId, { state, userId: null, expiresAt: Date.now() + FLOW_TTL_MS });
+  res.json({ flowId, authorizeUrl: buildAuthorizeUrl(state) });
+});
+
+// POST /api/auth/wca/poll — collect the result of a native sign-in.
+router.post('/wca/poll', async (req, res, next) => {
   try {
-    const code = typeof req.body?.code === 'string' ? req.body.code : '';
-    const userId = code ? takeExchange(code) : null;
-    if (!userId) {
-      res.status(401).json({ error: 'Invalid or expired sign-in code' });
+    const flowId = typeof req.body?.flowId === 'string' ? req.body.flowId : '';
+    const flow = flowId ? wcaFlows.get(flowId) : undefined;
+    if (!flow || flow.expiresAt <= Date.now()) {
+      if (flow) wcaFlows.delete(flowId);
+      res.status(401).json({ error: 'Sign-in expired. Please try again.' });
       return;
     }
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!flow.userId) {
+      // Still waiting on WCA. Not an error: the app polls until this changes.
+      res.status(202).json({ status: 'pending' });
+      return;
+    }
+    // Read once: the tokens are handed over a single time, so a replayed flowId
+    // is worth nothing even before it expires.
+    wcaFlows.delete(flowId);
+    const user = await prisma.user.findUnique({ where: { id: flow.userId } });
     if (!user) {
-      res.status(401).json({ error: 'Invalid or expired sign-in code' });
+      res.status(401).json({ error: 'Sign-in expired. Please try again.' });
       return;
     }
     const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
-    // Cookies are set here too, harmlessly: a native client ignores them, and it
-    // keeps this response shaped exactly like every other auth response.
     setAuthCookies(res, payload);
     res.json(authBody(req, user, payload));
   } catch (e) {
@@ -356,8 +361,17 @@ router.post('/wca/exchange', authLimiter, async (req, res, next) => {
   }
 });
 
+// The page the browser lands on after a native sign-in. Plain HTML rather than a
+// redirect into the web client, which would show a login screen to someone who
+// has just signed in. The app closes this itself the moment its poll succeeds;
+// this is what's behind it in the meantime, and what remains if the user got
+// here in an ordinary browser.
+function nativeDonePage(message: string, detail: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Speedcubing Central</title><style>body{background:#0f1117;color:#e8eaf0;font:16px/1.5 system-ui,-apple-system,sans-serif;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center}div{max-width:22rem;padding:2rem;text-align:center}h1{font-size:1.15rem;margin:0 0 .5rem}p{margin:0;color:#9aa3b8}</style></head><body><div><h1>${message}</h1><p>${detail}</p></div></body></html>`;
+}
+
 // GET /api/auth/wca — redirect to WCA's authorize endpoint
-router.get('/wca', (req, res) => {
+router.get('/wca', (_req, res) => {
   // If WCA OAuth isn't configured, bounce back with a clear in-app message
   // rather than sending the user to WCA's "Missing required parameter" error.
   if (!env.WCA_CLIENT_ID) {
@@ -368,23 +382,7 @@ router.get('/wca', (req, res) => {
   // httpOnly cookie, so the callback can confirm this response actually
   // corresponds to a flow we started (not an attacker's crafted callback URL
   // tricking a victim into linking the attacker's WCA account).
-  // The marker rides in the state so the callback knows where to send the user
-  // back to. It's covered by the same round-trip check as the rest of the state,
-  // so it can't be forged into a flow that didn't start as a mobile one.
-  const state = (req.query.mobile === '1' ? MOBILE_STATE_PREFIX : '') + crypto.randomBytes(16).toString('hex');
-  if (req.query.mobile === '1') {
-    // Carried in a cookie rather than the state so it survives the round trip
-    // without being echoed through WCA, and so it's never attacker-supplied at
-    // the point it's used: whatever comes back, this is what the server chose.
-    const ret = safeMobileReturn(req.query.return_url) ?? MOBILE_REDIRECT;
-    res.cookie(OAUTH_RETURN_COOKIE, ret, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 10 * 60 * 1000,
-    });
-  }
+  const state = crypto.randomBytes(16).toString('hex');
   res.cookie(OAUTH_STATE_COOKIE, state, {
     httpOnly: true,
     secure: isProd,
@@ -392,14 +390,7 @@ router.get('/wca', (req, res) => {
     path: '/',
     maxAge: 10 * 60 * 1000,
   });
-  const url = new URL(`${env.WCA_BASE}/oauth/authorize`);
-  url.searchParams.set('client_id', env.WCA_CLIENT_ID);
-  url.searchParams.set('redirect_uri', env.WCA_REDIRECT_URI);
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('state', state);
-  // WCA OAuth: 'public' is the only valid scope and is the default.
-  // Omitting scope avoids "invalid scope" errors on some WCA environments.
-  res.redirect(url.toString());
+  res.redirect(buildAuthorizeUrl(state));
 });
 
 // GET /api/auth/wca/callback — exchange code, fetch profile, upsert user
@@ -410,22 +401,26 @@ router.get('/wca/callback', async (req, res) => {
   res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
   // Read off the *expected* state, the value this server issued, never off the
   // one echoed back in the query string, which is attacker-controllable.
-  const isMobile = typeof expectedState === 'string' && expectedState.startsWith(MOBILE_STATE_PREFIX);
-  // Re-validated on the way out, not just on the way in: a cookie is client
-  // storage, so this is checked against the allowlist again rather than trusted
-  // because we set it earlier.
-  const mobileReturn = safeMobileReturn(req.cookies?.[OAUTH_RETURN_COOKIE]) ?? MOBILE_REDIRECT;
-  res.clearCookie(OAUTH_RETURN_COOKIE, { path: '/' });
-  const joiner = mobileReturn.includes('?') ? '&' : '?';
+  // A native flow is identified by its own state, which this server generated
+  // and still holds. Nothing here is taken from the query string on trust.
+  const mobile = typeof state === 'string' && state.startsWith(MOBILE_STATE_PREFIX) ? findFlowByState(state) : null;
+  const isMobile = mobile !== null;
   const fail = (reason: string) => {
-    if (isMobile) res.redirect(`${mobileReturn}${joiner}error=${reason}`);
-    else res.redirect(`${env.FRONTEND_URL}/login?error=${reason}`);
+    if (isMobile) {
+      res.status(400).send(nativeDonePage('Sign-in failed', 'Return to the app and try again.'));
+    } else {
+      res.redirect(`${env.FRONTEND_URL}/login?error=${reason}`);
+    }
   };
   if (!code) {
     fail('wca_no_code');
     return;
   }
-  if (!expectedState || state !== expectedState) {
+  // The web flow proves itself with the round-tripped cookie. The native flow
+  // proves itself by the state matching a live flow this server created, which
+  // is the same guarantee without requiring a cookie to survive a system
+  // browser handing control back to the app.
+  if (!isMobile && (!expectedState || state !== expectedState)) {
     fail('wca_failed');
     return;
   }
@@ -466,11 +461,11 @@ router.get('/wca/callback', async (req, res) => {
     }
 
     const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
-    if (isMobile) {
-      // Hand back a single-use code, not the tokens themselves: this URL is
-      // about to be written to browser history and, on Android, delivered to
-      // every app registered for the scheme.
-      res.redirect(`${mobileReturn}${joiner}code=${putExchange(user.id)}`);
+    if (mobile) {
+      // Resolve the flow the app is polling. Nothing sensitive goes to the
+      // browser: it only gets a page telling the user they're done.
+      mobile.flow.userId = user.id;
+      res.send(nativeDonePage('Signed in', 'You can close this and return to the app.'));
       return;
     }
     setAuthCookies(res, payload);

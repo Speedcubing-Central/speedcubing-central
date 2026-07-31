@@ -1,21 +1,10 @@
 import { create } from 'zustand';
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import type { PublicUser } from '@scc/shared';
 import { api, setAuthLostHandler } from '../lib/api';
 import { SERVER_ORIGIN } from '../lib/config';
 import { loadTokens, saveTokens, clearTokens, type TokenPair } from '../lib/tokens';
 
-// Must match the server's MOBILE_REDIRECT and app.json's `scheme`. Built from
-// the scheme rather than hardcoded so the two can't drift apart silently.
-const WCA_RETURN_URL = Linking.createURL('wca-auth');
-
-// Logged in development because this value is not guessable from the outside: a
-// standalone build produces `speedcubingcentral://wca-auth`, while Expo Go
-// produces `exp://<dev-host>:<port>/--/wca-auth`. Running against a *deployed*
-// server needs that exact string in its WCA_MOBILE_DEV_RETURN, and a near-miss
-// fails as a redirect mismatch rather than anything more helpful.
-if (__DEV__) console.log('[wca] this build returns to:', WCA_RETURN_URL);
 
 // Mobile counterpart of client/src/store/auth.ts. Same endpoints and the same
 // resulting PublicUser (including its `betaAccess` flag, which the beta gate
@@ -84,33 +73,55 @@ export const useAuth = create<AuthState>((set) => ({
     set({ user: data.user });
   },
   loginWithWca: async () => {
-    // The system auth browser, not an in-app WebView: it's the only surface that
+    // Ask the server for a flow first. The id it returns never appears in a URL,
+    // so it isn't written to browser history and can't be delivered to another
+    // app; and because the app polls for the result, there is no redirect back
+    // into the app to arrange. That's what makes this work identically in Expo
+    // Go, a dev build and a store build, with nothing to configure.
+    const { data: flow } = await api.post<{ flowId: string; authorizeUrl: string }>('/auth/wca/start');
+
+    // The system browser, not an in-app WebView: it's the only surface that
     // shares Safari's cookie jar, so someone already signed in to WCA isn't made
     // to type their password again, and credentials are never entered in a view
     // this app could read.
-    // The return URL is sent along because it isn't fixed: a standalone build is
-    // reached at speedcubingcentral://, but the same code in Expo Go is reached
-    // at exp://<dev-host>/--/. The server allowlists what it will accept.
-    const result = await WebBrowser.openAuthSessionAsync(
-      `${SERVER_ORIGIN}/api/auth/wca?mobile=1&return_url=${encodeURIComponent(WCA_RETURN_URL)}`,
-      WCA_RETURN_URL,
-    );
-    // 'cancel' (dismissed) and 'dismiss' both mean the user backed out.
-    if (result.type !== 'success') return false;
+    const browser = WebBrowser.openAuthSessionAsync(flow.authorizeUrl, null);
 
-    const { queryParams } = Linking.parse(result.url);
-    const err = typeof queryParams?.error === 'string' ? queryParams.error : null;
-    if (err) throw new Error(err === 'wca_not_configured' ? 'WCA sign-in is not configured on this server.' : 'WCA sign-in failed.');
+    let dismissed = false;
+    void browser.then(() => {
+      dismissed = true;
+    });
 
-    const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
-    if (!code) throw new Error('WCA sign-in did not return a sign-in code.');
-
-    // The redirect carries a single-use code, never the tokens. Trading it over
-    // POST keeps the credentials out of the URL, and out of browser history.
-    const { data } = await api.post<{ user: PublicUser; tokens?: TokenPair }>('/auth/wca/exchange', { code });
-    if (data.tokens) await saveTokens(data.tokens);
-    set({ user: data.user });
-    return true;
+    const deadline = Date.now() + 5 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1200));
+      let resp;
+      try {
+        resp = await api.post<{ user?: PublicUser; tokens?: TokenPair; status?: string }>(
+          '/auth/wca/poll',
+          { flowId: flow.flowId },
+          // 202 means "still waiting", which is a normal beat of this loop
+          // rather than a failure, so it must not go down the error path.
+          { validateStatus: (s) => s === 200 || s === 202 || s === 401 },
+        );
+      } catch {
+        // A dropped poll (a blip while the browser is foregrounded) shouldn't
+        // end the flow; the next tick tries again.
+        continue;
+      }
+      if (resp.status === 401) throw new Error('Sign-in expired. Please try again.');
+      if (resp.status === 200 && resp.data.user) {
+        if (resp.data.tokens) await saveTokens(resp.data.tokens);
+        set({ user: resp.data.user });
+        // Close the browser for them: the flow is done and the page behind it
+        // says as much, but nobody should have to dismiss it themselves.
+        if (!dismissed) WebBrowser.dismissAuthSession();
+        return true;
+      }
+      // The user closed the browser without finishing.
+      if (dismissed) return false;
+    }
+    if (!dismissed) WebBrowser.dismissAuthSession();
+    throw new Error('Sign-in timed out. Please try again.');
   },
   logout: async () => {
     try {
