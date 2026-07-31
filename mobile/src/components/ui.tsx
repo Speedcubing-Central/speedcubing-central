@@ -74,9 +74,28 @@ export function Title({ children }: { children: ReactNode }) {
   return <Text style={{ color: p.text, fontSize: 22, fontFamily: font.sansBlack }}>{children}</Text>;
 }
 
-export function Muted({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+export function Muted({
+  children,
+  style,
+  numberOfLines,
+  maxFontSizeMultiplier,
+}: {
+  children: ReactNode;
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
+  /** Forwarded so a caller in a fixed-height box can cap OS text scaling. */
+  maxFontSizeMultiplier?: number;
+}) {
   const p = usePalette();
-  return <Text style={[{ color: p.textMuted, fontSize: 13, fontFamily: font.sans }, style]}>{children}</Text>;
+  return (
+    <Text
+      numberOfLines={numberOfLines}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ color: p.textMuted, fontSize: 13, fontFamily: font.sans }, style]}
+    >
+      {children}
+    </Text>
+  );
 }
 
 export function Button({

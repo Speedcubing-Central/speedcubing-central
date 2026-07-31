@@ -31,7 +31,7 @@ import {
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { eventBadge } from '../../lib/scramble';
-import { useScreenScale } from '../../lib/scale';
+import { densityFor, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { IconButton, MONO, MONO_BOLD, Muted } from '../../components/ui';
@@ -116,7 +116,7 @@ const PENALTY_TILE_H = 56;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
-  const { s: sc, isShort } = useScreenScale();
+  const { s: sc, isShort, fontScale, maxFontMultiplier } = useScreenScale();
   const settings = useSettings();
   const {
     inspection,
@@ -154,6 +154,10 @@ export default function TimerScreen({ navigation }: Props) {
   // fits text to its WIDTH only, so on a short tile the glyphs kept full height
   // and were sliced by the tile's clipped edge, top and bottom.
   const [timerTileH, setTimerTileH] = useState(0);
+  // The column's own height, which is what density is decided from: the window
+  // height would be wrong by the safe area and the tab bar, and those differ per
+  // device by more than the gap between two tiers.
+  const [columnH, setColumnH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
@@ -322,6 +326,22 @@ export default function TimerScreen({ navigation }: Props) {
   // floor keeps them legible on the shortest tile a long Square-1 scramble
   // leaves; below that the tile clips, which is at least visibly wrong rather
   // than silently unreadable.
+  // One decision, read by the header, the footer and the stats block, so they
+  // cannot disagree about how much room there is.
+  const density = columnH > 0 ? densityFor(columnH, fontScale) : 'comfortable';
+  // Tied to the measured footer, not to density. Density is computed from the
+  // column's total height, which cannot know how much of it the scramble took:
+  // by that rule an iPhone SE was 'compact' even on a 3x3, so those users never
+  // saw the cube image although the footer had ~160pt to draw it in. The row's
+  // own height already accounts for everything above it.
+  //
+  // No feedback loop: the row's height comes from the flex split, which is
+  // settled before its contents draw, so including or excluding the image cannot
+  // change it. Optimistic before the first measurement, so it doesn't flash in.
+  const showScrambleImage = footerH === 0 || footerH >= sc(76);
+  const statRows: ('primary' | 'secondary' | 'tertiary')[] =
+    density === 'minimal' ? ['primary'] : ['primary', 'secondary', 'tertiary'];
+
   const digitCeiling = sc(immersive ? 84 : 64);
   // The measured-tile share still governs (it is what stopped the clipping);
   // the screen scale only lowers the ceiling, so a small phone never starts
@@ -353,7 +373,10 @@ export default function TimerScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
-      <View style={{ flex: 1, paddingHorizontal: space.md, paddingBottom: space.sm, gap: space.sm }}>
+      <View
+        style={{ flex: 1, paddingHorizontal: space.md, paddingBottom: space.sm, gap: space.sm }}
+        onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}
+      >
         {!immersive && (
           <>
             {/* ── Header ──
@@ -384,7 +407,10 @@ export default function TimerScreen({ navigation }: Props) {
                     characters and left the session beside it with room for
                     about three. The picker this opens lists every event by
                     name, so nothing is lost. */}
-                <Text style={{ color: p.accent, fontFamily: font.sansBold, fontSize: 14 }}>
+                <Text
+                  maxFontSizeMultiplier={maxFontMultiplier}
+                  style={{ color: p.accent, fontFamily: font.sansBold, fontSize: sc(14) }}
+                >
                   {eventBadge(event)}
                 </Text>
                 {/* Down, not right: this opens a sheet up from the bottom. */}
@@ -413,7 +439,8 @@ export default function TimerScreen({ navigation }: Props) {
               >
                 <Text
                   numberOfLines={1}
-                  style={{ color: p.textMuted, fontFamily: font.sansSemi, fontSize: 13, flexShrink: 1 }}
+                  maxFontSizeMultiplier={maxFontMultiplier}
+                  style={{ color: p.textMuted, fontFamily: font.sansSemi, fontSize: sc(13), flexShrink: 1 }}
                 >
                   {sessionLabel}
                 </Text>
@@ -429,7 +456,11 @@ export default function TimerScreen({ navigation }: Props) {
             </View>
 
             {!user && (
-              <Text style={{ color: p.textMuted, fontFamily: font.sans, fontSize: 11, textAlign: 'center' }}>
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={maxFontMultiplier}
+                style={{ color: p.textMuted, fontFamily: font.sans, fontSize: sc(11), textAlign: 'center' }}
+              >
                 Not signed in. Solves are saved on this device only.
               </Text>
             )}
@@ -474,17 +505,27 @@ export default function TimerScreen({ navigation }: Props) {
               <Text
                 adjustsFontSizeToFit
                 numberOfLines={1}
+                // The digits are sized from the tile they were given, so the OS
+                // text setting must not scale them again on top of that: the
+                // result would be a number too tall for the box it was measured
+                // into, which is the clipping this replaced.
+                allowFontScaling={false}
                 style={{
                   color: digitColor,
                   fontFamily: MONO_BOLD,
-                  fontSize: immersive ? 84 : 64,
+                  fontSize: digitFontSize,
+                  lineHeight: digitFontSize * 1.1,
                   fontVariant: ['tabular-nums'],
                   paddingHorizontal: space.lg,
                 }}
               >
                 {display}
               </Text>
-              <Muted style={{ textAlign: 'center', paddingHorizontal: space.lg }}>
+              <Muted
+                numberOfLines={1}
+                maxFontSizeMultiplier={maxFontMultiplier}
+                style={{ textAlign: 'center', paddingHorizontal: space.lg }}
+              >
                 {inputBlocked ? (data.solvesLoading ? 'Loading solves…' : 'Scrambling…') : hint}
               </Muted>
               {(engine.phase === 'inspecting' || engine.phase === 'running') && (
@@ -513,7 +554,8 @@ export default function TimerScreen({ navigation }: Props) {
             <Text
               adjustsFontSizeToFit
               numberOfLines={1}
-              style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: 52 }}
+              allowFontScaling={false}
+              style={{ color: p.text, fontFamily: MONO_BOLD, fontSize: sc(52) }}
             >
               {typed || (isFmc ? 'moves' : formatTime(0, 'NONE', solvePrecision))}
             </Text>
@@ -572,7 +614,9 @@ export default function TimerScreen({ navigation }: Props) {
               // Floor covering the row plus, when it's showing, the penalty tile
               // and the gap above it. Without this the footer shrinks below its
               // own contents and they spill off the bottom of the screen.
-              minHeight: sc(FOOTER_ROW_MIN_H) + (newest ? sc(PENALTY_TILE_H) + space.sm : 0),
+              minHeight:
+                sc(density === 'minimal' ? 56 : FOOTER_ROW_MIN_H) +
+                (newest ? sc(PENALTY_TILE_H) + space.sm : 0),
               gap: space.sm,
             }}
           >
@@ -603,7 +647,13 @@ export default function TimerScreen({ navigation }: Props) {
               // banner) never give way, and on a short screen this row is the
               // only thing that can shrink. Without a floor it shrinks to
               // nothing and the scramble image and stats vanish.
-              style={{ flex: 1, minHeight: sc(FOOTER_ROW_MIN_H), flexDirection: 'row', gap: space.sm, alignItems: 'stretch' }}
+              style={{
+                flex: 1,
+                minHeight: sc(density === 'minimal' ? 56 : FOOTER_ROW_MIN_H),
+                flexDirection: 'row',
+                gap: space.sm,
+                alignItems: 'stretch',
+              }}
               onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             >
               {/* Fixed width, so the tile is the same size before the drawing
@@ -614,7 +664,7 @@ export default function TimerScreen({ navigation }: Props) {
                   arrival. Not tappable: the scramble image is something to look
                   at, and it used to open Statistics, which is the stats tile's
                   job and surprising from a picture of a cube. */}
-              {hasScrambleNet(scrambleEventId) && scr.scramble ? (
+              {showScrambleImage && hasScrambleNet(scrambleEventId) && scr.scramble ? (
                 <Tile
                   style={{
                     width: sc(SCRAMBLE_NET_MAX_W) + space.sm * 2,
@@ -638,25 +688,43 @@ export default function TimerScreen({ navigation }: Props) {
                   available went somewhere more general than the number under
                   your thumb. Mean and Solves aren't a window onto anything, so
                   they stay plain. */}
+              {/* Rows are shed by density, not squeezed. At the tightest tier
+                  the row that survives is the one you actually watch between
+                  attempts, plus the best, rather than six figures too small to
+                  read. */}
               <StatsBlock
-                rows={[
-                  [
-                    { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
-                    { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
-                  ],
-                  [
-                    { label: 'Ao100', value: fmtAvg(footerStats.ao100), onPress: () => openCurrentAverage(100) },
-                    { label: 'Mean', value: fmtAvg(footerStats.meanValue) },
-                  ],
-                  [
-                    {
-                      label: 'Best',
-                      value: footerStats.best === null ? '—' : fmt(footerStats.best),
-                      onPress: () => openBestSolve(),
-                    },
-                    { label: 'Solves', value: String(footerStats.count) },
-                  ],
-                ]}
+                rows={
+                  density === 'minimal'
+                    ? [
+                        [
+                          { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
+                          { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
+                          {
+                            label: 'Best',
+                            value: footerStats.best === null ? '—' : fmt(footerStats.best),
+                            onPress: () => openBestSolve(),
+                          },
+                        ],
+                      ]
+                    : [
+                        [
+                          { label: 'Ao5', value: fmtAvg(footerStats.ao5), onPress: () => openCurrentAverage(5) },
+                          { label: 'Ao12', value: fmtAvg(footerStats.ao12), onPress: () => openCurrentAverage(12) },
+                        ],
+                        [
+                          { label: 'Ao100', value: fmtAvg(footerStats.ao100), onPress: () => openCurrentAverage(100) },
+                          { label: 'Mean', value: fmtAvg(footerStats.meanValue) },
+                        ],
+                        [
+                          {
+                            label: 'Best',
+                            value: footerStats.best === null ? '—' : fmt(footerStats.best),
+                            onPress: () => openBestSolve(),
+                          },
+                          { label: 'Solves', value: String(footerStats.count) },
+                        ],
+                      ]
+                }
               />
             </View>
           </View>
@@ -790,7 +858,7 @@ function StatsBlock({ rows }: { rows: { label: string; value: string; onPress?: 
 
 function StatCell({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
   const p = usePalette();
-  const { s: sc } = useScreenScale();
+  const { s: sc, maxFontMultiplier } = useScreenScale();
   // An em dash means there's no such average yet, so there's nothing to open.
   const tappable = !!onPress && value !== '—';
   const body = (
@@ -804,6 +872,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
           letterSpacing: 0.4,
         }}
         numberOfLines={1}
+        maxFontSizeMultiplier={maxFontMultiplier}
       >
         {label}
       </Text>
@@ -811,6 +880,7 @@ function StatCell({ label, value, onPress }: { label: string; value: string; onP
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.7}
+        maxFontSizeMultiplier={maxFontMultiplier}
         style={{
           color: tappable ? p.accent : p.text,
           fontFamily: MONO_BOLD,
