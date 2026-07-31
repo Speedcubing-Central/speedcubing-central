@@ -187,7 +187,11 @@ There is no admin account or admin role — see Roles below.
   thresholds the engine uses internally when the solve actually starts.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
-- **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). Pinned to SDK
+- **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). See
+  **`mobile/HANDOFF.md`** before working on it: development history, the
+  decisions that are load bearing, layout traps that each reached a tester
+  once, and what is still open. This section says what the app is; that says
+  how it got here and what not to undo. Pinned to SDK
   54, not the current Expo release, because Apple's App Store review has been holding
   up new Expo Go builds since SDK 55 (its App Store listing was stuck on 54 as of this
   writing), so a project on a newer SDK than that gets "Project is incompatible with
