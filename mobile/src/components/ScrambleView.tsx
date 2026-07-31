@@ -106,14 +106,14 @@ export function ScrambleView({
   }
 
   return (
+    // No card. The scramble is a label on the instrument, not a panel of its
+    // own: giving it the same border and fill as the readout below made five
+    // identical rectangles down the screen, and nothing then signalled which of
+    // them mattered. Reading it needs contrast and space, not a frame.
     <View
       style={{
-        backgroundColor: p.card,
-        borderColor: p.border,
-        borderWidth: 1,
-        borderRadius: radius.md,
-        paddingHorizontal: space.md,
-        paddingVertical: space.sm,
+        paddingHorizontal: space.sm,
+        paddingTop: space.xs,
         gap: space.xs,
       }}
     >

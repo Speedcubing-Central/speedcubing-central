@@ -315,6 +315,22 @@ export default function TimerScreen({ navigation }: Props) {
     return p.text;
   })();
 
+  // A Stackmat tells you where you are in the attempt by colour before you read
+  // anything: red under your hands, green when it will start. The timer surface
+  // borrows that. The whole area you are touching carries a wash of the phase
+  // colour, so the state is legible from the edge of your vision at the moment
+  // your eyes are on the cube rather than the phone.
+  //
+  // Held at 12% so it reads as a tint on the background rather than a filled
+  // panel; at full strength it would compete with the digits sitting on it.
+  const surfaceTint = (() => {
+    const phase = engine.phase;
+    if (phase === 'ready') return `${p.green}1F`;
+    if (phase === 'holding') return inspection ? `${p.yellow}1F` : `${p.red}1F`;
+    if (phase === 'running') return `${p.accent}14`;
+    return 'transparent';
+  })();
+
   // While an attempt is live the screen goes immersive: chrome hidden so
   // nothing but the digits is on screen (and nothing but the digits is
   // touchable) at the moment your hands are leaving the phone for the cube.
@@ -342,11 +358,18 @@ export default function TimerScreen({ navigation }: Props) {
   const statRows: ('primary' | 'secondary' | 'tertiary')[] =
     density === 'minimal' ? ['primary'] : ['primary', 'secondary', 'tertiary'];
 
-  const digitCeiling = sc(immersive ? 84 : 64);
+  // Raised well past the old 64: that ceiling was set when the timer was a
+  // bordered card competing with four others, and it left the digits at ~53pt
+  // inside a 320pt surface, six times their own height in empty space. With the
+  // card gone the time is the screen, so the ceiling is the width of the phone
+  // rather than an arbitrary point size, and the measured-tile share still
+  // governs on short screens. adjustsFontSizeToFit handles the long values
+  // ("1:23.45" is seven characters where "25.05" is five).
+  const digitCeiling = sc(immersive ? 128 : 104);
   // The measured-tile share still governs (it is what stopped the clipping);
   // the screen scale only lowers the ceiling, so a small phone never starts
   // from a size it has no room for.
-  const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.4)) : digitCeiling;
+  const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.46)) : digitCeiling;
 
   const hint = (() => {
     switch (engine.phase) {
@@ -482,8 +505,13 @@ export default function TimerScreen({ navigation }: Props) {
             see and the area that starts a solve are the same rectangle, which
             matters more here than on any other panel. */}
         {entryMode === 'keyboard' && !isFmc ? (
-          <Tile
-            style={{ flex: TIMER_FLEX, overflow: 'hidden' }}
+          <View
+            style={{
+              flex: TIMER_FLEX,
+              overflow: 'hidden',
+              borderRadius: radius.lg,
+              backgroundColor: surfaceTint,
+            }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
             <Pressable
@@ -539,7 +567,7 @@ export default function TimerScreen({ navigation }: Props) {
                 </Pressable>
               )}
             </Pressable>
-          </Tile>
+          </View>
         ) : (
           // Manual entry, also the path FMC takes in this pass.
           <Tile
@@ -611,20 +639,22 @@ export default function TimerScreen({ navigation }: Props) {
           <View
             style={{
               flex: FOOTER_FLEX,
+              // No gap when the penalty row is showing: the two halves are one
+              // panel, split by a rule rather than by space.
+              gap: newest ? 0 : space.sm,
               // Floor covering the row plus, when it's showing, the penalty tile
               // and the gap above it. Without this the footer shrinks below its
               // own contents and they spill off the bottom of the screen.
               minHeight:
                 sc(density === 'minimal' ? 56 : FOOTER_ROW_MIN_H) +
-                (newest ? sc(PENALTY_TILE_H) + space.sm : 0),
-              gap: space.sm,
+                (newest ? sc(PENALTY_TILE_H) : 0),
             }}
           >
             {/* Penalties get their own tile rather than sitting loose above the
                 footer: they act on the last solve, not on the timer, and a
                 surface of their own is what makes that separation legible. */}
             {newest && (
-              <Tile style={{ padding: space.sm }}>
+              <Tile style={{ padding: space.sm, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 }}>
                 <PenaltyRow
                   penalty={newest.penalty}
                   plusTwoCount={newest.plusTwoCount}
@@ -671,6 +701,7 @@ export default function TimerScreen({ navigation }: Props) {
                     padding: space.sm,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    ...(newest ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : null),
                   }}
                 >
                   <ScrambleNet
@@ -693,6 +724,7 @@ export default function TimerScreen({ navigation }: Props) {
                   attempts, plus the best, rather than six figures too small to
                   read. */}
               <StatsBlock
+                joined={!!newest}
                 rows={
                   density === 'minimal'
                     ? [
@@ -824,17 +856,27 @@ function Tile({
 // The compact label/value grid beside the scramble image. Two columns so six
 // stats fit in the footer without crowding the timer, and every value is
 // tabular so the columns don't jitter as times change.
-function StatsBlock({ rows }: { rows: { label: string; value: string; onPress?: () => void }[][] }) {
+function StatsBlock({
+  rows,
+  joined,
+}: {
+  rows: { label: string; value: string; onPress?: () => void }[][];
+  /** True when it sits directly under the penalty row, sharing its edge. */
+  joined?: boolean;
+}) {
   return (
     <Tile
-      style={{
-        flex: 1,
-        paddingVertical: space.sm,
-        paddingHorizontal: space.md,
-        // Clipped, so a row that still can't fit is visibly cut at the tile edge
-        // rather than drawn over the tab bar below it.
-        overflow: 'hidden',
-      }}
+      style={[
+        {
+          flex: 1,
+          paddingVertical: space.sm,
+          paddingHorizontal: space.md,
+          // Clipped, so a row that still can't fit is visibly cut at the tile
+          // edge rather than drawn over the tab bar below it.
+          overflow: 'hidden',
+        },
+        joined ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : null,
+      ]}
     >
       {rows.map((row, i) => (
         // Each row takes an equal share of the tile rather than its natural
