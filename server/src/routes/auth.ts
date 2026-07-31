@@ -250,8 +250,110 @@ router.get('/config', (_req, res) => {
 
 const OAUTH_STATE_COOKIE = 'oauth_state';
 
+// ── Native WCA sign-in ────────────────────────────────────────────────────
+//
+// The web flow ends by setting cookies and redirecting to the site. A native app
+// has neither a cookie jar nor a page to land on, so it needs the JWT pair the
+// bearer path uses, delivered somewhere the app can pick it up.
+//
+// The app opens this same /wca endpoint with ?mobile=1 in a system auth browser
+// and waits for a redirect back to its own URL scheme. That flag rides in the
+// `state` parameter rather than a second cookie, because `state` is the one
+// value WCA is contractually obliged to hand back unchanged, and it's already
+// round-tripped and checked.
+//
+// The callback does NOT redirect with tokens in the URL. Instead it mints a
+// single-use, short-lived code, hands that to the app, and the app trades it for
+// tokens over POST (see /wca/exchange). A redirect URL is the most-logged,
+// most-observed string in an OAuth flow: it lands in browser history, and on
+// Android any app registering the same scheme can receive it. A code that is
+// useless seconds later and dies on first use is a much smaller thing to leak
+// than a 7-day refresh token.
+//
+// Nothing about the web flow changes: no ?mobile=1 means no marker in the state,
+// and the callback takes exactly the branch it always did.
+const MOBILE_STATE_PREFIX = 'm.';
+const MOBILE_REDIRECT = 'speedcubingcentral://wca-auth';
+const OAUTH_RETURN_COOKIE = 'oauth_return';
+const EXCHANGE_TTL_MS = 2 * 60 * 1000;
+
+// Where the callback may send a mobile client back to.
+//
+// The app has to supply this rather than the server hardcoding one address,
+// because the return URL genuinely differs by build: a standalone app owns
+// `speedcubingcentral://`, but the same code running in Expo Go during
+// development is reached at `exp://<dev-host>/--/...` instead.
+//
+// Which makes this an open-redirect surface, and the thing being redirected is a
+// code that can be traded for a session, so it's allowlisted rather than
+// trusted. The app's own scheme is always allowed. Expo's dev schemes are
+// allowed only outside production, where a dev server URL is meaningless anyway
+// and permitting it would let anyone who can craft a link have the code
+// delivered to a host of their choosing.
+function safeMobileReturn(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > 300) return null;
+  if (raw.startsWith('speedcubingcentral://')) return raw;
+  if (!isProd && /^exp(\+[a-z0-9-]+)?:\/\//i.test(raw)) return raw;
+  return null;
+}
+
+interface PendingExchange {
+  userId: string;
+  expiresAt: number;
+}
+
+// In-memory rather than Redis: these live for two minutes, are single-use, and a
+// lost one just means signing in again. Surviving a restart isn't worth a
+// dependency, and this deliberately doesn't use cache.ts, whose entries are
+// shared, long-lived WCA API responses.
+const pendingExchanges = new Map<string, PendingExchange>();
+
+function putExchange(userId: string): string {
+  const code = crypto.randomBytes(32).toString('hex');
+  pendingExchanges.set(code, { userId, expiresAt: Date.now() + EXCHANGE_TTL_MS });
+  // Opportunistic sweep, so an abandoned flow can't accumulate forever.
+  if (pendingExchanges.size > 64) {
+    const now = Date.now();
+    for (const [k, v] of pendingExchanges) if (v.expiresAt <= now) pendingExchanges.delete(k);
+  }
+  return code;
+}
+
+function takeExchange(code: string): string | null {
+  const hit = pendingExchanges.get(code);
+  // Deleted on the first read whether or not it's still valid, so a code can
+  // never be redeemed twice.
+  if (hit) pendingExchanges.delete(code);
+  if (!hit || hit.expiresAt <= Date.now()) return null;
+  return hit.userId;
+}
+
+// POST /api/auth/wca/exchange — trade a single-use code for the token pair.
+router.post('/wca/exchange', authLimiter, async (req, res, next) => {
+  try {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    const userId = code ? takeExchange(code) : null;
+    if (!userId) {
+      res.status(401).json({ error: 'Invalid or expired sign-in code' });
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(401).json({ error: 'Invalid or expired sign-in code' });
+      return;
+    }
+    const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
+    // Cookies are set here too, harmlessly: a native client ignores them, and it
+    // keeps this response shaped exactly like every other auth response.
+    setAuthCookies(res, payload);
+    res.json(authBody(req, user, payload));
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/auth/wca — redirect to WCA's authorize endpoint
-router.get('/wca', (_req, res) => {
+router.get('/wca', (req, res) => {
   // If WCA OAuth isn't configured, bounce back with a clear in-app message
   // rather than sending the user to WCA's "Missing required parameter" error.
   if (!env.WCA_CLIENT_ID) {
@@ -262,7 +364,23 @@ router.get('/wca', (_req, res) => {
   // httpOnly cookie, so the callback can confirm this response actually
   // corresponds to a flow we started (not an attacker's crafted callback URL
   // tricking a victim into linking the attacker's WCA account).
-  const state = crypto.randomBytes(16).toString('hex');
+  // The marker rides in the state so the callback knows where to send the user
+  // back to. It's covered by the same round-trip check as the rest of the state,
+  // so it can't be forged into a flow that didn't start as a mobile one.
+  const state = (req.query.mobile === '1' ? MOBILE_STATE_PREFIX : '') + crypto.randomBytes(16).toString('hex');
+  if (req.query.mobile === '1') {
+    // Carried in a cookie rather than the state so it survives the round trip
+    // without being echoed through WCA, and so it's never attacker-supplied at
+    // the point it's used: whatever comes back, this is what the server chose.
+    const ret = safeMobileReturn(req.query.return_url) ?? MOBILE_REDIRECT;
+    res.cookie(OAUTH_RETURN_COOKIE, ret, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 10 * 60 * 1000,
+    });
+  }
   res.cookie(OAUTH_STATE_COOKIE, state, {
     httpOnly: true,
     secure: isProd,
@@ -286,12 +404,25 @@ router.get('/wca/callback', async (req, res) => {
   const state = req.query.state as string | undefined;
   const expectedState = req.cookies?.[OAUTH_STATE_COOKIE];
   res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+  // Read off the *expected* state, the value this server issued, never off the
+  // one echoed back in the query string, which is attacker-controllable.
+  const isMobile = typeof expectedState === 'string' && expectedState.startsWith(MOBILE_STATE_PREFIX);
+  // Re-validated on the way out, not just on the way in: a cookie is client
+  // storage, so this is checked against the allowlist again rather than trusted
+  // because we set it earlier.
+  const mobileReturn = safeMobileReturn(req.cookies?.[OAUTH_RETURN_COOKIE]) ?? MOBILE_REDIRECT;
+  res.clearCookie(OAUTH_RETURN_COOKIE, { path: '/' });
+  const joiner = mobileReturn.includes('?') ? '&' : '?';
+  const fail = (reason: string) => {
+    if (isMobile) res.redirect(`${mobileReturn}${joiner}error=${reason}`);
+    else res.redirect(`${env.FRONTEND_URL}/login?error=${reason}`);
+  };
   if (!code) {
-    res.redirect(`${env.FRONTEND_URL}/login?error=wca_no_code`);
+    fail('wca_no_code');
     return;
   }
   if (!expectedState || state !== expectedState) {
-    res.redirect(`${env.FRONTEND_URL}/login?error=wca_failed`);
+    fail('wca_failed');
     return;
   }
   try {
@@ -331,12 +462,19 @@ router.get('/wca/callback', async (req, res) => {
     }
 
     const payload: JwtPayload = { sub: user.id, role: user.role as JwtPayload['role'], tokenVersion: user.tokenVersion };
+    if (isMobile) {
+      // Hand back a single-use code, not the tokens themselves: this URL is
+      // about to be written to browser history and, on Android, delivered to
+      // every app registered for the scheme.
+      res.redirect(`${mobileReturn}${joiner}code=${putExchange(user.id)}`);
+      return;
+    }
     setAuthCookies(res, payload);
     res.redirect(`${env.FRONTEND_URL}/profile`);
   } catch (e) {
     const msg = axios.isAxiosError(e) ? e.message : 'wca_error';
     console.error('[wca] callback error:', msg);
-    res.redirect(`${env.FRONTEND_URL}/login?error=wca_failed`);
+    fail('wca_failed');
   }
 });
 

@@ -1,7 +1,14 @@
 import { create } from 'zustand';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import type { PublicUser } from '@scc/shared';
 import { api, setAuthLostHandler } from '../lib/api';
+import { SERVER_ORIGIN } from '../lib/config';
 import { loadTokens, saveTokens, clearTokens, type TokenPair } from '../lib/tokens';
+
+// Must match the server's MOBILE_REDIRECT and app.json's `scheme`. Built from
+// the scheme rather than hardcoded so the two can't drift apart silently.
+const WCA_RETURN_URL = Linking.createURL('wca-auth');
 
 // Mobile counterpart of client/src/store/auth.ts. Same endpoints and the same
 // resulting PublicUser (including its `betaAccess` flag, which the beta gate
@@ -15,6 +22,8 @@ interface AuthState {
   refreshUser: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
+  /** Runs the native WCA OAuth flow. Resolves false if the user backed out. */
+  loginWithWca: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -66,6 +75,35 @@ export const useAuth = create<AuthState>((set) => ({
     });
     if (data.tokens) await saveTokens(data.tokens);
     set({ user: data.user });
+  },
+  loginWithWca: async () => {
+    // The system auth browser, not an in-app WebView: it's the only surface that
+    // shares Safari's cookie jar, so someone already signed in to WCA isn't made
+    // to type their password again, and credentials are never entered in a view
+    // this app could read.
+    // The return URL is sent along because it isn't fixed: a standalone build is
+    // reached at speedcubingcentral://, but the same code in Expo Go is reached
+    // at exp://<dev-host>/--/. The server allowlists what it will accept.
+    const result = await WebBrowser.openAuthSessionAsync(
+      `${SERVER_ORIGIN}/api/auth/wca?mobile=1&return_url=${encodeURIComponent(WCA_RETURN_URL)}`,
+      WCA_RETURN_URL,
+    );
+    // 'cancel' (dismissed) and 'dismiss' both mean the user backed out.
+    if (result.type !== 'success') return false;
+
+    const { queryParams } = Linking.parse(result.url);
+    const err = typeof queryParams?.error === 'string' ? queryParams.error : null;
+    if (err) throw new Error(err === 'wca_not_configured' ? 'WCA sign-in is not configured on this server.' : 'WCA sign-in failed.');
+
+    const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
+    if (!code) throw new Error('WCA sign-in did not return a sign-in code.');
+
+    // The redirect carries a single-use code, never the tokens. Trading it over
+    // POST keeps the credentials out of the URL, and out of browser history.
+    const { data } = await api.post<{ user: PublicUser; tokens?: TokenPair }>('/auth/wca/exchange', { code });
+    if (data.tokens) await saveTokens(data.tokens);
+    set({ user: data.user });
+    return true;
   },
   logout: async () => {
     try {

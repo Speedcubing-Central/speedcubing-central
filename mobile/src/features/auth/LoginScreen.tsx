@@ -23,7 +23,7 @@ import { font, radius, space } from '../../theme';
 // touching the OAuth callback, which this pass deliberately leaves alone.
 export default function LoginScreen() {
   const p = usePalette();
-  const { login, register } = useAuth();
+  const { login, register, loginWithWca } = useAuth();
   const wcaEnabled = useServerConfig((s) => s.wcaEnabled);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -112,25 +112,30 @@ export default function LoginScreen() {
             <Muted>Or sign in with your WCA account</Muted>
             <Pressable
               accessibilityRole="button"
-              onPress={() =>
-                Linking.openURL(`${SERVER_ORIGIN}/api/auth/wca`).catch(() =>
-                  Alert.alert('Could not open browser', 'Try signing in at speedcubingcentral.com instead.'),
-                )
-              }
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true);
+                try {
+                  await loginWithWca();
+                } catch (e) {
+                  Alert.alert('WCA sign in failed', apiError(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
               style={({ pressed }) => ({
                 borderWidth: 1,
                 borderColor: p.border,
                 borderRadius: radius.sm,
                 paddingVertical: 12,
                 alignItems: 'center',
-                opacity: pressed ? 0.7 : 1,
+                opacity: busy ? 0.5 : pressed ? 0.7 : 1,
               })}
             >
               <Text style={{ color: p.text, fontFamily: font.sansBold }}>Continue with WCA</Text>
             </Pressable>
             <Muted>
-              WCA sign-in completes in your browser and signs you in on the web app. Native WCA sign-in is coming;
-              for now, set a password in web settings and use it here.
+              Opens WCA in a secure browser and signs you in here. Your WCA password is never entered in this app.
             </Muted>
           </View>
         )}
