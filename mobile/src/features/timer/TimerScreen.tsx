@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Keyboard, Platform, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -116,6 +116,10 @@ const TIMER_CONTENT_BIAS = 0.65;
 // The real relief valves are ScrambleView's content-length font ladder and
 // `density` dropping content.
 const TIMER_MIN_H = 140;
+
+// Clearance kept between the entry row and the top of the keyboard, so the
+// field does not sit flush against it looking half covered.
+const ENTRY_KEYBOARD_GAP = 12;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
@@ -395,6 +399,58 @@ export default function TimerScreen({ navigation }: Props) {
     if (immersive || timerTileH <= 0) return 0;
     const contentH = digitFontSize * 1.1 + space.md + sc(18);
     return Math.round(Math.max(0, timerTileH - contentH) * TIMER_CONTENT_BIAS);
+  })();
+
+  // ── Manual entry and the keyboard ─────────────────────────────────────────
+  //
+  // The column does not scroll and iOS does not move it: the keyboard is drawn
+  // over the screen, and whatever was under it stays where it was, which on a
+  // short phone is the field you are typing into. Android needs none of this,
+  // because its window resizes under the keyboard (Expo's default
+  // softwareKeyboardLayoutMode is `resize`), so the column re-lays out on its
+  // own and lifting it again here would double count.
+  //
+  // A transform, not padding and not a KeyboardAvoidingView, because this must
+  // not change the column's layout. Every other child is auto-height and React
+  // Native leaves flexShrink at 0 (trap 3), so anything that squeezes the tile
+  // pushes the scramble off a screen that cannot scroll it back.
+  const entryRowRef = useRef<View>(null);
+  // The entry row's bottom edge in window coordinates. Measured only while
+  // nothing is lifted, since measureInWindow reports the rendered position and
+  // measuring through our own translate would feed the lift back into itself.
+  const entryBottomRef = useRef(0);
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    // WillChangeFrame rather than DidShow: it fires before the animation, so
+    // the field is already clear when the keyboard arrives rather than being
+    // covered for a frame and then jumping.
+    const change = Keyboard.addListener('keyboardWillChangeFrame', (e) =>
+      setKeyboardTop(e.endCoordinates.screenY),
+    );
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardTop(null));
+    return () => {
+      change.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const measureEntryRow = useCallback(() => {
+    entryRowRef.current?.measureInWindow((_x, y, _w, h) => {
+      if (h > 0) entryBottomRef.current = y + h;
+    });
+  }, []);
+
+  // How far the entry block has to rise to clear the keyboard. Bounded by the
+  // cube's height so that it can cover the picture, which nobody is reading
+  // while typing a time they have already done, but never the scramble itself
+  // or the controls that change it.
+  const entryLift = (() => {
+    if (keyboardTop === null || entryBottomRef.current === 0) return 0;
+    const overlap = entryBottomRef.current + ENTRY_KEYBOARD_GAP - keyboardTop;
+    if (overlap <= 0) return 0;
+    return imageBoxH > 0 ? Math.min(overlap, imageBoxH) : overlap;
   })();
 
   const hint = (() => {
@@ -714,14 +770,26 @@ export default function TimerScreen({ navigation }: Props) {
           // Manual entry, also the path FMC takes in this pass. Same surface as
           // the touch timer above, so switching input mode doesn't change what
           // the screen looks like, only what it accepts.
+          //
+          // Its content sits at the TOP of the tile, where the touch timer's is
+          // centred and then biased. The tile takes the column's whole surplus
+          // (TIMER_FLEX), and centring that surplus around a block you are
+          // meant to type into puts half of it between the cube and the field
+          // as a hole. There is also no attempt to watch here and no tap target
+          // to keep large: the readout is a receipt for what you typed, not the
+          // focal point it is in touch mode. So the surplus goes below the
+          // controls, where it reads as room before the panel, and the field
+          // comes up within reach of a thumb.
           <View
             style={{
               flex: TIMER_FLEX,
               minHeight: sc(TIMER_MIN_H),
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
               gap: space.lg,
               padding: space.lg,
+              // Layout-free by design; see the entryLift note above.
+              transform: [{ translateY: -entryLift }],
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
@@ -733,14 +801,24 @@ export default function TimerScreen({ navigation }: Props) {
             >
               {typed || (isFmc ? 'moves' : formatTime(0, 'NONE', solvePrecision))}
             </Text>
-            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+            <View
+              ref={entryRowRef}
+              // Only while nothing is lifted: this measurement is what the lift
+              // is computed from, so taking it through the lift would chase its
+              // own tail. Layout does not change under the keyboard on iOS, so
+              // the value taken here stays good for as long as it is needed.
+              onLayout={() => {
+                if (keyboardTop === null) measureEntryRow();
+              }}
+              style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}
+            >
               <Input
                 value={typed}
                 onChangeText={setTyped}
                 onSubmitEditing={addTyped}
-                // The panel is position:absolute against the bottom edge and
-                // nothing here manages the keyboard, so an open panel would sit
-                // underneath it. Collapsing on focus is the cheap fix.
+                // The panel is position:absolute against the bottom edge, so an
+                // open one would sit under the keyboard. Collapsing on focus
+                // keeps it out of the way; the lift above handles the field.
                 onFocus={() => setPanelOpen(false)}
                 editable={!inputBlocked}
                 placeholder={isFmc ? '28' : '10.00'}
