@@ -168,44 +168,115 @@ export function useTimerData(eventId: string) {
     [currentId, isGuest, eventId, setLastSessionForEvent],
   );
 
+  // ── Edits are applied locally first, then sent ────────────────────────────
+  //
+  // These used to await the server and only then touch local state, so tapping
+  // +2 did nothing at all until the round trip came back. On a fast connection
+  // that reads as sluggish; on a slow one it reads as broken, and it invites a
+  // second tap on a control that has already been pressed.
+  //
+  // Applying first and reverting on failure is the same trade `addSolve` and
+  // `deleteSolves` already make. The revert restores the exact previous solve
+  // rather than re-fetching, so a failed edit cannot reorder the list or lose a
+  // concurrent change to a different solve.
+  const patchSolve = useCallback(
+    async (solveId: string, apply: (s: SolveDTO) => SolveDTO, send: () => Promise<unknown>) => {
+      if (!currentId) return;
+      let previous: SolveDTO | undefined;
+      setSolves((prev) =>
+        prev.map((s) => {
+          if (s.id !== solveId) return s;
+          previous = s;
+          return apply(s);
+        }),
+      );
+      try {
+        await send();
+      } catch (e) {
+        if (previous) {
+          const restore = previous;
+          setSolves((prev) => prev.map((s) => (s.id === solveId ? restore : s)));
+        }
+        throw e;
+      }
+    },
+    [currentId],
+  );
+
   const updatePenalty = useCallback(
     async (solveId: string, penalty: Penalty, plusTwoCount: number) => {
       if (!currentId) return;
       const count = penalty === 'DNF' ? 0 : plusTwoCount;
-      if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty, count);
-      else await api.patch(`/solves/${solveId}`, { penalty, plusTwoCount: count });
-      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, penalty, plusTwoCount: count } : s)));
+      await patchSolve(
+        solveId,
+        (s) => ({ ...s, penalty, plusTwoCount: count }),
+        async () => {
+          if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty, count);
+          else await api.patch(`/solves/${solveId}`, { penalty, plusTwoCount: count });
+        },
+      );
     },
-    [currentId, isGuest],
+    [currentId, isGuest, patchSolve],
   );
 
   const updateTime = useCallback(
     async (solveId: string, time: number) => {
       if (!currentId) return;
-      if (isGuest) guestStore.updateTime(currentId, solveId, time);
-      else await api.patch(`/solves/${solveId}`, { time });
-      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, time } : s)));
+      await patchSolve(
+        solveId,
+        (s) => ({ ...s, time }),
+        async () => {
+          if (isGuest) guestStore.updateTime(currentId, solveId, time);
+          else await api.patch(`/solves/${solveId}`, { time });
+        },
+      );
     },
-    [currentId, isGuest],
+    [currentId, isGuest, patchSolve],
   );
 
   const updateComment = useCallback(
     async (solveId: string, comment: string) => {
       if (!currentId) return;
-      if (isGuest) guestStore.updateComment(currentId, solveId, comment);
-      else await api.patch(`/solves/${solveId}`, { comment });
       const trimmed = comment.trim() || undefined;
-      setSolves((prev) => prev.map((s) => (s.id === solveId ? { ...s, comment: trimmed } : s)));
+      await patchSolve(
+        solveId,
+        (s) => ({ ...s, comment: trimmed }),
+        async () => {
+          if (isGuest) guestStore.updateComment(currentId, solveId, comment);
+          else await api.patch(`/solves/${solveId}`, { comment });
+        },
+      );
     },
-    [currentId, isGuest],
+    [currentId, isGuest, patchSolve],
   );
 
   const deleteSolve = useCallback(
     async (solveId: string) => {
       if (!currentId) return;
-      if (isGuest) guestStore.deleteSolve(currentId, solveId);
-      else await api.delete(`/solves/${solveId}`);
-      setSolves((prev) => prev.filter((s) => s.id !== solveId));
+      // Captured before the removal so a failed delete can put it back where it
+      // was; `solves` is newest-first and that order is load bearing for the
+      // rolling averages, so re-appending would be wrong.
+      let removed: { solve: SolveDTO; index: number } | null = null;
+      setSolves((prev) => {
+        const index = prev.findIndex((s) => s.id === solveId);
+        if (index === -1) return prev;
+        removed = { solve: prev[index], index };
+        return prev.filter((s) => s.id !== solveId);
+      });
+      try {
+        if (isGuest) guestStore.deleteSolve(currentId, solveId);
+        else await api.delete(`/solves/${solveId}`);
+      } catch (e) {
+        if (removed) {
+          const { solve, index } = removed;
+          setSolves((prev) => {
+            const next = prev.slice();
+            next.splice(Math.min(index, next.length), 0, solve);
+            return next;
+          });
+        }
+        throw e;
+      }
     },
     [currentId, isGuest],
   );

@@ -148,44 +148,86 @@ export function eventBadge(eventId: string): string {
 // 50pt box this replaces, a 7x7 sticker was 2.4pt, which is not a picture of
 // anything.
 //
-// So the height scales with how many sticker rows the drawing has to fit down
-// it (3 faces stacked, so 3N for an NxN), targeting roughly 8pt per sticker or
-// better on a baseline phone.
+// The knob is WIDTH, expressed as a fraction of the screen.
 //
-// Height, not width, because a puzzle's `aspect` is only known after cubing.js
-// resolves the drawing. Reserving the box by the dimension known up front is
-// what keeps the column from reflowing when the image finally lands; the width
-// is then whatever the aspect makes it, which on a phone always fits.
-const IMAGE_BASE_H: Record<string, number> = {
-  '222': 100,
-  '333': 116,
-  '333oh': 116,
-  '333bf': 116,
-  '333ft': 116,
-  '333fm': 116,
-  lsll: 116,
-  ll: 116,
-  cls: 116,
-  '444': 150,
-  '444bf': 150,
-  '555': 150,
-  '555bf': 150,
-  // 18 and 21 sticker rows: the two that most need the room.
-  '666': 168,
-  '777': 168,
-  minx: 150,
-  // Aspect 0.652, the one puzzle taller than it is wide, so a height budget is
-  // the *only* thing that decides how big it gets.
-  sq1: 150,
-  // Aspect 2.000 and only four dial rows, so it reads fine short and would
-  // otherwise be drawn absurdly wide.
-  clock: 100,
-  pyram: 116,
-  skewb: 116,
-  kilominx: 150,
-  fto: 150,
-  redi_cube: 116,
+// Sizing by height was the second mistake. Height alone does not say how big a
+// drawing looks, because each puzzle has its own proportions: FTO is nearly
+// twice as wide as it is tall (1.947), so the height that suited a 3x3 made FTO
+// span the display, while square-1 at 0.652 is taller than it is wide and came
+// out a sliver. "How much of the screen does this take" is the question that
+// was actually being got wrong, and a width fraction answers it directly.
+//
+// The heights below are then derived, not guessed, because `aspect` is fixed
+// cubing.js geometry rather than something that varies at runtime. Reserving
+// the box by a computed height keeps the column from reflowing when the drawing
+// finally resolves, which is what the async load would otherwise cause.
+const IMAGE_WIDTH_FRACTION: Record<string, number> = {
+  '222': 0.38,
+  '333': 0.4,
+  '333oh': 0.4,
+  '333bf': 0.4,
+  '333ft': 0.4,
+  '333fm': 0.4,
+  lsll: 0.4,
+  ll: 0.4,
+  cls: 0.4,
+  '444': 0.55,
+  '444bf': 0.55,
+  '555': 0.6,
+  '555bf': 0.6,
+  // The big cubes are wider on purpose: 18 and 21 sticker rows need the linear
+  // size or the stickers stop being distinguishable. Held at the point where
+  // the timer still clears its own floor on the tightest device, which is what
+  // caps them rather than taste.
+  '666': 0.62,
+  '777': 0.65,
+  minx: 0.62,
+  // Taller than it is wide, so a modest width still makes a tall drawing.
+  sq1: 0.3,
+  // Only four dial rows and the widest aspect of the set, so it reads clearly
+  // at half the screen and would look enormous at more.
+  clock: 0.5,
+  pyram: 0.42,
+  skewb: 0.45,
+  kilominx: 0.58,
+  fto: 0.52,
+  redi_cube: 0.42,
 };
+
+// Aspect ratios (width / height) taken from the viewBox cubing.js emits for
+// each puzzle. Duplicated here rather than read from the rendered drawing
+// because the layout needs the height BEFORE the drawing loads, and these are
+// fixed geometry: the artwork's proportions do not depend on the scramble.
+// lib/cubingSvg.ts still reads the real value at render time, so a change
+// upstream shows up as a slightly wrong box rather than a wrong picture.
+const IMAGE_ASPECT: Record<string, number> = {
+  '222': 1.345,
+  '333': 1.177,
+  '333oh': 1.177,
+  '333bf': 1.177,
+  '333ft': 1.177,
+  '333fm': 1.177,
+  lsll: 1.177,
+  ll: 1.177,
+  cls: 1.177,
+  '444': 1.6,
+  '444bf': 1.6,
+  '555': 1.6,
+  '555bf': 1.6,
+  '666': 1.6,
+  '777': 1.6,
+  minx: 1.6,
+  sq1: 0.652,
+  clock: 2.0,
+  pyram: 1.137,
+  skewb: 1.6,
+  kilominx: 1.6,
+  fto: 1.947,
+  redi_cube: 1.306,
+};
+
+const DEFAULT_WIDTH_FRACTION = 0.42;
+const DEFAULT_ASPECT = 1.177;
 
 // The tightest tier still shows the image. An earlier pass hid it there, and
 // the arithmetic showed an iPhone SE at large text reaching `minimal` with over
@@ -197,12 +239,21 @@ const IMAGE_DENSITY_FACTOR: Record<Density, number> = {
   minimal: 0.7,
 };
 
+/** Width budget for this event's drawing, in points. */
+export function scrambleImageWidth(eventId: string, screenWidth: number): number {
+  return Math.round(screenWidth * (IMAGE_WIDTH_FRACTION[eventId] ?? DEFAULT_WIDTH_FRACTION));
+}
+
 /**
- * Height to give the scramble image for this event, in points.
+ * Height to reserve for this event's scramble image, in points.
  *
- * @param s The screen-scale helper from `useScreenScale`.
+ * Derived from the width budget and the puzzle's own aspect, so the box is the
+ * shape the drawing will actually be and there is no empty band left over. A
+ * single height for every puzzle left FTO in a box twice the height of the
+ * picture inside it.
  */
-export function scrambleImageHeight(eventId: string, density: Density, s: (n: number) => number): number {
-  const base = IMAGE_BASE_H[eventId] ?? IMAGE_BASE_H['333'];
-  return Math.round(s(base) * IMAGE_DENSITY_FACTOR[density]);
+export function scrambleImageHeight(eventId: string, density: Density, screenWidth: number): number {
+  const width = scrambleImageWidth(eventId, screenWidth);
+  const aspect = IMAGE_ASPECT[eventId] ?? DEFAULT_ASPECT;
+  return Math.round((width / aspect) * IMAGE_DENSITY_FACTOR[density]);
 }

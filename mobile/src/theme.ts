@@ -72,6 +72,32 @@ export function getPalette(themeId: string, theme: 'dark' | 'light', accentOverr
   };
 }
 
+// Composites `overlay` over `base` at `alpha` and returns an opaque colour.
+//
+// For tinting a whole screen, where a translucent layer won't do. A View has one
+// background, so a full-bleed tint has to be mixed into the colour rather than
+// stacked on top of it: an absolutely positioned layer is laid out inside its
+// parent's padding, so it cannot reach under a safe-area inset, and it would sit
+// over a touch target that needs every pixel it has.
+//
+// Both arguments are 6-digit hex, which is what every colour in this file and in
+// Palette is. Anything else returns `base` rather than a colour built from NaN.
+export function mix(base: string, overlay: string, alpha: number): string {
+  const parse = (hex: string): [number, number, number] | null => {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+  };
+  const b = parse(base);
+  const o = parse(overlay);
+  if (!b || !o) return base;
+  const channel = (from: number, to: number) =>
+    Math.round(from + (to - from) * alpha)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(b[0], o[0])}${channel(b[1], o[1])}${channel(b[2], o[2])}`;
+}
+
 // Shared spacing/typography scale, so screens don't each invent their own.
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
@@ -85,6 +111,21 @@ export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
 // the sheet's top edge used hairlineWidth, so two lists a tap apart drew
 // visibly different dividers. Naming the rule is what stops that recurring.
 export const stroke = { hairline: StyleSheet.hairlineWidth, thin: 1 } as const;
+
+// ── Motion ────────────────────────────────────────────────────────────────
+//
+// Durations for the chrome that leaves as an attempt starts and returns when it
+// ends: the Timer's stats panel and the app's tab bar.
+//
+// Shared, because those two sit at the same edge of the screen and move at the
+// same moment. Given separate values they read as one thing glitching rather
+// than as two things agreeing, which is what happened when the panel cut
+// instantly and the bar took 190ms over it.
+//
+// Out is quicker than in on purpose. Leaving should get out of the way of a
+// solve that is already starting; returning lands while you are reading the
+// time you just got, and a snap there pulls the eye off it.
+export const motion = { immersiveOut: 150, immersiveIn: 190 } as const;
 
 // ── Type families, matching the web client ────────────────────────────────
 //

@@ -1,8 +1,8 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { UNOFFICIAL_EVENTS, WCA_EVENTS, type WcaEvent } from '@scc/shared';
 import { usePalette } from '../store/settings';
 import { Label } from './ui';
-import { Sheet } from './Sheet';
+import { Sheet, SheetScrollView } from './Sheet';
 import { font, radius, space } from '../theme';
 
 // Bottom-sheet event picker.
@@ -65,10 +65,12 @@ export function EventPickerSheet({
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Event" fillHeight maxHeightRatio={0.78}>
-      <ScrollView>
+      {/* Reports its scroll position to the sheet, so a drag that starts at the
+          top of this list drags the sheet and every other drag scrolls. */}
+      <SheetScrollView>
         {renderGroup('WCA Events', wcaEvents)}
         {renderGroup('Unofficial Events', UNOFFICIAL_EVENTS)}
-      </ScrollView>
+      </SheetScrollView>
     </Sheet>
   );
 }

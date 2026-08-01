@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,13 +17,15 @@ import {
 } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
-import { eventBadge, scrambleImageHeight } from '../../lib/scramble';
+import { eventBadge, scrambleImageHeight, scrambleImageWidth } from '../../lib/scramble';
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
+import { useUi } from '../../store/ui';
 import { Button, IconButton, Input, MONO_BOLD, Muted } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
+import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
 import { PbCelebration } from './PbCelebration';
 import { EventPickerSheet } from '../../components/EventPickerSheet';
 import { AverageDetailSheet } from './AverageDetailSheet';
@@ -34,9 +36,10 @@ import { TimerMenuSheet, type TimerMenuItem } from './TimerMenuSheet';
 import { StatsPanel } from './StatsPanel';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
-import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
+import { useTimerEngine } from './useTimerEngine';
+import { TimerDigits } from './TimerDigits';
 import type { TimerStackParamList } from '../../navigation/TimerStack';
-import { font, radius, space } from '../../theme';
+import { font, mix, radius, space } from '../../theme';
 
 // ── The mobile Timer ──────────────────────────────────────────────────────
 //
@@ -69,10 +72,40 @@ type Props = NativeStackScreenProps<TimerStackParamList, 'TimerHome'>;
 
 const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map((e) => [e.id, e.name]));
 
-// The timer is now the column's only flexible child, so there is no share to
-// negotiate: this exists to hold that fact where the next person will read it.
-// The previous 3:1 split against a footer sibling is gone along with the footer.
-const TIMER_FLEX = 1;
+// How the column's leftover height is split between the cube image and the
+// timer. Both are real siblings in a definite-height container, which is the
+// only place a flex share means anything (HANDOFF trap 2).
+//
+// The timer takes the larger share, and the image barely grows at all.
+//
+// An earlier pass had this the other way round, to stop the timer turning
+// surplus into dead space around its centred digits. That fixed the spacing and
+// broke something more important: the timer tile IS the tap target, so every
+// point the image gained came straight out of the area you can hit to start a
+// solve, and the cube ended up dominating a screen whose whole job is being
+// easy to press.
+//
+// The spacing is handled by TIMER_CONTENT_BIAS below instead, which is the
+// right tool for it: it moves the digits within the tile rather than shrinking
+// the tile.
+const IMAGE_FLEX = 1;
+const TIMER_FLEX = 2.2;
+
+// Ceiling on the image's growth, as a multiple of its natural size. Small on
+// purpose: the image is sized for legibility by scrambleImageHeight and there is
+// nothing to gain past that, so this only takes the edge off a roomy screen.
+const IMAGE_MAX_GROWTH = 1.25;
+
+// How far up the timer tile its content sits, as a fraction of the free space
+// that would otherwise be split evenly above and below it.
+//
+// 0 is strict centring, which is what produced the void the cube used to float
+// above: in a tall tile a centred block leaves half the surplus as a gap under
+// the cube. Biasing upward closes that gap while the whole tile stays tappable,
+// so the space it keeps ends up below the hint, where it reads as breathing room
+// before the panel rather than as a hole. Optically the digits still read as
+// centred, since a strictly centred block in a tall box reads as low.
+const TIMER_CONTENT_BIAS = 0.65;
 
 // A floor on the timer tile, and deliberately a DIAGNOSTIC one. The old
 // arrangement had the floor on the footer and let the timer absorb any
@@ -86,7 +119,7 @@ const TIMER_MIN_H = 140;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
-  const { s: sc, fontScale, maxFontMultiplier } = useScreenScale();
+  const { s: sc, fontScale, maxFontMultiplier, width } = useScreenScale();
   const settings = useSettings();
   const {
     inspection,
@@ -131,6 +164,11 @@ export default function TimerScreen({ navigation }: Props) {
   // from its own measurement, and reserved here by a spacer so the timer's tap
   // target and the panel never overlap.
   const [panelCollapsedH, setPanelCollapsedH] = useState(0);
+  // The image box's flex-resolved height, so the drawing can fill whatever
+  // share it won. Measuring is safe here and cannot loop: the box's height
+  // comes from the flex split against the timer, which does not depend on the
+  // drawing inside it.
+  const [imageBoxH, setImageBoxH] = useState(0);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
@@ -154,6 +192,16 @@ export default function TimerScreen({ navigation }: Props) {
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty, plusTwoCount: number) => {
       setSubmitting(true);
+      // The scramble this attempt used, captured before the display moves on.
+      const used = scr.scramble;
+      // Ahead of the save, not after it, and deliberately not awaited.
+      //
+      // The next scramble is already prefetched (useScrambler keeps a queue of
+      // three in flight), so the seconds between finishing a solve and seeing a
+      // new scramble were almost entirely the save's network round trip, spent
+      // with the solved scramble still on screen. Nothing about picking the next
+      // scramble depends on the save succeeding, so the two run together.
+      scr.advance();
       try {
         let sessionId = data.currentId;
         if (!sessionId) {
@@ -161,8 +209,7 @@ export default function TimerScreen({ navigation }: Props) {
           sessionId = created.id;
         }
         const prevSolves = data.solves;
-        const solve = await data.addSolve(timeMs, penalty, plusTwoCount, scr.scramble, sessionId);
-        scr.advance();
+        const solve = await data.addSolve(timeMs, penalty, plusTwoCount, used, sessionId);
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
           // The overlay owns its own dismissal timing, so no timeout here.
@@ -171,7 +218,11 @@ export default function TimerScreen({ navigation }: Props) {
         return true;
       } catch (e) {
         // A failed save must never silently advance the scramble. Same
-        // reasoning as the web Timer's error handling.
+        // reasoning as the web Timer's error handling: the scramble the attempt
+        // used goes back up, so the retry is against that one and not a new
+        // one. Advancing early doesn't change that guarantee, it just means the
+        // undo is explicit.
+        scr.restore(used);
         Alert.alert('Solve not saved', apiError(e, 'Failed to save solve, try again'));
         return false;
       } finally {
@@ -234,29 +285,18 @@ export default function TimerScreen({ navigation }: Props) {
       : formatTime(ms, penalty, solvePrecision, plusTwoCount);
   };
 
-  const display = useMemo(() => {
+  // What the digits show when nothing is ticking. The live value is owned by
+  // TimerDigits, which subscribes to the engine, so this deliberately does NOT
+  // depend on elapsed: that dependency is what re-rendered the whole screen 60
+  // times a second.
+  const restingText = useMemo(() => {
     const phase = engine.phase;
-    if (inspection && (phase === 'inspecting' || phase === 'holding' || phase === 'ready')) {
-      return formatInspectionDisplay(inspectionDirection, engine.inspectionElapsed, engine.inspectionRemaining);
-    }
-    if (phase === 'running') return runningStr(engine.elapsed);
-    if (phase === 'stopped') return formatTime(Math.round(engine.elapsed), 'NONE', solvePrecision);
+    if (phase === 'stopped') return formatTime(Math.round(engine.stoppedElapsed), 'NONE', solvePrecision);
     if ((phase === 'holding' || phase === 'ready') && !inspection) return formatTime(0, 'NONE', solvePrecision);
     if (newest) return fmt(newest.time, newest.penalty, newest.plusTwoCount);
     return formatTime(0, 'NONE', solvePrecision);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    engine.phase,
-    engine.elapsed,
-    engine.inspectionElapsed,
-    engine.inspectionRemaining,
-    newest,
-    inspection,
-    inspectionDirection,
-    timerUpdate,
-    solvePrecision,
-    isFmc,
-  ]);
+  }, [engine.phase, engine.stoppedElapsed, newest, inspection, solvePrecision, isFmc]);
 
   const digitColor = (() => {
     const phase = engine.phase;
@@ -266,21 +306,26 @@ export default function TimerScreen({ navigation }: Props) {
   })();
 
   // A Stackmat tells you where you are in the attempt by colour before you read
-  // anything: red under your hands, green when it will start. The timer surface
-  // borrows that, so the state is legible from the edge of your vision at the
-  // moment your eyes are on the cube rather than the phone.
+  // anything: red under your hands, green when it will start. The screen borrows
+  // that, so the state is legible from the edge of your vision at the moment
+  // your eyes are on the cube rather than the phone.
   //
-  // Held at 12% so it reads as a tint on the background rather than a filled
-  // panel; at full strength it would compete with the digits sitting on it.
-  // This was previously computed and then applied only to the manual-entry
-  // branch, so the touch timer, the one the comment is actually about, never
-  // had it.
-  const surfaceTint = (() => {
+  // The whole screen, not the timer's own box. As a rounded rectangle inset from
+  // the edges it read as a panel that had changed colour, which is a smaller,
+  // later signal than the thing it is imitating: a Stackmat's mat is the field
+  // of view, not a widget in it. Full bleed also removes the odd tension of a
+  // coloured tile sitting on a differently coloured page.
+  //
+  // Mixed into the background rather than layered over it, because this is the
+  // background: see `mix` in theme.ts for why a translucent overlay cannot
+  // reach the whole screen. Held at 12% so it stays a tint, not a fill; at full
+  // strength it would compete with the digits on top of it.
+  const screenTint = (() => {
     const phase = engine.phase;
-    if (phase === 'ready') return `${p.green}1F`;
-    if (phase === 'holding') return inspection ? `${p.yellow}1F` : `${p.red}1F`;
-    if (phase === 'running') return `${p.accent}14`;
-    return 'transparent';
+    if (phase === 'ready') return mix(p.bg, p.green, 0.12);
+    if (phase === 'holding') return mix(p.bg, inspection ? p.yellow : p.red, 0.12);
+    if (phase === 'running') return mix(p.bg, p.accent, 0.08);
+    return p.bg;
   })();
 
   // While an attempt is live the screen goes immersive: chrome hidden so nothing
@@ -288,6 +333,24 @@ export default function TimerScreen({ navigation }: Props) {
   // moment your hands are leaving the phone for the cube.
   const immersive =
     engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
+
+  // Tell the root navigator to pull its tab bar while an attempt is live. The
+  // Timer hides its own chrome directly, but the bar belongs to the navigator
+  // above it, and it is a custom bar, so React Navigation's own
+  // `tabBarStyle: { display: 'none' }` never reaches it.
+  //
+  // Cleared on unmount as well as on leaving the phase: navigating away
+  // mid-attempt would otherwise leave the app with no tab bar and no way to get
+  // it back.
+  // Also publishes the phase colour, not just the flag. The tint is this
+  // screen's background, so it stops at this screen's edge, and the tab bar sits
+  // outside it: without the colour the bar's area stayed plain while the rest of
+  // the display went yellow, green or accent, leaving a band along the bottom.
+  const setTimerImmersion = useUi((s) => s.setTimerImmersion);
+  useEffect(() => {
+    setTimerImmersion(immersive, immersive ? screenTint : null);
+  }, [immersive, screenTint, setTimerImmersion]);
+  useEffect(() => () => setTimerImmersion(false, null), [setTimerImmersion]);
 
   // One decision, read by the header and the panel, so they cannot disagree
   // about how much room there is.
@@ -299,7 +362,8 @@ export default function TimerScreen({ navigation }: Props) {
   // constant that suits a 9-row 3x3 leaves a 21-row 7x7 unreadable. Scaled by
   // the screen and then by density, so it is the events that need the room that
   // spend the timer's height, and a 3x3 keeps its digits at their ceiling.
-  const imageHeight = scrambleImageHeight(scrambleEventId, density, sc);
+  const imageHeight = scrambleImageHeight(scrambleEventId, density, width);
+  const imageWidth = scrambleImageWidth(scrambleEventId, width);
 
   // Raised well past the old 64: that ceiling was set when the timer was a
   // bordered card competing with four others, and it left the digits at ~53pt
@@ -309,7 +373,29 @@ export default function TimerScreen({ navigation }: Props) {
   // adjustsFontSizeToFit handles the long values ("1:23.45" is seven characters
   // where "25.05" is five).
   const digitCeiling = sc(immersive ? 128 : 104);
-  const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.46)) : digitCeiling;
+  // 0.60 of the tile, up from 0.46. The tile is shorter now that the cube is a
+  // flex sibling taking a share of the surplus, and at 0.46 the digits shrank
+  // with it: on a 14/15 Pro they fell from the 104pt ceiling to about 85, which
+  // traded the focal point away to fix the spacing. 0.60 restores them to the
+  // ceiling in the same tile, so the gap closes and the digits do not move.
+  // The hint below them still clears: at 0.60 the content comes to roughly
+  // 0.66 * tile + 29, which fits every case the harness models.
+  const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.6)) : digitCeiling;
+
+  // Padding at the bottom of the timer's content box, which shifts the digits up
+  // by half of it. Derived from the free space the tile actually has, so a tile
+  // barely taller than its content is left alone and only a roomy one is lifted.
+  //
+  // Never during an attempt. The lift exists to close the gap between the cube
+  // and the digits, and once the attempt starts there is no cube: the chrome
+  // unmounts and the tile becomes nearly the whole column, so the free space it
+  // is a fraction of becomes enormous and the same rule pins the digits to the
+  // top of the screen. With nothing above them, centred is simply correct.
+  const timerContentLift = (() => {
+    if (immersive || timerTileH <= 0) return 0;
+    const contentH = digitFontSize * 1.1 + space.md + sc(18);
+    return Math.round(Math.max(0, timerTileH - contentH) * TIMER_CONTENT_BIAS);
+  })();
 
   const hint = (() => {
     switch (engine.phase) {
@@ -366,7 +452,10 @@ export default function TimerScreen({ navigation }: Props) {
   ];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
+    // The phase colour lives here, on the screen itself, so it runs edge to edge
+    // and under the status bar (a View's background covers its padding, which is
+    // what the safe-area inset is).
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenTint }}>
       <View
         style={{ flex: 1, paddingHorizontal: space.md }}
         onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}
@@ -482,29 +571,92 @@ export default function TimerScreen({ navigation }: Props) {
                 onEdit={() => setShowEditScramble(true)}
                 onCopy={() => Clipboard.setStringAsync(normalizeScramble(scr.scramble))}
                 onOpenImage={() => setShowScrambleImage(true)}
-                imageHeight={imageHeight}
               />
             </View>
+
+            {/* ── The cube ──
+                A flex sibling of the timer rather than a fixed box inside the
+                scramble, so the two of them share whatever the column has left
+                over instead of the timer taking all of it.
+
+                That share is the fix for the spacing: the timer centres its
+                digits, so every point of surplus it wins becomes two holes, one
+                above the digits and one below. The digits cannot absorb it
+                either, since at this size they are limited by the screen's
+                WIDTH, not its height ("15.87" at 104pt is already ~312pt wide
+                in ~337pt of room). Sending the surplus here instead spends it
+                on a bigger cube, which is worth having, and shortens the gap
+                above the timer at the same time.
+
+                minHeight is the legibility floor from scrambleImageHeight;
+                maxHeight stops a tall screen with a short scramble handing the
+                cube half the display. */}
+            {hasScrambleNet(scrambleEventId) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View the scrambled cube full size"
+                onPress={() => setShowScrambleImage(true)}
+                // The box stays while the next scramble is being fetched, and
+                // only the drawing inside it comes and goes. Unmounting it
+                // instead collapsed a flex child of the column, so every solve
+                // ended with the timer and the scramble jumping up and then
+                // back down again as the replacement landed.
+                disabled={!scr.scramble}
+                onLayout={(e) => setImageBoxH(e.nativeEvent.layout.height)}
+                style={({ pressed }) => ({
+                  flex: IMAGE_FLEX,
+                  minHeight: imageHeight,
+                  maxHeight: Math.round(imageHeight * IMAGE_MAX_GROWTH),
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  // Section above, group below. The cube is its own block, and
+                  // the scramble's margin below it already contributes `group`,
+                  // so this tops it up to a section's worth: at the compact tier
+                  // `group` alone resolves to 8, which read as the cube being
+                  // crowded against the buttons over it.
+                  marginTop: rhythm.section - rhythm.group,
+                  marginBottom: rhythm.group,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                {scr.scramble ? (
+                  <ScrambleNet
+                    eventId={scrambleEventId}
+                    scramble={scr.scramble}
+                    // This event's own width budget, not the whole column. A
+                    // wide puzzle given everything available is what made FTO
+                    // and clock span the screen while a 3x3 sat modestly in the
+                    // middle: one box reads completely differently depending on
+                    // the drawing's proportions.
+                    size={imageWidth}
+                    // The measured box, once known. No layout jump: the box's
+                    // height comes from the flex split, which does not depend on
+                    // the drawing inside it, so only the drawing changes size.
+                    maxHeight={imageBoxH > 0 ? imageBoxH : imageHeight}
+                  />
+                ) : null}
+              </Pressable>
+            ) : null}
           </>
         )}
 
         {/* ── The timer surface ──
-            No fill of its own. The digits are the focal point of the screen,
-            and a panel behind them puts a box in the way of that: a surface
-            says "this is one thing among several", which is exactly the reading
-            to avoid. The tint is the phase colour, not a surface.
+            No fill of its own, and no longer any shape of its own either. The
+            digits are the focal point of the screen, and a panel behind them
+            puts a box in the way of that: a surface says "this is one thing
+            among several", which is exactly the reading to avoid. The phase
+            colour is the screen's (see `screenTint`), so this is only a box for
+            laying out and for catching the touch.
 
-            Overflow is clipped to the radius so the Pressable fills the tile
-            exactly: the area you see and the area that starts a solve are the
-            same rectangle, which matters more here than anywhere else. */}
+            Overflow is still clipped, so the Pressable fills the tile exactly:
+            the area you see and the area that starts a solve are the same
+            rectangle, which matters more here than anywhere else. */}
         {entryMode === 'keyboard' && !isFmc ? (
           <View
             style={{
               flex: TIMER_FLEX,
               minHeight: sc(TIMER_MIN_H),
               overflow: 'hidden',
-              borderRadius: radius.lg,
-              backgroundColor: surfaceTint,
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
@@ -517,27 +669,28 @@ export default function TimerScreen({ navigation }: Props) {
               onPressOut={() => {
                 if (engineEnabled) engine.release();
               }}
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md }}
+              // Centred, then pulled up by padding at the bottom. The Pressable
+              // still fills the tile, so the whole rectangle starts a solve;
+              // only the digits move. See TIMER_CONTENT_BIAS.
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.md,
+                paddingBottom: timerContentLift,
+              }}
             >
-              <Text
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                // The digits are sized from the tile they were given, so the OS
-                // text setting must not scale them again on top of that: the
-                // result would be a number too tall for the box it was measured
-                // into, which is the clipping this replaced.
-                allowFontScaling={false}
-                style={{
-                  color: digitColor,
-                  fontFamily: MONO_BOLD,
-                  fontSize: digitFontSize,
-                  lineHeight: digitFontSize * 1.1,
-                  fontVariant: ['tabular-nums'],
-                  paddingHorizontal: space.lg,
-                }}
-              >
-                {display}
-              </Text>
+              <TimerDigits
+                phase={engine.phase}
+                subscribe={engine.subscribe}
+                inspection={inspection}
+                inspectionDirection={inspectionDirection}
+                timerUpdate={timerUpdate}
+                solvePrecision={solvePrecision}
+                restingText={restingText}
+                color={digitColor}
+                fontSize={digitFontSize}
+              />
               <Muted
                 numberOfLines={1}
                 maxFontSizeMultiplier={maxFontMultiplier}
@@ -569,8 +722,6 @@ export default function TimerScreen({ navigation }: Props) {
               justifyContent: 'center',
               gap: space.lg,
               padding: space.lg,
-              borderRadius: radius.lg,
-              backgroundColor: surfaceTint,
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >

@@ -25,6 +25,9 @@ import type { InspectionDirection } from '../../store/settings';
 //    that's arguably the better cue anyway, and it changes no recorded value.
 export type TimerPhase = 'idle' | 'inspecting' | 'holding' | 'ready' | 'running' | 'stopped';
 
+/** Called on every frame of a live attempt with the current elapsed values. */
+export type TimerTickListener = (elapsed: number, inspectionElapsed: number) => void;
+
 const INSPECTION_MS = 15000;
 
 interface Options {
@@ -62,8 +65,42 @@ export function useTimerEngine(opts: Options) {
   const { inspection, holdToStart, holdDuration, enabled, onComplete } = opts;
 
   const [phase, setPhase] = useState<TimerPhase>('idle');
-  const [elapsed, setElapsed] = useState(0);
-  const [inspectionElapsed, setInspectionElapsed] = useState(0);
+  // The final time of the attempt that just finished. State, because it changes
+  // once per solve; the *running* time deliberately is not (see below).
+  const [stoppedElapsed, setStoppedElapsed] = useState(0);
+
+  // ── Why the running time is not React state ───────────────────────────────
+  //
+  // It used to be, and every animation frame called setElapsed, which re-rendered
+  // the whole Timer screen 60 times a second. That is a fine cost when the screen
+  // is a few Text nodes and a ruinous one now: the tree it re-rendered included
+  // the always-mounted stats panel (with a FlatList once opened), the scramble
+  // view and an SVG cube. The visible result was a timer that appeared to update
+  // about five times a second, and inspection that took a moment to even start.
+  //
+  // So the ticking values live in refs and are pushed to subscribers instead.
+  // Exactly one small component subscribes (TimerDigits), so a frame costs one
+  // leaf render rather than a whole-screen one, and everything else re-renders
+  // only when the phase actually changes.
+  const elapsedRef = useRef(0);
+  const inspectionElapsedRef = useRef(0);
+  const listeners = useRef(new Set<TimerTickListener>());
+
+  const emit = useCallback(() => {
+    for (const listener of listeners.current) {
+      listener(elapsedRef.current, inspectionElapsedRef.current);
+    }
+  }, []);
+
+  const subscribe = useCallback((listener: TimerTickListener) => {
+    listeners.current.add(listener);
+    // Fire immediately so a subscriber that mounts mid-attempt paints the
+    // current value rather than a zero until the next frame.
+    listener(elapsedRef.current, inspectionElapsedRef.current);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
 
   const startRef = useRef(0);
   const rafRef = useRef(0);
@@ -85,9 +122,10 @@ export function useTimerEngine(opts: Options) {
   const stopTimerRaf = () => cancelAnimationFrame(rafRef.current);
 
   const tick = useCallback(() => {
-    setElapsed(now() - startRef.current);
+    elapsedRef.current = now() - startRef.current;
+    emit();
     rafRef.current = requestAnimationFrame(tick);
-  }, []);
+  }, [emit]);
 
   // Inspection penalty based on the moment the solve STARTS (WCA rules).
   function inspectionPenaltyAtStart(): { penalty: Penalty; plusTwoCount: number } {
@@ -101,7 +139,9 @@ export function useTimerEngine(opts: Options) {
   const stopRunning = useCallback(() => {
     stopTimerRaf();
     const finalMs = now() - startRef.current;
-    setElapsed(finalMs);
+    elapsedRef.current = finalMs;
+    emit();
+    setStoppedElapsed(finalMs);
     setPhase('stopped');
     onComplete(
       Math.round(finalMs),
@@ -109,24 +149,26 @@ export function useTimerEngine(opts: Options) {
       inspectionPenaltyRef.current.plusTwoCount,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onComplete]);
+  }, [onComplete, emit]);
 
   const startRunning = useCallback(() => {
     stopInspectionRaf();
     inspectionPenaltyRef.current = inspectionPenaltyAtStart();
     startRef.current = now();
-    setElapsed(0);
+    elapsedRef.current = 0;
+    emit();
     setPhase('running');
     if (optsRef.current.startSound) startCue();
     rafRef.current = requestAnimationFrame(tick);
-  }, [tick]);
+  }, [tick, emit]);
 
   const beginInspectionCountdown = useCallback(() => {
     inspectionStart.current = now();
     spoken.current = { eight: false, twelve: false };
     const update = () => {
       const used = now() - inspectionStart.current;
-      setInspectionElapsed(used);
+      inspectionElapsedRef.current = used;
+      emit();
       if (optsRef.current.inspectionVoice) {
         if (!spoken.current.eight && used >= 8000) {
           spoken.current.eight = true;
@@ -140,7 +182,7 @@ export function useTimerEngine(opts: Options) {
       inspectionRaf.current = requestAnimationFrame(update);
     };
     update();
-  }, []);
+  }, [emit]);
 
   const clearHold = () => {
     if (holdTimer.current) {
@@ -168,7 +210,7 @@ export function useTimerEngine(opts: Options) {
     if (p === 'idle' || p === 'stopped') {
       if (optsRef.current.inspection) {
         setPhase('inspecting');
-        setInspectionElapsed(0);
+        inspectionElapsedRef.current = 0;
         beginInspectionCountdown();
       } else {
         beginHold();
@@ -197,10 +239,11 @@ export function useTimerEngine(opts: Options) {
     clearHold();
     stopTimerRaf();
     stopInspectionRaf();
-    setElapsed(0);
-    setInspectionElapsed(0);
+    elapsedRef.current = 0;
+    inspectionElapsedRef.current = 0;
+    emit();
     setPhase('idle');
-  }, []);
+  }, [emit]);
 
   // If the engine gets disabled mid-attempt (a modal opened, the tab changed,
   // the scramble started reloading), abandon the attempt rather than leaving a
@@ -224,9 +267,7 @@ export function useTimerEngine(opts: Options) {
     [],
   );
 
-  const inspectionRemaining = INSPECTION_MS - inspectionElapsed;
-
-  return { phase, elapsed, inspectionElapsed, inspectionRemaining, press, release, cancel };
+  return { phase, stoppedElapsed, subscribe, press, release, cancel };
 }
 
 // Inspection display text for either counting direction, capping at the same

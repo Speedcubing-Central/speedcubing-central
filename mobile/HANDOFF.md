@@ -26,6 +26,19 @@ they render real state but no gameplay.
 Navigation is a bottom tab bar with **no Home tab** (`navigation/RootNavigator.tsx`).
 A sidebar needs a landing slot; a tab bar doesn't. Timer is the initial route.
 
+The bar carries Timer, Calculator, Algorithms and Settings. The web's other four
+destinations (Battle, Relays, Reconstruction, Results) open as a second row
+above the bar from the three-dot More button, drawn by a hand-rolled bar
+(`navigation/BottomBar.tsx`) because the stock one can hide a tab but has
+nowhere to put one. Icons are the web sidebar's own, per destination.
+
+Two things there are load bearing. The extra row is a `Modal`, not a view
+anchored above the bar: a child drawn outside its parent's bounds gets no
+touches on Android, and growing the bar itself would shrink the scene and
+reflow the Timer every time it opened. And the bar is drawn *again* inside that
+overlay, because the backdrop would otherwise dim the real one and eat every
+press aimed at it.
+
 ---
 
 ## 2. Architecture decisions that are load bearing
@@ -191,9 +204,20 @@ join, cube-simulator correctness, WCA 9f rounding, clipboard format.
   `postinstall`) must have run.
 - **The dev bundle URL is `/mobile/index.bundle`**, not `/index.bundle`, because
   Metro's server root is the workspace root.
-- **`EXPO_PUBLIC_API_URL`** picks the server. `localhost` is the *phone* from the
-  app's perspective; use the machine's LAN IP for local dev, or
-  `https://speedcubingcentral.com` for production data.
+- **`EXPO_PUBLIC_API_URL`** picks the server (see `.env.example`). `localhost` is
+  the *phone* from the app's perspective; use the machine's LAN IP for local dev,
+  or `https://speedcubingcentral.com` for production data.
+- **WCA sign-in only works against the deployed server.** The authorize URL
+  carries whatever `WCA_REDIRECT_URI` that server is configured with, and WCA
+  rejects any redirect URI not registered on the OAuth application ("The
+  requested redirect URI is malformed or doesn't match the client redirect
+  URI"). A dev server's default is `http://localhost:3001/...`, which is both
+  unregistered and, from a phone, the phone itself. `/api/auth/wca/start` now
+  refuses to start a flow whose callback host isn't the host the app reached it
+  on, so this reports itself in the app instead of dead-ending on WCA's site.
+  The native flow needs that equality anyway: the flow lives in one server
+  process's memory, so the callback has to come back to the same process the app
+  is polling.
 - **`npm run build` includes `expo export`.** Server/web deploys should use
   `npm run build:web`.
 
