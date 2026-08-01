@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -257,6 +257,31 @@ function MoreOverlay({
 
   const rowHeight = ROW_HEIGHT + space.xs;
 
+  // Draggable shut, like every sheet in the app (components/Sheet.tsx). It slid
+  // up, so it should answer a drag back down; being dismissable only by tapping
+  // elsewhere is the thing the sheets were fixed for.
+  //
+  // Taken on movement only, so the four destinations inside it stay tappable,
+  // and downward only, since it is already open as far as it goes.
+  const pan = PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_e, g) => g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderMove: (_e, g) => {
+      if (g.dy > 0) anim.setValue(Math.max(0, 1 - g.dy / rowHeight));
+    },
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > rowHeight * 0.4 || g.vy > 0.7) {
+        onClose();
+        return;
+      }
+      Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 24, stiffness: 280 }).start();
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(anim, { toValue: 1, useNativeDriver: true }).start();
+    },
+    onPanResponderTerminationRequest: () => false,
+  });
+
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1 }}>
@@ -273,6 +298,7 @@ function MoreOverlay({
             extending rather than a panel landing on top of it. */}
         <View style={{ height: rowHeight, overflow: 'hidden' }}>
           <Animated.View
+            {...pan.panHandlers}
             style={{
               height: rowHeight,
               flexDirection: 'row',

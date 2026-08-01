@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import {
   formatAverageCopy,
   formatMoveCount,
@@ -10,7 +10,7 @@ import {
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
 import { ColumnLabel, CopyButton, Divider, EMPTY, MONO, Surface } from '../../components/ui';
-import { Sheet } from '../../components/Sheet';
+import { Sheet, SheetFlatList } from '../../components/Sheet';
 import { font, space } from '../../theme';
 
 // One average, broken out into the solves that made it. The mobile equivalent
@@ -85,7 +85,7 @@ export function AverageDetailSheet({
           card per row. Twenty stacked boxes read as twenty things; one list of
           twenty rows reads as one average, which is what it is. */}
       <Surface padding="none" style={{ flex: 1, overflow: 'hidden' }}>
-        <FlatList
+        <SheetFlatList
           data={shown.window}
           keyExtractor={(s) => s.id}
           ItemSeparatorComponent={Divider}
