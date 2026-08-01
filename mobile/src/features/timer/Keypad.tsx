@@ -30,7 +30,8 @@ import { radius, space } from '../../theme';
 //    anything here, and no submit key.
 //  * It is the same on both platforms, which the system keyboards are not.
 //  * The value being entered is drawn inside the sheet, so nothing depends on
-//    what the sheet does or does not cover.
+//    what the sheet does or does not cover. It closes once the solve is added,
+//    which puts the stats panel and its penalty buttons back in front of you.
 //
 // Digits only, and they shift in from the right, the way cstimer and every
 // other phone timer take a time: 1,2,3,4 is 12.34 and 1,0,0,0,0 is 1:00.00.

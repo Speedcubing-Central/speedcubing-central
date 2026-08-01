@@ -308,18 +308,17 @@ export default function TimerScreen({ navigation }: Props) {
   // the field was blank, which was undiscoverable next to the scramble's own
   // refresh button doing the same thing in plain sight.)
   //
-  // The keypad stays open afterwards, which is the point of it being a sheet:
-  // manual entry is usually a run of times taken off another timer, and the
-  // scramble is still readable above the sheet. The entry clearing and a
-  // success tick are what say it landed, since the solves list is behind the
-  // sheet at that moment.
+  // A successful add closes the keypad, so the solve you just entered is the
+  // next thing you see: the stats panel and its penalty buttons are behind the
+  // sheet, and they are where you go if that solve was a +2. A failure leaves
+  // the keypad up with the entry still in it, so nothing has to be retyped.
   const addTyped = useCallback(async () => {
     const parsed = parseTimeInput(typed, manualPrecision);
     if (!parsed) return;
-    // Only clear on a successful save so a failure doesn't force a retype.
     const saved = await onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
     if (saved) {
       setTyped('');
+      setShowKeypad(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     }
   }, [typed, manualPrecision, onComplete]);

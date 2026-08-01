@@ -327,8 +327,8 @@ the Timer is an instrument, not a card grid.
   12.34), which is exactly how `parseTimeInput` already reads a run of digits on
   both platforms. Penalties are not on the keypad: they belong to a solve that
   exists, and the panel puts OK / +2 / DNF against the last one the moment it
-  lands. Adding a time leaves the keypad up, because manual entry is usually a
-  run of times taken off another timer.
+  lands, which is also why adding a time closes the keypad: the solve you just
+  entered, and the buttons that fix it, are what the sheet was covering.
 
 The panel replaced three separate boxes glued into a fake single card with
 corner-radius surgery. It is also what brings the web layout's right-hand column
