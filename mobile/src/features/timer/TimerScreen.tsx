@@ -342,11 +342,15 @@ export default function TimerScreen({ navigation }: Props) {
   // Cleared on unmount as well as on leaving the phase: navigating away
   // mid-attempt would otherwise leave the app with no tab bar and no way to get
   // it back.
-  const setImmersive = useUi((s) => s.setImmersive);
+  // Also publishes the phase colour, not just the flag. The tint is this
+  // screen's background, so it stops at this screen's edge, and the tab bar sits
+  // outside it: without the colour the bar's area stayed plain while the rest of
+  // the display went yellow, green or accent, leaving a band along the bottom.
+  const setTimerImmersion = useUi((s) => s.setTimerImmersion);
   useEffect(() => {
-    setImmersive(immersive);
-  }, [immersive, setImmersive]);
-  useEffect(() => () => setImmersive(false), [setImmersive]);
+    setTimerImmersion(immersive, immersive ? screenTint : null);
+  }, [immersive, screenTint, setTimerImmersion]);
+  useEffect(() => () => setTimerImmersion(false, null), [setTimerImmersion]);
 
   // One decision, read by the header and the panel, so they cannot disagree
   // about how much room there is.

@@ -62,6 +62,9 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
   // custom the navigator's own `tabBarStyle: { display: 'none' }` never reaches
   // it.
   const immersive = useUi((s) => s.immersive);
+  // The colour the Timer screen is painted right now, so the lid below can
+  // match it instead of stopping the tint at the screen's edge.
+  const timerTint = useUi((s) => s.timerTint);
 
   const focusedName = state.routes[state.index]?.name as TabName | undefined;
   const overflowFocused = focusedName !== undefined && OVERFLOW.includes(focusedName);
@@ -139,7 +142,8 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
           out of step with the Timer's own chrome. */}
       <View pointerEvents={immersive ? 'none' : 'auto'}>
         {row}
-        {/* A lid, painted in the page background, faded in over the bar.
+        {/* A lid, painted the same colour the Timer screen currently is, faded
+            in over the bar.
 
             Fading the bar itself to transparent would only reveal whatever sits
             behind it, which is not guaranteed to be the colour we want and left
@@ -148,14 +152,22 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
             is the point: during an attempt the screen should look like it has no
             bar, not like it has an empty one.
 
-            Opacity only, so this stays on the native driver. A colour
-            interpolation would have to run on the JS thread, which is the thread
-            the running timer is already using sixty times a second. */}
+            It follows the Timer's phase tint rather than being a fixed
+            background. The tint IS that screen's background, so it stops at that
+            screen's edge; painted plainly here, the yellow, green and accent
+            washes all stopped short in a band along the bottom. It only matched
+            during inspection, which is the one live phase with no tint.
+
+            The colour is swapped, not animated, exactly as the screen swaps its
+            own, so the two change together. Opacity is the only animated
+            property, which keeps this on the native driver: a colour
+            interpolation would run on the JS thread, and that is the thread the
+            running timer is already using sixty times a second. */}
         <Animated.View
           pointerEvents="none"
           style={{
             ...StyleSheet.absoluteFillObject,
-            backgroundColor: p.bg,
+            backgroundColor: timerTint ?? p.bg,
             opacity: hidden,
           }}
         />
