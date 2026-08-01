@@ -366,8 +366,14 @@ export default function TimerScreen({ navigation }: Props) {
   // Padding at the bottom of the timer's content box, which shifts the digits up
   // by half of it. Derived from the free space the tile actually has, so a tile
   // barely taller than its content is left alone and only a roomy one is lifted.
+  //
+  // Never during an attempt. The lift exists to close the gap between the cube
+  // and the digits, and once the attempt starts there is no cube: the chrome
+  // unmounts and the tile becomes nearly the whole column, so the free space it
+  // is a fraction of becomes enormous and the same rule pins the digits to the
+  // top of the screen. With nothing above them, centred is simply correct.
   const timerContentLift = (() => {
-    if (timerTileH <= 0) return 0;
+    if (immersive || timerTileH <= 0) return 0;
     const contentH = digitFontSize * 1.1 + space.md + sc(18);
     return Math.round(Math.max(0, timerTileH - contentH) * TIMER_CONTENT_BIAS);
   })();
