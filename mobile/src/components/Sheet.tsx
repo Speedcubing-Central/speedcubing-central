@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
   View,
   type FlatListProps,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type PanResponderGestureState,
@@ -36,33 +37,40 @@ import { font, radius, space } from '../theme';
 // handle affordance promises. Dragging dismisses now, which is what a phone user
 // reaches for first.
 //
-// ── Where the drag is picked up ────────────────────────────────────────────
+// ── Where the drag is picked up, and why not everywhere ────────────────────
 //
-// The whole panel, not the handle. It was the handle alone at first, because
-// several of these sheets contain a ScrollView and a panel-wide responder races
-// the list for every vertical touch. But that made the sheets read as stuck:
-// the drag worked, on a strip most of a finger wide, and everywhere else the
-// gesture did nothing.
+// Everywhere on a sheet that does not scroll. Only the header strip on one that
+// does. That split is not a preference, it is the limit of what RN's own
+// responder system can do, and it was established on a device rather than
+// reasoned about:
 //
-// The race is settled by asking the list where it is rather than by staying off
-// it. A sheet whose content scrolls reports whether it is scrolled to the top
-// (see useSheetScrollProps), and the panel only claims a drag that starts there
-// and goes down. Anywhere else in that list, a vertical drag is scrolling and is
-// left alone. A sheet with no scrolling content registers nothing, and every
-// vertical drag on it is the sheet's.
+//   * The responder claims correctly. Traced on a device: claimed on the first
+//     try, granted, move handler running, correct values all the way down.
+//   * A drag over a live ScrollView never gets that far. On iOS the scroll
+//     view's own pan recogniser takes the touch before the JS responder system
+//     votes, and no amount of capture-phase claiming outranks it. This is the
+//     single reason gesture-handler exists.
 //
-// The handle keeps its own responder, which claims unconditionally. That is what
-// gets you out of a sheet scrolled halfway down a long list, where the rule
-// above deliberately gives the gesture to the list.
+// So the sheet stops fighting for a gesture it cannot win. Scrolling is switched
+// off whenever the content fits (see useSheetScrollProps), which is most sheets
+// most of the time, and those are draggable anywhere on the panel because there
+// is no live scroll view left to compete. When the content genuinely scrolls,
+// the header strip is the drag surface and the body scrolls.
 //
-// This mirrors the Timer's stats panel: the responder is taken on *movement*
-// only, never on touch-down, so every button inside the drag surface still takes
-// a tap normally.
+// This is exactly how the Timer's stats panel works, which is why that one has
+// always felt right: its drag surface is a band with nothing scrollable in it.
+//
+// The panel additionally declines any drag the list could use, so at the top of
+// a scrollable list a downward drag still reaches the sheet.
+//
+// Both responders take the gesture on *movement* only, never on touch-down, so
+// every button inside a drag surface still takes a tap normally.
 //
 // Built on RN's own Animated + PanResponder rather than Reanimated/
 // gesture-handler: neither is set up in this app (gesture-handler is installed
-// but has no GestureHandlerRootView, and Reanimated isn't installed at all), and
-// a single-axis drag doesn't need either. No new native dependency.
+// but has no GestureHandlerRootView, and Reanimated isn't installed at all).
+// Wiring gesture-handler up is what it would take to drag a scrolling sheet by
+// its body, and is the one remaining upgrade here.
 
 // Read at module load, so it is whatever the screen was when the JS bundle first
 // evaluated: wrong after a rotation, on an iPad split view, and on a foldable.
@@ -94,10 +102,10 @@ const PANEL_SLOP = 6;
 // The handle has nothing on it to tap, so nothing to protect.
 const HANDLE_SLOP = 2;
 
-// TEMPORARY diagnostic. Traces the drag negotiation into the Metro log, which is
-// the only way to see what the responder system is doing on a device with no
-// debugger attached. Delete this and every `trace(` call with it.
-const DRAG_TRACE = true;
+// Traces the drag negotiation into the Metro log. Off, but kept: it is what
+// established that the responder claims correctly and the transform was the
+// problem, and this component has no other way to be observed on a device.
+const DRAG_TRACE = false;
 
 // ── Why these animations are JS driven ─────────────────────────────────────
 //
@@ -121,6 +129,8 @@ function travelFor(dy: number): number {
 interface SheetScrollReporter {
   register: () => () => void;
   setAtTop: (atTop: boolean) => void;
+  /** Whether the content is actually taller than the viewport. */
+  setScrollable: (scrollable: boolean) => void;
 }
 
 const SheetScrollContext = createContext<SheetScrollReporter | null>(null);
@@ -137,16 +147,41 @@ const SheetScrollContext = createContext<SheetScrollReporter | null>(null);
 // waiting for there.
 function useSheetScrollProps() {
   const reporter = useContext(SheetScrollContext);
+  const viewportH = useRef(0);
+  const contentH = useRef(0);
+  const [scrollable, setScrollable] = useState(false);
+
   useEffect(() => reporter?.register(), [reporter]);
+
+  // A list shorter than its viewport has nothing to scroll, and a scroll view
+  // with scrolling switched off is not a scroll view as far as the touch system
+  // is concerned: its pan recogniser stops competing and the whole panel becomes
+  // draggable. This is what makes short sheets (a solve with no comment, the
+  // timer menu) draggable everywhere rather than by the handle alone.
+  const sync = useCallback(() => {
+    const next = contentH.current > viewportH.current + 1;
+    setScrollable(next);
+    reporter?.setScrollable(next);
+  }, [reporter]);
+
   return useMemo(
     () => ({
+      scrollEnabled: scrollable,
       scrollEventThrottle: 16,
       bounces: false,
+      onLayout: (e: LayoutChangeEvent) => {
+        viewportH.current = e.nativeEvent.layout.height;
+        sync();
+      },
+      onContentSizeChange: (_w: number, h: number) => {
+        contentH.current = h;
+        sync();
+      },
       onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         reporter?.setAtTop(e.nativeEvent.contentOffset.y <= 0);
       },
     }),
-    [reporter],
+    [reporter, scrollable, sync],
   );
 }
 
@@ -193,6 +228,20 @@ export function Sheet({
   // than vanishing the instant `visible` flips.
   const [mounted, setMounted] = useState(visible);
   const translateY = useRef(new Animated.Value(INITIAL_SCREEN_HEIGHT)).current;
+  // Where the finger has the panel, or null when no finger is on it.
+  //
+  // The drag is driven by React state and the enter/exit animations by
+  // `translateY`, and the transform below picks whichever is in charge. That
+  // split exists because an Animated value driven from a gesture was measured
+  // not to move this view at all: the responder was claiming, the move handler
+  // was running, setValue was receiving correct numbers, and the panel stayed
+  // put. A plain style prop cannot fail that way, because there is no separate
+  // animation pipeline for it to be lost in.
+  //
+  // The cost is a render per frame of the drag, and it is smaller than it
+  // sounds: `children` is the same element object across these renders, so
+  // React bails out of the sheet's whole body and only the shell re-renders.
+  const [dragY, setDragY] = useState<number | null>(null);
   const backdrop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -230,19 +279,21 @@ export function Sheet({
   // Whether the sheet's content scrolls, and if so whether it is at the top.
   // Refs, not state: the responder callbacks read these on every touch and must
   // see the current value without the component re-rendering to get it.
-  const scrollersRef = useRef(0);
+  const scrollableRef = useRef(false);
   const atTopRef = useRef(true);
   const reporter = useMemo<SheetScrollReporter>(
     () => ({
       register: () => {
-        scrollersRef.current += 1;
         atTopRef.current = true;
         return () => {
-          scrollersRef.current -= 1;
+          scrollableRef.current = false;
         };
       },
       setAtTop: (atTop: boolean) => {
         atTopRef.current = atTop;
+      },
+      setScrollable: (scrollable: boolean) => {
+        scrollableRef.current = scrollable;
       },
     }),
     [],
@@ -289,7 +340,7 @@ export function Sheet({
           if (!traced && (ok || Math.abs(g.dy) > 14)) {
             traced = true;
             trace(
-              `capture dy=${g.dy.toFixed(0)} dx=${g.dx.toFixed(0)} scrollers=${scrollersRef.current} atTop=${atTopRef.current} claim=${ok}`,
+              `capture dy=${g.dy.toFixed(0)} dx=${g.dx.toFixed(0)} scrollable=${scrollableRef.current} atTop=${atTopRef.current} claim=${ok}`,
             );
           }
           return ok;
@@ -301,14 +352,20 @@ export function Sheet({
         },
         onPanResponderMove: (_e, g) => {
           const to = travelFor(g.dy);
-          translateY.setValue(to);
+          setDragY(to);
           if (!moved) {
             moved = true;
-            trace(`first move -> translateY=${to.toFixed(0)}`);
+            trace(`first move -> dragY=${to.toFixed(0)}`);
           }
         },
         onPanResponderRelease: (_e, g) => {
           trace(`release dy=${g.dy.toFixed(0)} vy=${g.vy.toFixed(2)}`);
+          // Hand the position back to the Animated value at exactly where the
+          // finger left it, then stop driving from state. Both happen before
+          // anything animates, so the switch of who owns the transform is not a
+          // frame where the panel jumps.
+          translateY.setValue(travelFor(g.dy));
+          setDragY(null);
           if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
             onClose();
             return;
@@ -320,8 +377,10 @@ export function Sheet({
             stiffness: 300,
           }).start();
         },
-        onPanResponderTerminate: () => {
+        onPanResponderTerminate: (_e, g) => {
           trace('TERMINATED mid-drag');
+          translateY.setValue(travelFor(g.dy));
+          setDragY(null);
           Animated.spring(translateY, { toValue: 0, useNativeDriver: false }).start();
         },
         // Never hand the gesture back mid-drag, so a list underneath the finger
@@ -329,7 +388,7 @@ export function Sheet({
         onPanResponderTerminationRequest: () => false,
       });
     },
-    [translateY, onClose],
+    [translateY, onClose, setDragY],
   );
 
   // The panel. Yields to a list that has somewhere to scroll; owns everything
@@ -339,7 +398,7 @@ export function Sheet({
       makeResponder(
         'panel',
         PANEL_SLOP,
-        (g) => scrollersRef.current === 0 || (atTopRef.current && g.dy > 0),
+        (g) => !scrollableRef.current || (atTopRef.current && g.dy > 0),
       ),
     [makeResponder],
   );
@@ -365,7 +424,7 @@ export function Sheet({
         <Animated.View
           {...panelPan.panHandlers}
           style={{
-            transform: [{ translateY }],
+            transform: [{ translateY: dragY ?? translateY }],
             maxHeight: screenHeight * maxHeightRatio,
             height: fillHeight ? screenHeight * maxHeightRatio : undefined,
             backgroundColor: p.card,
@@ -380,9 +439,27 @@ export function Sheet({
               target, so it needs real height, not just a 4px bar. Its own
               responder sits deeper in the tree than the panel's, so it is asked
               first and wins, which is how it can claim what the panel won't. */}
-          <View {...handlePan.panHandlers} style={{ paddingTop: space.sm, paddingBottom: space.xs }}>
+          <View
+            {...handlePan.panHandlers}
+            // A generous strip, because on a sheet whose content scrolls this is
+            // the only place the drag can live (see the note at the top). The
+            // Timer's stats panel works the same way and for the same reason:
+            // its drag surface is a band with nothing scrollable in it.
+            style={{ paddingTop: space.md, paddingBottom: space.sm }}
+          >
             <View style={{ alignItems: 'center', paddingVertical: space.xs }}>
-              <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: p.border }} />
+              {/* Lights up while a finger owns the panel. Started as a debug
+                  readout and earned its place: it is the only feedback that
+                  the handle did take the gesture, on a control whose whole job
+                  is to be grabbed. */}
+              <View
+                style={{
+                  width: 44,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: dragY !== null ? p.accent : p.border,
+                }}
+              />
             </View>
             {title ? (
               <View

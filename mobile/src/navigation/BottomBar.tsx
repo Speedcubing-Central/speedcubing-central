@@ -55,6 +55,11 @@ const ROW_HEIGHT = 49;
 
 export function BottomBar({ state, navigation }: BottomTabBarProps) {
   const [expanded, setExpanded] = useState(false);
+  // Set by the Timer while an attempt is live. See store/ui.ts: the Timer hides
+  // its own chrome, but the bar is not its to hide, and because this bar is
+  // custom the navigator's own `tabBarStyle: { display: 'none' }` never reaches
+  // it.
+  const immersive = useUi((s) => s.immersive);
 
   const focusedName = state.routes[state.index]?.name as TabName | undefined;
   const overflowFocused = focusedName !== undefined && OVERFLOW.includes(focusedName);
