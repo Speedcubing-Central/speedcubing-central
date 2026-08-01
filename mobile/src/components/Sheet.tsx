@@ -84,6 +84,16 @@ const DISMISS_VELOCITY = 0.85;
 // one that is true.
 const UPWARD_RESISTANCE = 0.22;
 
+// How far a finger travels before a drag on the panel is a drag rather than a
+// tap that wobbled. Claiming in the capture phase means this number is the only
+// thing protecting the buttons underneath, so it is a real distance (about a
+// millimetre and a half) rather than the 2 that reads as "any movement at all".
+// UIScrollView uses a comparable threshold over tappable content for the same
+// reason.
+const PANEL_SLOP = 6;
+// The handle has nothing on it to tap, so nothing to protect.
+const HANDLE_SLOP = 2;
+
 function travelFor(dy: number): number {
   return dy >= 0 ? dy : dy * UPWARD_RESISTANCE;
 }
@@ -222,13 +232,31 @@ export function Sheet({
   // One set of drag handlers, given to two responders that differ only in when
   // they are willing to take the gesture.
   const makeResponder = useCallback(
-    (claims: (g: PanResponderGestureState) => boolean) =>
-      PanResponder.create({
+    (slop: number, claims: (g: PanResponderGestureState) => boolean) => {
+      const wants = (g: PanResponderGestureState) =>
+        Math.abs(g.dy) > slop && Math.abs(g.dy) > Math.abs(g.dx) && claims(g);
+      return PanResponder.create({
         // Never on touch-down, so a tap anywhere inside the drag surface is
         // still a tap: these sheets are full of buttons.
         onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_e, g) =>
-          Math.abs(g.dy) > 2 && Math.abs(g.dy) > Math.abs(g.dx) && claims(g),
+        onStartShouldSetPanResponderCapture: () => false,
+        // Claimed on the way DOWN the tree, not on the way back up.
+        //
+        // This is what the first version got wrong, and why dragging a sheet
+        // took several tries. A bubbled claim only lands if whatever is already
+        // holding the touch agrees to give it up. A Pressable does agree, which
+        // is why the Timer's stats panel works without this: its drag strip has
+        // nothing else in it. A native ScrollView does not, and three of these
+        // sheets are a ScrollView filling the whole panel, so the drag was
+        // landing only when a finger happened to start somewhere the list
+        // wasn't. Capture asks the ancestor first and takes the gesture
+        // outright.
+        //
+        // Safe precisely because `claims` is narrow: for a scrolling sheet it is
+        // true only at the top of the list and only downward, which is the one
+        // gesture the list has no use for. Everything else still reaches it.
+        onMoveShouldSetPanResponderCapture: (_e, g) => wants(g),
+        onMoveShouldSetPanResponder: (_e, g) => wants(g),
         onPanResponderMove: (_e, g) => {
           translateY.setValue(travelFor(g.dy));
         },
@@ -250,19 +278,25 @@ export function Sheet({
         // Never hand the gesture back mid-drag, so a list underneath the finger
         // cannot take over a drag that has already started moving the sheet.
         onPanResponderTerminationRequest: () => false,
-      }),
+      });
+    },
     [translateY, onClose],
   );
 
   // The panel. Yields to a list that has somewhere to scroll; owns everything
   // else, including the upward drag that only springs back.
   const panelPan = useMemo(
-    () => makeResponder((g) => scrollersRef.current === 0 || (atTopRef.current && g.dy > 0)),
+    () =>
+      makeResponder(
+        PANEL_SLOP,
+        (g) => scrollersRef.current === 0 || (atTopRef.current && g.dy > 0),
+      ),
     [makeResponder],
   );
   // The handle. Always the sheet's, which is what makes a sheet scrolled halfway
-  // down a long list still dismissable by drag.
-  const handlePan = useMemo(() => makeResponder(() => true), [makeResponder]);
+  // down a long list still dismissable by drag. Finer slop because there is
+  // nothing on it to tap, so there is no tap to protect.
+  const handlePan = useMemo(() => makeResponder(HANDLE_SLOP, () => true), [makeResponder]);
 
   if (!mounted) return null;
 

@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Modal,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type PanResponderGestureState,
+} from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -263,9 +272,16 @@ function MoreOverlay({
   //
   // Taken on movement only, so the four destinations inside it stay tappable,
   // and downward only, since it is already open as far as it goes.
+  const wantsDrag = (g: PanResponderGestureState) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx);
   const pan = PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_e, g) => g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx),
+    onStartShouldSetPanResponderCapture: () => false,
+    // Capture, like the sheets: the four destinations in this row are
+    // Pressables holding the touch, and a claim that has to ask them for it
+    // lands only some of the time. 6, not 2, so a tap that wobbles still opens
+    // the tab it was aimed at.
+    onMoveShouldSetPanResponderCapture: (_e, g) => wantsDrag(g),
+    onMoveShouldSetPanResponder: (_e, g) => wantsDrag(g),
     onPanResponderMove: (_e, g) => {
       if (g.dy > 0) anim.setValue(Math.max(0, 1 - g.dy / rowHeight));
     },
