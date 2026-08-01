@@ -87,22 +87,38 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
     go(name);
   };
 
-  // Gone entirely during an attempt, not just hidden: the point is that nothing
-  // but the digits is on screen and nothing but the digits is touchable at the
-  // moment your hands leave the phone for the cube. A bar that is merely
-  // invisible still swallows a press aimed at the timer above it.
+  // ── Hidden during an attempt, but never unmounted ─────────────────────────
   //
-  // Unmounting also hands its height back to the screen, so the timer grows into
-  // it. That is the same trade the Timer's own chrome already makes when it
-  // unmounts, so the layout change reads as one event rather than two.
+  // The first version returned null here, which reads badly: unmounting changes
+  // the navigator's screen height, and that relayout lands in a different frame
+  // from the Timer's own chrome disappearing. You saw the bar go, then a blank
+  // strip where it had been, then everything resize to fill it. Ending a solve
+  // was worse, because the bar came back instantly and shoved the whole column
+  // up in one step.
   //
+  // Keeping it mounted at full height means the screen's box never changes, so
+  // there is no reflow to be out of step with: the only thing that moves is the
+  // Timer's own content, which is one deliberate change instead of two competing
+  // ones. It costs the timer the bar's height during an attempt, which is a good
+  // trade for the screen not lurching at the two moments that matter most.
+  //
+  // Fading rather than cutting, and `pointerEvents` off before the fade even
+  // finishes: an invisible bar that still takes presses would be the worst of
+  // all, since the press it swallows is the one stopping the solve.
+  const hidden = useRef(new Animated.Value(immersive ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(hidden, {
+      toValue: immersive ? 1 : 0,
+      duration: immersive ? 140 : 190,
+      useNativeDriver: true,
+    }).start();
+  }, [immersive, hidden]);
+
   // The expanded More row is collapsed on the way in, so leaving the attempt
   // cannot restore the bar with an overlay open over the timer.
   useEffect(() => {
     if (immersive && expanded) setExpanded(false);
   }, [immersive, expanded]);
-
-  if (immersive) return null;
 
   const row = (
     <BarRow
@@ -116,7 +132,21 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <>
-      {row}
+      <Animated.View
+        // No layout properties here on purpose: BarRow keeps its own height, so
+        // this wrapper animates appearance only and the screen above never
+        // resizes. A small downward slide reads as the bar leaving rather than
+        // as it being switched off.
+        style={{
+          opacity: hidden.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+          transform: [
+            { translateY: hidden.interpolate({ inputRange: [0, 1], outputRange: [0, 10] }) },
+          ],
+        }}
+        pointerEvents={immersive ? 'none' : 'auto'}
+      >
+        {row}
+      </Animated.View>
       <MoreOverlay
         visible={expanded}
         focusedName={focusedName}
