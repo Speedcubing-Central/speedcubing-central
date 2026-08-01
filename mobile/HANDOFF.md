@@ -26,6 +26,19 @@ they render real state but no gameplay.
 Navigation is a bottom tab bar with **no Home tab** (`navigation/RootNavigator.tsx`).
 A sidebar needs a landing slot; a tab bar doesn't. Timer is the initial route.
 
+The bar carries Timer, Calculator, Algorithms and Settings. The web's other four
+destinations (Battle, Relays, Reconstruction, Results) open as a second row
+above the bar from the three-dot More button, drawn by a hand-rolled bar
+(`navigation/BottomBar.tsx`) because the stock one can hide a tab but has
+nowhere to put one. Icons are the web sidebar's own, per destination.
+
+Two things there are load bearing. The extra row is a `Modal`, not a view
+anchored above the bar: a child drawn outside its parent's bounds gets no
+touches on Android, and growing the bar itself would shrink the scene and
+reflow the Timer every time it opened. And the bar is drawn *again* inside that
+overlay, because the backdrop would otherwise dim the real one and eat every
+press aimed at it.
+
 ---
 
 ## 2. Architecture decisions that are load bearing

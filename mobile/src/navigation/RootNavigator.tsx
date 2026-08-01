@@ -1,12 +1,13 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { usePalette } from '../store/settings';
-import { Icon, type IconName } from '../components/Icon';
-import { font } from '../theme';
+import { BottomBar } from './BottomBar';
 import { TimerStack } from './TimerStack';
-import { MoreStack } from './MoreStack';
+import { SettingsStack } from './SettingsStack';
 import AlgorithmsScreen from '../features/algorithms/AlgorithmsScreen';
 import BattleScreen from '../features/battle/BattleScreen';
 import RelaysScreen from '../features/relays/RelaysScreen';
+import CalculatorScreen from '../features/calculator/CalculatorScreen';
+import ReconstructionScreen from '../features/reconstruction/ReconstructionScreen';
+import ResultsScreen from '../features/results/ResultsScreen';
 
 // ── Bottom tab bar ────────────────────────────────────────────────────────
 //
@@ -18,57 +19,47 @@ import RelaysScreen from '../features/relays/RelaysScreen';
 // It's what the app gets opened for.
 //
 // Tab budget. A phone tab bar tops out around five items before labels start
-// truncating, and the web nav has eight destinations once Home is dropped (Timer,
-// Calculator, Algorithms, Battle, Relays, Reconstruction, Results, Settings). So
-// the four tabs here are the ones reached for during a practice session, and the
-// four that are browsed occasionally rather than used mid-solve, Calculator,
-// Reconstruction, Results, Settings, are grouped behind "More" (see MoreStack)
-// along with sign-in/out. Nothing is unreachable; the split follows how often a
-// screen gets opened, not importance.
+// truncating, and the web nav has eight destinations once Home is dropped. So the
+// bar carries Timer, Calculator, Algorithms and Settings, and the other four
+// (Battle, Relays, Reconstruction, Results) open as a second row above the bar
+// from the three-dot More button. Every destination is registered here as a real
+// tab; which of them the bar shows, and where, is BottomBar's business.
+//
+// This replaced an earlier split where More was itself a tab holding a stack of
+// list-of-links screens. That cost two taps and a pushed screen to reach a
+// destination the bar now reveals in place, and its landing screen duplicated the
+// Settings page's account section to do it.
 export type RootTabParamList = {
   Timer: undefined;
+  Calculator: undefined;
   Algorithms: undefined;
+  Settings: undefined;
   Battle: undefined;
   Relays: undefined;
-  More: undefined;
+  Reconstruction: undefined;
+  Results: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-// The web client's own icon set, ported to react-native-svg in
-// components/Icon.tsx: same 24x24 paths, so a tab is drawn with the same glyph
-// its sidebar entry uses on the web. (This replaced emoji placeholders, which
-// rendered at inconsistent sizes and couldn't take the active tint.)
-const TAB_ICON: Record<keyof RootTabParamList, IconName> = {
-  Timer: 'timer',
-  Algorithms: 'brain',
-  Battle: 'swords',
-  Relays: 'skipForward',
-  More: 'panel',
-};
-
 export function RootNavigator() {
-  const p = usePalette();
   return (
     <Tab.Navigator
       initialRouteName="Timer"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: p.accent,
-        tabBarInactiveTintColor: p.textMuted,
-        tabBarStyle: {
-          backgroundColor: p.card,
-          borderTopColor: p.border,
-        },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: font.sansSemi },
-        tabBarIcon: ({ color }) => <Icon name={TAB_ICON[route.name]} size={22} color={color} />,
-      })}
+      // The stock bar can hide a tab but has nowhere to put one, so the whole
+      // bar is ours. Tint, label and icon options are set there rather than
+      // through screenOptions for the same reason.
+      tabBar={(props) => <BottomBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Timer" component={TimerStack} />
+      <Tab.Screen name="Calculator" component={CalculatorScreen} />
       <Tab.Screen name="Algorithms" component={AlgorithmsScreen} />
+      <Tab.Screen name="Settings" component={SettingsStack} />
       <Tab.Screen name="Battle" component={BattleScreen} />
       <Tab.Screen name="Relays" component={RelaysScreen} />
-      <Tab.Screen name="More" component={MoreStack} />
+      <Tab.Screen name="Reconstruction" component={ReconstructionScreen} />
+      <Tab.Screen name="Results" component={ResultsScreen} />
     </Tab.Navigator>
   );
 }

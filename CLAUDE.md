@@ -211,7 +211,9 @@ There is no admin account or admin role — see Roles below.
   `client/src/features/timer/stats.ts` for exactly this reason, and that old path is now
   a re-export so no web import changed.
   The *interface* is deliberately not a port of the desktop layout: navigation is a
-  bottom tab bar (Timer / Algorithms / Battle / Relays / More) with **no Home tab**
+  bottom tab bar (Timer / Calculator / Algorithms / Settings, plus a three-dot More
+  button that opens Battle / Relays / Reconstruction / Results as a second row
+  above the bar) with **no Home tab**
   (a sidebar needs a landing slot, a tab bar doesn't), and the desktop Timer's
   permanently-visible stats table and solves list became pushed sub-screens
   (`navigation/TimerStack.tsx`), leaving only the last solve and current Ao5 on screen
