@@ -55,6 +55,7 @@ const TAB_ICON: Record<TabName, IconName> = {
 const ROW_HEIGHT = 49;
 
 export function BottomBar({ state, navigation }: BottomTabBarProps) {
+  const p = usePalette();
   const [expanded, setExpanded] = useState(false);
   // Set by the Timer while an attempt is live. See store/ui.ts: the Timer hides
   // its own chrome, but the bar is not its to hide, and because this bar is
@@ -102,9 +103,10 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
   // ones. It costs the timer the bar's height during an attempt, which is a good
   // trade for the screen not lurching at the two moments that matter most.
   //
-  // Fading rather than cutting, and `pointerEvents` off before the fade even
-  // finishes: an invisible bar that still takes presses would be the worst of
-  // all, since the press it swallows is the one stopping the solve.
+  // Fading rather than cutting, and `pointerEvents` off with the flag rather
+  // than with the animation: a bar you cannot see but which still takes presses
+  // would be the worst of the three, since the press it swallows is the one
+  // stopping the solve.
   const hidden = useRef(new Animated.Value(immersive ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(hidden, {
@@ -132,21 +134,32 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <>
-      <Animated.View
-        // No layout properties here on purpose: BarRow keeps its own height, so
-        // this wrapper animates appearance only and the screen above never
-        // resizes. A small downward slide reads as the bar leaving rather than
-        // as it being switched off.
-        style={{
-          opacity: hidden.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-          transform: [
-            { translateY: hidden.interpolate({ inputRange: [0, 1], outputRange: [0, 10] }) },
-          ],
-        }}
-        pointerEvents={immersive ? 'none' : 'auto'}
-      >
+      {/* No layout properties on this wrapper on purpose: BarRow keeps its own
+          height, so the screen's box never changes and there is no reflow to be
+          out of step with the Timer's own chrome. */}
+      <View pointerEvents={immersive ? 'none' : 'auto'}>
         {row}
-      </Animated.View>
+        {/* A lid, painted in the page background, faded in over the bar.
+
+            Fading the bar itself to transparent would only reveal whatever sits
+            behind it, which is not guaranteed to be the colour we want and left
+            a card-coloured strip visible. Covering it with a known colour makes
+            the bar's area indistinguishable from the rest of the screen, which
+            is the point: during an attempt the screen should look like it has no
+            bar, not like it has an empty one.
+
+            Opacity only, so this stays on the native driver. A colour
+            interpolation would have to run on the JS thread, which is the thread
+            the running timer is already using sixty times a second. */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: p.bg,
+            opacity: hidden,
+          }}
+        />
+      </View>
       <MoreOverlay
         visible={expanded}
         focusedName={focusedName}
