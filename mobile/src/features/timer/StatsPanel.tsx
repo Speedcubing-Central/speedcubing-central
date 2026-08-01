@@ -140,6 +140,14 @@ export function StatsPanel({
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
 
   const [collapsedH, setCollapsedH] = useState(sc(PANEL_COLLAPSED_MIN_H));
+  // What the parent was last told, which is not the same thing as `collapsedH`:
+  // that starts at a seed value, and reporting only when the measurement moved
+  // away from the seed would leave the parent's spacer at 0 whenever the strip
+  // happened to measure exactly there. The spacer is what keeps the timer's tap
+  // target and this panel from overlapping (guard 1), so it cannot be left
+  // depending on two constants not colliding. -1 is unreachable as a height, so
+  // the first layout always reports.
+  const reportedH = useRef(-1);
   // The body is not built until the panel has been opened once, so the Timer's
   // steady-state render cost is unchanged. After that it stays mounted, so
   // reopening is instant and the solves list keeps its scroll position.
@@ -375,8 +383,9 @@ export function StatsPanel({
         onLayout={(e) => {
           const h = Math.round(e.nativeEvent.layout.height);
           const clamped = Math.max(sc(PANEL_COLLAPSED_MIN_H), Math.min(sc(PANEL_COLLAPSED_MAX_H), h));
-          if (clamped !== collapsedH) {
-            setCollapsedH(clamped);
+          if (clamped !== collapsedH) setCollapsedH(clamped);
+          if (clamped !== reportedH.current) {
+            reportedH.current = clamped;
             onCollapsedHeight(clamped);
           }
         }}

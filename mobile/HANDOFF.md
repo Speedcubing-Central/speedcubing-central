@@ -19,6 +19,13 @@ client, so solves, sessions and Battle rooms are shared across platforms.
 sub-screens (Statistics, Solves, Sessions, Timer settings), scramble images for
 every event, settings, beta gating.
 
+The Timer's bottom strip is a **draggable stats panel** (`features/timer/
+StatsPanel.tsx`), not a footer. Collapsed it shows the last solve with its
+penalty buttons and ao5 / ao12 / best; dragged up it becomes the full statistics
+table and the whole solves list without leaving the Timer. The pushed Statistics
+and Solves screens remain, for browsing. Read section 6 before redesigning it and
+section 3 before changing how it is positioned.
+
 **Stubs** (render a "not in this build" panel, `components/StubScreen.tsx`):
 Calculator, Reconstruction, Results. Algorithms, Battle and Relays are partial:
 they render real state but no gameplay.
@@ -130,11 +137,39 @@ entirely once, and the timer swallowed the space they vacated.
 Flex shares belong on the element that is a real sibling in a definite-height
 container, not on the thing you happen to want sized.
 
+Live example, and the reason this trap is still one edit away: `StatsPanel`'s
+body is `flex: 1`, and that works only because the panel itself has a definite
+height (`expandedH`, derived from the measured column). Give the panel an
+auto height "to hug its content" and the body silently becomes zero tall.
+
 ### React Native leaves `flexShrink` at 0
 
 Auto-height siblings never give way. Whatever *is* flexible becomes the only
 thing that can shrink, and it shrinks to nothing. Floors (`minHeight`) are what
-stop this; several exist in `TimerScreen.tsx` and they are not decorative.
+stop this, and the ones in `TimerScreen.tsx` and `StatsPanel.tsx` are not
+decorative.
+
+The stats footer no longer competes for a flex share, which is where most of
+this trap history came from. The panel is `position: absolute` and the column
+reserves its collapsed rectangle with a plain spacer. What remains in the flex
+flow is two children, deliberately: the cube image (`IMAGE_FLEX` 1, floored at
+`scrambleImageHeight` and capped at `IMAGE_MAX_GROWTH`) and the timer tile
+(`TIMER_FLEX` 2.2). They share the leftover height because the digits cannot
+absorb it, being limited by the screen's width at that size, so surplus given to
+the timer alone becomes a gap above and below the digits rather than a bigger
+number. Three consequences to keep in mind:
+
+- `TIMER_MIN_H` in `TimerScreen.tsx` is now a **diagnostic** floor. A shortfall
+  has nowhere to go, so if it binds the column overflows and the Yoga harness
+  fails its explicit overflow assertion. The real relief valves are
+  `ScrambleView`'s content-length font ladder and `density` dropping content.
+- The spacer's height comes from the panel measuring itself and reporting up
+  (`onCollapsedHeight`). That single number is what keeps the timer's tap
+  target and the panel from overlapping. If it is ever wrong or unreported, a
+  tap meant for the timer lands on the panel.
+- The image box stays mounted while the next scramble loads, and only the
+  drawing inside it comes and goes. Unmounting the box collapses a flex child,
+  so the timer and the scramble jump up and back down on every solve.
 
 ### OS text scaling is not optional
 
@@ -180,6 +215,18 @@ changing the Timer layout**. It is the only thing that catches "fits on my
 phone, clips on an SE". Model the column, then assert the timer keeps usable
 height and the stats row survives; asserting "it fits" alone is nearly
 tautological because flex children absorb by definition.
+
+The column to model is now five nodes: header, scramble (text and its control
+row, auto height), the cube image (`IMAGE_FLEX`, floored and capped), the timer
+tile (`TIMER_FLEX`, floored at `TIMER_MIN_H`), and a spacer holding the
+collapsed panel's height. The panel is out of the flex flow, so model it as that
+spacer and assert separately that `expandedH` leaves `MIN_TIMER_VISIBLE_H`.
+
+Assert three things, not one. The column does not overflow (nothing auto-height
+can shrink to absorb a shortfall). The timer keeps usable height at every
+scramble depth. And the image stays at or above its legibility floor, since it
+is now the other claimant on the same surplus and is the one that gives way
+first.
 
 Other suites written during development (also scratchpad, recreate as needed):
 bearer auth and web-cookie non-regression, Timer stats parity against the live
@@ -229,12 +276,23 @@ Agreed with the owner after two rejected attempts. The direction is **"Focus"**:
 the Timer is an instrument, not a card grid.
 
 - The timer digits are the focal point, on **no surface at all**. A fill behind
-  them says "this is one thing among several", which is the wrong reading.
+  them says "this is one thing among several", which is the wrong reading. The
+  phase colour is carried by the whole screen instead, mixed into the background
+  at 12% (`screenTint`, and `mix` in `theme.ts`): a Stackmat's mat is the field
+  of view, not a widget in it. Red under your hands, green when it will start.
 - The scramble is **text on the page**, not a panel. It is something you read,
-  not a control you operate.
-- One card at the bottom: the last solve beside the penalty buttons that act on
-  it, then three figures (Ao5, Ao12, best).
+  not a control you operate. Its image sits directly under it, because it
+  answers a question about the scramble.
+- One surface at the bottom, the stats panel: the last solve beside the penalty
+  buttons that act on it, then three figures (ao5, ao12, best). Dragging it up
+  reveals the full statistics and the solves list.
 - Everything except the digits hides during an attempt.
+
+The panel replaced three separate boxes glued into a fake single card with
+corner-radius surgery. It is also what brings the web layout's right-hand column
+back within thumb reach: on desktop the stats table and solves list live
+permanently beside the timer, and making them pushed screens meant checking your
+ao12 cost you the screen you were using.
 
 **What was rejected and why:** copying the web client's card vocabulary onto a
 phone. The website uses cards because a desktop grid has room; on a phone it
@@ -256,15 +314,24 @@ order rather than shrinking everything until something clips.
 
 - **The visual design is not settled.** The owner rejected two passes. The last
   one landed but has not been confirmed as liked. Ask before assuming the
-  current look is approved. Next levers, if asked to go further: the header and
-  the scramble controls still carry more chrome than the agreed direction.
+  current look is approved. Next lever, if asked to go further: the scramble
+  controls still carry more chrome than the agreed direction.
+- **The Timer does not work offline**, despite that being the stated reason for
+  bundling the scramble images (section 2). `lib/scramble.ts` drops web's
+  `scrambow` fallback and retries the server forever with capped backoff, so
+  with no network you get an image you cannot use and a timer stuck on
+  "Scrambling…" with no error and no way to record a solve. Each decision is
+  defensible alone; the combination is not. Resolving it means either shipping a
+  local generator or telling the user plainly that a scramble cannot be fetched.
 - **`shared/` has three require cycles** (`index → averaging → index`, same for
   `timerStats` and `copy`). Harmless today, visible as a Metro warning on every
   start, and the kind of thing that becomes "undefined is not a function" after
   an innocent import change.
-- **Session names truncate in the Timer header** on narrow screens. Partly
-  mitigated by the compact event badge. A real fix needs a design decision about
-  what gives way.
+- **Long session names still ellipsize in the Timer header**, though no longer
+  by being squeezed: the compact event badge and collapsing three icon buttons
+  into one overflow returned about 76pt to the name, and it now takes the
+  header's spare width and truncates deliberately at one line. Only worth
+  revisiting if a tester complains again.
 - **Stub tabs**: Calculator, Reconstruction, Results. Battle, Algorithms and
   Relays need gameplay.
 - **Alg diagrams**: investigated, not built. `pg().get3d()` returns cubing.js's

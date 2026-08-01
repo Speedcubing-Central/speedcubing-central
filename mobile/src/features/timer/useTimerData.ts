@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import type { SessionDTO, SolveDTO, Penalty } from '@scc/shared';
 import { useAuth } from '../../store/auth';
 import { useSettings } from '../../store/settings';
-import { api } from '../../lib/api';
+import { api, apiError } from '../../lib/api';
 import { guestStore, hydrateGuestStore } from './guestStore';
 
 // Port of client/src/features/timer/useTimerData.ts. Same endpoints, same
@@ -175,12 +176,35 @@ export function useTimerData(eventId: string) {
   // that reads as sluggish; on a slow one it reads as broken, and it invites a
   // second tap on a control that has already been pressed.
   //
-  // Applying first and reverting on failure is the same trade `addSolve` and
-  // `deleteSolves` already make. The revert restores the exact previous solve
-  // rather than re-fetching, so a failed edit cannot reorder the list or lose a
-  // concurrent change to a different solve.
+  // Applying first and reverting on failure is the same trade `addSolve`
+  // already makes. The revert restores the exact previous solve rather than
+  // re-fetching, so a failed edit cannot reorder the list or lose a concurrent
+  // change to a different solve.
+  //
+  // The revert is necessary but not sufficient, which is what `failure` is for.
+  // Every edit here is fired and forgotten by its caller: a penalty button in
+  // the stats panel, a comment field's onBlur, a row's delete action. None of
+  // them can await a result without inventing per-row pending state, so a
+  // rejected write showed only as the row quietly snapping back, which reads as
+  // a glitch rather than as a failure, plus an unhandled rejection in the
+  // console. So these report for themselves using the server's own message, and
+  // resolve rather than reject, because a caller that cannot await also cannot
+  // catch.
+  //
+  // Session mutations deliberately keep throwing. Their callers (SessionsScreen,
+  // and TimerScreen's create-on-first-solve) already catch and report, and have
+  // their own UI state to unwind on the way.
+  const report = useCallback((e: unknown, failure: string) => {
+    Alert.alert(failure, apiError(e, 'Please try again.'));
+  }, []);
+
   const patchSolve = useCallback(
-    async (solveId: string, apply: (s: SolveDTO) => SolveDTO, send: () => Promise<unknown>) => {
+    async (
+      solveId: string,
+      apply: (s: SolveDTO) => SolveDTO,
+      send: () => Promise<unknown>,
+      failure: string,
+    ) => {
       if (!currentId) return;
       let previous: SolveDTO | undefined;
       setSolves((prev) =>
@@ -197,10 +221,10 @@ export function useTimerData(eventId: string) {
           const restore = previous;
           setSolves((prev) => prev.map((s) => (s.id === solveId ? restore : s)));
         }
-        throw e;
+        report(e, failure);
       }
     },
-    [currentId],
+    [currentId, report],
   );
 
   const updatePenalty = useCallback(
@@ -214,6 +238,7 @@ export function useTimerData(eventId: string) {
           if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty, count);
           else await api.patch(`/solves/${solveId}`, { penalty, plusTwoCount: count });
         },
+        'Penalty not saved',
       );
     },
     [currentId, isGuest, patchSolve],
@@ -229,6 +254,7 @@ export function useTimerData(eventId: string) {
           if (isGuest) guestStore.updateTime(currentId, solveId, time);
           else await api.patch(`/solves/${solveId}`, { time });
         },
+        'Time not saved',
       );
     },
     [currentId, isGuest, patchSolve],
@@ -245,6 +271,7 @@ export function useTimerData(eventId: string) {
           if (isGuest) guestStore.updateComment(currentId, solveId, comment);
           else await api.patch(`/solves/${solveId}`, { comment });
         },
+        'Comment not saved',
       );
     },
     [currentId, isGuest, patchSolve],
@@ -275,19 +302,27 @@ export function useTimerData(eventId: string) {
             return next;
           });
         }
-        throw e;
+        // The row reappearing is not an explanation, and the sheet that asked
+        // for the delete has already closed by now.
+        report(e, 'Solve not deleted');
       }
     },
-    [currentId, isGuest],
+    [currentId, isGuest, report],
   );
 
   const deleteSolves = useCallback(
     async (solveIds: string[]) => {
       if (!currentId || solveIds.length === 0) return;
-      if (isGuest) {
-        guestStore.deleteSolvesBulk(currentId, solveIds);
-      } else {
-        await api.post('/solves/bulk-delete', { ids: solveIds });
+      // Sent before it is applied, unlike the single-solve edits above. This one
+      // is already behind a confirmation dialog, so there is no "I tapped and
+      // nothing happened" to solve, and reverting it would mean restoring
+      // several positions in a newest-first list rather than one.
+      try {
+        if (isGuest) guestStore.deleteSolvesBulk(currentId, solveIds);
+        else await api.post('/solves/bulk-delete', { ids: solveIds });
+      } catch (e) {
+        report(e, `${solveIds.length === 1 ? 'Solve' : 'Solves'} not deleted`);
+        return;
       }
       const idSet = new Set(solveIds);
       setSolves((prev) => prev.filter((s) => !idSet.has(s.id)));
@@ -297,7 +332,7 @@ export function useTimerData(eventId: string) {
         ),
       );
     },
-    [currentId, isGuest],
+    [currentId, isGuest, report],
   );
 
   // Re-reads the current session's solves from the server. Used when returning

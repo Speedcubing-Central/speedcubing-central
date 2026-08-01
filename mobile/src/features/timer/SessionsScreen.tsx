@@ -58,6 +58,24 @@ export default function SessionsScreen() {
     }
   }
 
+  // Shared by the text field's submit and the Save button, which were two
+  // copies of the same handler and neither caught. A rename that the server
+  // rejects has to say so and leave the editor open on the text you typed,
+  // rather than closing as though it had been saved.
+  async function saveRename(id: string) {
+    const name = renameDraft.trim();
+    if (!name) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      await data.renameSession(id, name);
+      setRenamingId(null);
+    } catch (e) {
+      Alert.alert('Could not rename session', apiError(e));
+    }
+  }
+
   function confirmDelete(id: string, name: string) {
     Alert.alert(`Delete "${name}"?`, 'Every solve in this session will be deleted. This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -112,21 +130,13 @@ export default function SessionsScreen() {
                       onChangeText={setRenameDraft}
                       autoFocus
                       selectTextOnFocus
-                      onSubmitEditing={async () => {
-                        const name = renameDraft.trim();
-                        if (name) await data.renameSession(s.id, name);
-                        setRenamingId(null);
-                      }}
+                      onSubmitEditing={() => saveRename(s.id)}
                       style={{ flex: 1 }}
                     />
                     <Button
                       label="Save"
                       variant="primary"
-                      onPress={async () => {
-                        const name = renameDraft.trim();
-                        if (name) await data.renameSession(s.id, name);
-                        setRenamingId(null);
-                      }}
+                      onPress={() => saveRename(s.id)}
                     />
                   </View>
                 );

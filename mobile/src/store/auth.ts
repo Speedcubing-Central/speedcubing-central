@@ -2,9 +2,7 @@ import { create } from 'zustand';
 import * as WebBrowser from 'expo-web-browser';
 import type { PublicUser } from '@scc/shared';
 import { api, setAuthLostHandler } from '../lib/api';
-import { SERVER_ORIGIN } from '../lib/config';
 import { loadTokens, saveTokens, clearTokens, type TokenPair } from '../lib/tokens';
-
 
 // Mobile counterpart of client/src/store/auth.ts. Same endpoints and the same
 // resulting PublicUser (including its `betaAccess` flag, which the beta gate

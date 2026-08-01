@@ -12,12 +12,18 @@ import { useScreenScale } from '../lib/scale';
 // wrap individually so a line never breaks mid-pair and a meaningful trailing
 // slash is never dropped.
 //
-// Text only, by design: the scramble *image* is a separate component
-// (ScrambleNet), so the Timer can place it in the footer beside the stats rather
-// than stacked under the scramble text where it would compete with the timer for
-// vertical space. Web draws its diagram with a cubing.js <twisty-player>, which
-// has no React Native equivalent, so ScrambleNet renders the net natively
-// instead. See components/ScrambleNet.tsx and lib/cubingSvg.ts.
+// The scramble and the controls that act on it. Not the image of the resulting
+// cube: that is drawn by ScrambleNet (a separate component, because web draws
+// its diagram with a cubing.js <twisty-player> that has no React Native
+// equivalent, so the net is rendered natively instead), and the Timer places it
+// as a sibling of the timer rather than inside this view. See the `onOpenImage`
+// prop for why, components/ScrambleNet.tsx and lib/cubingSvg.ts for how.
+//
+// Where the image belongs has moved twice, so for whoever moves it a third
+// time: it was in the stats footer, beside ao5/ao12/best, which filed "is my
+// cube scrambled right" as a statistic and gave it a 50pt box, 2.4pt per
+// sticker on a 7x7. It belongs in the scramble zone, next to what it is an
+// image of. What it cannot be is a child of *this* view, which is auto-height.
 export function ScrambleView({
   eventId,
   scramble,
