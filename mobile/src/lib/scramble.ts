@@ -170,9 +170,12 @@ const IMAGE_BASE_H: Record<string, number> = {
   '444bf': 150,
   '555': 150,
   '555bf': 150,
-  // 18 and 21 sticker rows: the two that most need the room.
-  '666': 168,
-  '777': 168,
+  // 18 and 21 sticker rows: the two that most need the room. This is only the
+  // floor now, since the box grows into whatever the column has spare, so it is
+  // set at the point where the timer still clears its own floor on the tightest
+  // device rather than at the ideal.
+  '666': 156,
+  '777': 156,
   minx: 150,
   // Aspect 0.652, the one puzzle taller than it is wide, so a height budget is
   // the *only* thing that decides how big it gets.
