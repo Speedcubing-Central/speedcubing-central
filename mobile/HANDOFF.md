@@ -171,29 +171,35 @@ number. Three consequences to keep in mind:
   drawing inside it comes and goes. Unmounting the box collapses a flex child,
   so the timer and the scramble jump up and back down on every solve.
 
-### The keyboard covers the Timer column; it does not move it
+### The Timer column cannot host a text input
 
 The column does not scroll, and on iOS the keyboard is drawn over the screen
-without shifting anything under it, so in manual entry mode the field you are
-typing into was simply behind it. Android is fine on its own: its window resizes
-(Expo's default `softwareKeyboardLayoutMode` is `resize`), so the column
-re-lays out, which is why the lift in `TimerScreen.tsx` is iOS-only. Applying it
-on both would double count.
+without shifting anything under it, so a `TextInput` anywhere in the column is a
+control that disappears the moment you use it. Manual entry hit exactly this: the
+field was behind the keyboard on every iPhone modelled once the scramble ran past
+a line or two.
 
-**Do not reach for `KeyboardAvoidingView` or bottom padding here.** Both work by
-taking height away from the column, and every other child in it is auto-height
-with `flexShrink` 0 (trap 3), so the only thing that can give is the timer tile,
-and past that the column overflows a screen with no way to scroll it back. The
-lift is a `translateY`, which changes no layout at all.
+**A `KeyboardAvoidingView` is not the fix**, and neither is bottom padding. Both
+work by taking height away from the column, and every other child there is
+auto-height with `flexShrink` 0 (trap 3), so the only thing that can give is the
+timer tile, and past that the column overflows a screen that cannot scroll back.
+A `translateY` lift avoids that (it changes no layout at all) and was in fact
+built, iOS-only, since Android's window resizes on its own. It worked, and it
+was still the wrong shape: a workaround for having asked for the keyboard.
 
-It is measured, not assumed: the entry row reports its own bottom edge in window
-coordinates and the lift is the overlap with `keyboardWillChangeFrame`'s reported
-keyboard top. Two things that look optional and are not. The measurement is taken
-only while no lift is applied, because `measureInWindow` reports the rendered
-position and measuring through the translate would feed it back into itself. And
-the lift is capped at the cube image's height, so a very long scramble on a short
-phone can cover the picture (which nobody reads while typing a time they have
-already done) but never the scramble text or its controls.
+So manual entry now has its own keypad (`features/timer/Keypad.tsx`) and the
+Timer never opens the OS keyboard at all. If you add a text field to this column,
+you inherit the whole problem again. Put it in a `Sheet` instead, which is
+positioned against the bottom edge and can move without touching the column.
+
+The keypad's sizing is the load-bearing part. Its 12 targets have a floor
+(`KEY_MIN_H`, 44pt), the readout above them does not, and the tile claims
+`KEYPAD_MIN_H` plus that readout's floor as its own `minHeight` in manual entry.
+Yoga honours a min-height over a flex share, which is what makes the cube give
+way to the keys on a short screen rather than the other way round. Modelled
+across 5 devices x 3 scramble depths x 2 font scales, every case fits; the worst
+(an SE on a 7x7) by 3pt, with the readout down at 15pt and the keys at their
+floor.
 
 ### OS text scaling is not optional
 
@@ -311,6 +317,12 @@ the Timer is an instrument, not a card grid.
   buttons that act on it, then three figures (ao5, ao12, best). Dragging it up
   reveals the full statistics and the solves list.
 - Everything except the digits hides during an attempt.
+- Manual entry is the same screen with its own keypad in place of the tap
+  target, not a different screen. It takes digits only, shifting in from the
+  right the way cstimer does (1,2,3,4 is 12.34), which is exactly how
+  `parseTimeInput` already reads a run of digits on both platforms. Penalties
+  are not on the keypad: they belong to a solve that exists, and the panel puts
+  OK / +2 / DNF against the last one the moment it lands.
 
 The panel replaced three separate boxes glued into a fake single card with
 corner-radius surgery. It is also what brings the web layout's right-hand column

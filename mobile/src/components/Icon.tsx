@@ -36,6 +36,7 @@ export type IconName =
   | 'skipBack'
   | 'skipForward'
   | 'check'
+  | 'backspace'
   | 'x'
   | 'plus'
   | 'search'
@@ -208,6 +209,13 @@ function Paths({ name, color }: { name: IconName; color: string }) {
       );
     case 'check':
       return <Path d="m5 12.5 4.5 4.5L19 7" />;
+    case 'backspace':
+      return (
+        <>
+          <Path d="M9.5 5.5h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9L3 12z" />
+          <Path d="m11 9.5 5 5M16 9.5l-5 5" />
+        </>
+      );
     case 'x':
       return <Path d="M6 6l12 12M18 6 6 18" />;
     case 'plus':

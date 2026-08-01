@@ -27,6 +27,7 @@ export type IconName =
   | 'skipBack'
   | 'skipForward'
   | 'check'
+  | 'backspace'
   | 'x'
   | 'plus'
   | 'search'
@@ -171,6 +172,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19 7" />,
+  backspace: (
+    <>
+      <path d="M9.5 5.5h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9L3 12z" />
+      <path d="m11 9.5 5 5M16 9.5l-5 5" />
+    </>
+  ),
   x: <path d="M6 6l12 12M18 6 6 18" />,
   plus: <path d="M12 5v14M5 12h14" />,
   search: (
