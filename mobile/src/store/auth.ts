@@ -23,6 +23,20 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
+// Dismissing the auth browser is best effort. Android has no programmatic
+// dismiss (expo-web-browser throws UnavailabilityError there, because a Chrome
+// custom tab can only be closed by the user), and on any platform the session
+// may already be gone. Neither is a reason to report a sign-in that has
+// actually completed as a failure, which is what letting this throw did.
+function closeBrowser(alreadyDismissed: boolean): void {
+  if (alreadyDismissed) return;
+  try {
+    WebBrowser.dismissAuthSession();
+  } catch {
+    /* the browser stays until the user closes it; the app is signed in regardless */
+  }
+}
+
 export const useAuth = create<AuthState>((set) => ({
   user: null,
   loading: true,
@@ -84,16 +98,35 @@ export const useAuth = create<AuthState>((set) => ({
     // shares Safari's cookie jar, so someone already signed in to WCA isn't made
     // to type their password again, and credentials are never entered in a view
     // this app could read.
-    const browser = WebBrowser.openAuthSessionAsync(flow.authorizeUrl, null);
-
     let dismissed = false;
-    void browser.then(() => {
-      dismissed = true;
-    });
+    let browserFailure: unknown = null;
+    void WebBrowser.openAuthSessionAsync(flow.authorizeUrl, null).then(
+      () => {
+        dismissed = true;
+      },
+      (e) => {
+        // The session never opened at all (one is already presented, or the
+        // platform refused it). Without this branch the rejection would go
+        // unhandled and the loop below would poll a flow nobody can reach for
+        // five minutes before reporting a timeout, which describes neither
+        // what happened nor what to do about it.
+        dismissed = true;
+        browserFailure = e;
+      },
+    );
+
+    // A closed browser is not proof the sign-in failed. WCA can be approved and
+    // the page closed by hand inside the 1.2s before the next poll, by which
+    // point the flow is already resolved server-side and one more request would
+    // collect it. So the browser going away starts a short grace window rather
+    // than ending the flow on the tick that notices.
+    const GRACE_POLLS = 3;
+    let pollsSinceDismiss = 0;
 
     const deadline = Date.now() + 5 * 60 * 1000;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 1200));
+      if (browserFailure) throw browserFailure;
       let resp;
       try {
         resp = await api.post<{ user?: PublicUser; tokens?: TokenPair; status?: string }>(
@@ -114,13 +147,14 @@ export const useAuth = create<AuthState>((set) => ({
         set({ user: resp.data.user });
         // Close the browser for them: the flow is done and the page behind it
         // says as much, but nobody should have to dismiss it themselves.
-        if (!dismissed) WebBrowser.dismissAuthSession();
+        closeBrowser(dismissed);
         return true;
       }
-      // The user closed the browser without finishing.
-      if (dismissed) return false;
+      // The user closed the browser without finishing, and the grace window
+      // above has passed without the flow resolving.
+      if (dismissed && ++pollsSinceDismiss > GRACE_POLLS) return false;
     }
-    if (!dismissed) WebBrowser.dismissAuthSession();
+    closeBrowser(dismissed);
     throw new Error('Sign-in timed out. Please try again.');
   },
   logout: async () => {

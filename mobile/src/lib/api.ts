@@ -113,5 +113,10 @@ export function apiError(e: unknown, fallback = 'Something went wrong'): string 
   if (axios.isAxiosError(e)) {
     return (e.response?.data as { error?: string })?.error ?? e.message ?? fallback;
   }
+  // Not every failure a screen reports comes off the wire. The WCA sign-in flow
+  // throws its own Errors ("Sign-in timed out", "Sign-in expired"), and dropping
+  // straight to the fallback replaced all of them with "Something went wrong",
+  // which tells the user nothing about which of them happened.
+  if (e instanceof Error && e.message) return e.message;
   return fallback;
 }

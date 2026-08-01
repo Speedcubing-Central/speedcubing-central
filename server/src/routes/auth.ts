@@ -317,10 +317,62 @@ function buildAuthorizeUrl(state: string): string {
   return url.toString();
 }
 
+// Every host:port this request could be said to have arrived on. Host and not a
+// full origin on purpose: behind a proxy the scheme lives in a forwarded header
+// and getting that wrong would reject a perfectly good deployment. All the
+// candidates rather than one, for the same reason: a proxy may pass the public
+// host through untouched, or rewrite Host and put the original in
+// X-Forwarded-Host, and treating a match on either as a match means a
+// deployment can only be flagged when nothing about the request agrees with the
+// configuration.
+function requestHosts(req: Request): string[] {
+  const forwarded = req.get('x-forwarded-host')?.split(',')[0]?.trim();
+  return [req.get('host'), forwarded].filter((h): h is string => !!h);
+}
+
+// A native flow only completes if WCA's callback lands back on *this* server:
+// the flow lives in this process's memory, and it is this process the app polls.
+// So the configured WCA_REDIRECT_URI has to be on the same origin the app just
+// reached us on.
+//
+// When it isn't, the flow is already doomed at the moment it starts, and it
+// fails somewhere the app can't explain: either WCA refuses the authorize
+// request outright ("The requested redirect URI is malformed or doesn't match
+// the client redirect URI") because the URI isn't registered on the OAuth
+// application, or it accepts it and sends the phone's browser to an origin the
+// phone can't reach (a `localhost` callback means the phone itself). The common
+// case is a dev server: WCA_REDIRECT_URI defaults to http://localhost:3001,
+// which is right for a browser on the development machine and wrong for
+// anything holding a phone.
+//
+// Only the native route checks this. The web flow legitimately runs across two
+// origins (the client on :5173, the callback on :3001) and is left alone.
+function nativeRedirectMismatch(req: Request): string | null {
+  const hosts = requestHosts(req);
+  if (hosts.length === 0) return null;
+  let callback: URL;
+  try {
+    callback = new URL(env.WCA_REDIRECT_URI);
+  } catch {
+    return 'This server has an invalid WCA_REDIRECT_URI, so WCA sign-in cannot be started.';
+  }
+  if (hosts.includes(callback.host)) return null;
+  return (
+    `WCA sign-in is not available on this server: it returns from WCA to ${callback.origin}, ` +
+    `but this app is connected to ${hosts[0]}. Point the app at the deployed site, or set ` +
+    `WCA_REDIRECT_URI to this server's own address and register that URL with WCA.`
+  );
+}
+
 // POST /api/auth/wca/start — begin a native sign-in.
-router.post('/wca/start', authLimiter, (_req, res) => {
+router.post('/wca/start', authLimiter, (req, res) => {
   if (!env.WCA_CLIENT_ID) {
     res.status(503).json({ error: 'WCA sign-in is not configured on this server.' });
+    return;
+  }
+  const mismatch = nativeRedirectMismatch(req);
+  if (mismatch) {
+    res.status(503).json({ error: mismatch });
     return;
   }
   sweepFlows();
