@@ -187,19 +187,22 @@ A `translateY` lift avoids that (it changes no layout at all) and was in fact
 built, iOS-only, since Android's window resizes on its own. It worked, and it
 was still the wrong shape: a workaround for having asked for the keyboard.
 
-So manual entry now has its own keypad (`features/timer/Keypad.tsx`) and the
-Timer never opens the OS keyboard at all. If you add a text field to this column,
-you inherit the whole problem again. Put it in a `Sheet` instead, which is
+So manual entry has its own keypad (`features/timer/Keypad.tsx`) and the Timer
+never opens the OS keyboard at all. If you add a text field to this column, you
+inherit the whole problem again. Put it in a `Sheet` instead, which is
 positioned against the bottom edge and can move without touching the column.
 
-The keypad's sizing is the load-bearing part. Its 12 targets have a floor
-(`KEY_MIN_H`, 44pt), the readout above them does not, and the tile claims
-`KEYPAD_MIN_H` plus that readout's floor as its own `minHeight` in manual entry.
-Yoga honours a min-height over a flex share, which is what makes the cube give
-way to the keys on a short screen rather than the other way round. Modelled
-across 5 devices x 3 scramble depths x 2 font scales, every case fits; the worst
-(an SE on a 7x7) by 3pt, with the readout down at 15pt and the keys at their
-floor.
+The keypad itself is a `Sheet`, raised by tapping the readout. Its first shape
+was a keypad living permanently in the timer tile, which is worth knowing about
+because it is the obvious build and it does work: it needed the tile to claim a
+`minHeight` sized from the keys, so that Yoga would make the cube give way to
+them on a short screen rather than the reverse, and it fitted on every device
+modelled (worst case an SE on a 7x7, by 3pt, with the readout down at 15pt).
+What it could not fix is that 12 targets is a lot of column to hold open for a
+control you touch for a few seconds per solve, and the tile stopped looking like
+a timer. As a sheet it costs the column nothing, the readout goes back to being
+the same size as the touch timer's digits, and the scramble stays visible above
+it while you type.
 
 ### OS text scaling is not optional
 
@@ -317,12 +320,15 @@ the Timer is an instrument, not a card grid.
   buttons that act on it, then three figures (ao5, ao12, best). Dragging it up
   reveals the full statistics and the solves list.
 - Everything except the digits hides during an attempt.
-- Manual entry is the same screen with its own keypad in place of the tap
-  target, not a different screen. It takes digits only, shifting in from the
-  right the way cstimer does (1,2,3,4 is 12.34), which is exactly how
-  `parseTimeInput` already reads a run of digits on both platforms. Penalties
-  are not on the keypad: they belong to a solve that exists, and the panel puts
-  OK / +2 / DNF against the last one the moment it lands.
+- Manual entry is the same screen, not a different one: the same tile, showing
+  the time you are entering instead of the time you just did. Tapping it raises
+  the keypad from the bottom, so the keys exist only while you are using them.
+  Digits only, shifting in from the right the way cstimer does (1,2,3,4 is
+  12.34), which is exactly how `parseTimeInput` already reads a run of digits on
+  both platforms. Penalties are not on the keypad: they belong to a solve that
+  exists, and the panel puts OK / +2 / DNF against the last one the moment it
+  lands. Adding a time leaves the keypad up, because manual entry is usually a
+  run of times taken off another timer.
 
 The panel replaced three separate boxes glued into a fake single card with
 corner-radius surgery. It is also what brings the web layout's right-hand column

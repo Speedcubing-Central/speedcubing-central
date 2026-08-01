@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
@@ -34,7 +35,7 @@ import { EditScrambleSheet } from './EditScrambleSheet';
 import { ScrambleImageSheet } from './ScrambleImageSheet';
 import { TimerMenuSheet, type TimerMenuItem } from './TimerMenuSheet';
 import { StatsPanel } from './StatsPanel';
-import { Keypad, KEYPAD_MIN_H } from './Keypad';
+import { KeypadSheet } from './Keypad';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
 import { useTimerEngine } from './useTimerEngine';
@@ -57,12 +58,16 @@ import { font, mix, radius, space } from '../../theme';
 //   timer       the digits, on no surface at all, taking everything left over
 //   panel       a strip you glance at, which drags up into everything else
 //
-// The timer slot has two forms. Touch entry is the digits and a tap target that
-// is the whole tile. Manual entry is a readout and an in-app keypad
-// (Keypad.tsx), which exists so that this screen never has to ask for the OS
-// keyboard: the column cannot scroll, so anything the keyboard covers is simply
-// gone. Both are the same slot with the same floor and the same neighbours, so
-// switching entry mode changes what the screen accepts, not what it is.
+// The timer slot has two forms, and they are deliberately the same shape. Touch
+// entry is the digits, and the tile is the tap target that starts a solve.
+// Manual entry is the same tile showing the time you are entering, and tapping
+// it raises a keypad from the bottom (Keypad.tsx). Switching entry mode changes
+// what a tap does, not what the screen is.
+//
+// The keypad is a sheet rather than part of the column for two reasons. The
+// screen never has to ask for the OS keyboard, which on a column that cannot
+// scroll would simply cover whatever it lands on; and the column does not have
+// to carry 12 targets for a control you touch for a few seconds per solve.
 //
 // The panel (StatsPanel.tsx) is the substantive change from the previous pass,
 // which had three separate boxes at the bottom glued into a fake single card
@@ -125,22 +130,6 @@ const TIMER_CONTENT_BIAS = 0.65;
 // `density` dropping content.
 const TIMER_MIN_H = 140;
 
-// ── Manual entry ──
-// Tighter than the touch timer's `space.lg` padding, and deliberately so: the
-// keypad is 12 targets rather than one, so the tile's own padding is height
-// taken from the keys for nothing. The gap between the readout and the keys is
-// the only separation that has to read, and 8 does that.
-const MANUAL_PAD_V = space.sm;
-const MANUAL_GAP = space.sm;
-// The readout's floor, in baseline points. It is the thing that gives way when
-// the column is tight, but not past readable: 18 scales to 15 on an SE, which
-// is what the solves list already prints a time at.
-const MANUAL_READOUT_MIN = 18;
-// How far the cube may shrink in manual entry, as a fraction of the height it
-// takes in touch mode. It also loses IMAGE_MAX_GROWTH there: in manual entry
-// surplus height belongs to the keys, and a picture that grew while the keys
-// stayed at their floor would be the wrong way round.
-const MANUAL_IMAGE_FLOOR = 0.6;
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
@@ -174,6 +163,7 @@ export default function TimerScreen({ navigation }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const [showEditScramble, setShowEditScramble] = useState(false);
   const [showScrambleImage, setShowScrambleImage] = useState(false);
+  const [showKeypad, setShowKeypad] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Measured, not assumed. The column's own height is what density is decided
   // from: the window height would be wrong by the safe area and the tab bar,
@@ -275,6 +265,7 @@ export default function TimerScreen({ navigation }: Props) {
     !showMenu &&
     !showEditScramble &&
     !showScrambleImage &&
+    !showKeypad &&
     !panelOpen &&
     !inputBlocked;
 
@@ -316,12 +307,21 @@ export default function TimerScreen({ navigation }: Props) {
   // while the entry is empty. (It used to double as "skip this scramble" when
   // the field was blank, which was undiscoverable next to the scramble's own
   // refresh button doing the same thing in plain sight.)
+  //
+  // The keypad stays open afterwards, which is the point of it being a sheet:
+  // manual entry is usually a run of times taken off another timer, and the
+  // scramble is still readable above the sheet. The entry clearing and a
+  // success tick are what say it landed, since the solves list is behind the
+  // sheet at that moment.
   const addTyped = useCallback(async () => {
     const parsed = parseTimeInput(typed, manualPrecision);
     if (!parsed) return;
     // Only clear on a successful save so a failure doesn't force a retype.
     const saved = await onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
-    if (saved) setTyped('');
+    if (saved) {
+      setTyped('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    }
   }, [typed, manualPrecision, onComplete]);
 
   // The entry as it will be recorded, formatted by the same functions that
@@ -464,28 +464,6 @@ export default function TimerScreen({ navigation }: Props) {
     const contentH = digitFontSize * 1.1 + space.md + sc(18);
     return Math.round(Math.max(0, timerTileH - contentH) * TIMER_CONTENT_BIAS);
   })();
-
-  // Height for the readout above the keypad. Derived rather than fixed: the
-  // keys have a floor (KEY_MIN_H, a target you can actually hit) and the
-  // readout does not, so on a short screen the number is what gives way. This
-  // is the same "drop before you clip" rule `density` applies to the column.
-  //
-  // 0.72 of what is spare rather than all of it, so the keys get the rest and
-  // grow with the screen instead of the number growing alone.
-  const manualReadoutFont = (() => {
-    if (timerTileH <= 0) return sc(40);
-    const spare = timerTileH - MANUAL_PAD_V * 2 - MANUAL_GAP - KEYPAD_MIN_H;
-    return Math.round(Math.max(sc(MANUAL_READOUT_MIN), Math.min(sc(46), spare * 0.72)));
-  })();
-
-  // The floor the manual tile claims from the column, sized from what the
-  // keypad actually needs rather than from the touch timer's TIMER_MIN_H. Yoga
-  // honours it over the flex share, which is what settles the argument between
-  // the keys and the cube on a short screen: modelled across 5 devices x 3
-  // scramble depths x 2 font scales, every case fits, the worst (an SE on a
-  // 7x7) by 3pt.
-  const manualTileMinH =
-    MANUAL_PAD_V * 2 + Math.round(sc(MANUAL_READOUT_MIN) * 1.15) + MANUAL_GAP + KEYPAD_MIN_H;
 
   const hint = (() => {
     switch (engine.phase) {
@@ -695,12 +673,8 @@ export default function TimerScreen({ navigation }: Props) {
                 onLayout={(e) => setImageBoxH(e.nativeEvent.layout.height)}
                 style={({ pressed }) => ({
                   flex: IMAGE_FLEX,
-                  // Manual entry keeps the cube, at a reduced floor and its
-                  // normal size as a ceiling: it is still how you check the
-                  // scramble you are about to do, but it no longer competes
-                  // with the keypad for the surplus. See MANUAL_IMAGE_FLOOR.
-                  minHeight: manualEntry ? Math.round(imageHeight * MANUAL_IMAGE_FLOOR) : imageHeight,
-                  maxHeight: manualEntry ? imageHeight : Math.round(imageHeight * IMAGE_MAX_GROWTH),
+                  minHeight: imageHeight,
+                  maxHeight: Math.round(imageHeight * IMAGE_MAX_GROWTH),
                   alignItems: 'center',
                   justifyContent: 'center',
                   // Section above, group below. The cube is its own block, and
@@ -805,52 +779,70 @@ export default function TimerScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : (
-          // Manual entry, also the path FMC takes in this pass. The readout
-          // above the keys is the same shape as the touch timer's, so switching
-          // input mode changes what the screen accepts rather than what it is.
+          // Manual entry, also the path FMC takes in this pass. Same tile, same
+          // flex share, same sizing as the touch timer above: the time is still
+          // the screen, and switching entry mode changes what a tap does rather
+          // than what the screen is.
           //
-          // The block fills the tile from the TOP down, where the touch timer's
-          // content is centred and then biased. The tile takes the column's
-          // whole surplus (TIMER_FLEX), and centring a block you type into
-          // leaves half that surplus as a hole between the cube and the keys.
-          // Here the keypad grows into it instead, up to KEY_MAX_H per row.
+          // The keys are not here. They arrive from the bottom when you tap
+          // (KeypadSheet), because 12 targets is a lot of column to hold open
+          // permanently for a control you touch for a few seconds per solve,
+          // and keeping them out is what lets this tile go on looking like the
+          // timer rather than like a form.
           <View
             style={{
               flex: TIMER_FLEX,
-              minHeight: manualTileMinH,
-              alignItems: 'center',
-              gap: MANUAL_GAP,
-              paddingHorizontal: space.lg,
-              paddingVertical: MANUAL_PAD_V,
+              minHeight: sc(TIMER_MIN_H),
+              overflow: 'hidden',
             }}
             onLayout={(e) => setTimerTileH(e.nativeEvent.layout.height)}
           >
-            <Text
-              adjustsFontSizeToFit
-              numberOfLines={1}
-              allowFontScaling={false}
-              style={{
-                // Muted until there is something to read, so an untouched
-                // 0.00 does not look like a result you have already entered.
-                color: typed ? p.text : p.textMuted,
-                fontFamily: MONO_BOLD,
-                fontSize: manualReadoutFont,
-                fontVariant: ['tabular-nums'],
-              }}
-            >
-              {manualDisplay}
-            </Text>
-
-            <Keypad
-              onDigit={pressDigit}
-              onBackspace={() => setTyped((prev) => prev.slice(0, -1))}
-              onClear={() => setTyped('')}
-              onSubmit={addTyped}
-              empty={typed.length === 0}
-              // The same gate the touch timer uses: nothing is recorded until
-              // this session's solves and the current scramble have landed.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={typed ? `Edit the time you are entering, ${manualDisplay}` : 'Enter a time'}
+              accessibilityHint="Opens the keypad"
+              onPress={() => setShowKeypad(true)}
               disabled={inputBlocked}
-            />
+              style={({ pressed }) => ({
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.md,
+                paddingBottom: timerContentLift,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                allowFontScaling={false}
+                style={{
+                  // Muted until there is something to read, so an untouched
+                  // 0.00 does not look like a result you have already entered.
+                  color: typed ? p.text : p.textMuted,
+                  fontFamily: MONO_BOLD,
+                  fontSize: digitFontSize,
+                  lineHeight: digitFontSize * 1.1,
+                  fontVariant: ['tabular-nums'],
+                  paddingHorizontal: space.lg,
+                }}
+              >
+                {manualDisplay}
+              </Text>
+              <Muted
+                numberOfLines={1}
+                maxFontSizeMultiplier={maxFontMultiplier}
+                style={{ textAlign: 'center', paddingHorizontal: space.lg }}
+              >
+                {inputBlocked
+                  ? data.solvesLoading
+                    ? 'Loading solves…'
+                    : 'Scrambling…'
+                  : typed
+                    ? 'Tap to finish this entry'
+                    : 'Tap to enter a time'}
+              </Muted>
+            </Pressable>
           </View>
         )}
 
@@ -936,6 +928,23 @@ export default function TimerScreen({ navigation }: Props) {
         current={scr.scramble}
         onApply={scr.setCustom}
         onClose={() => setShowEditScramble(false)}
+      />
+
+      {/* The keypad, from the bottom, when the readout is tapped. Mounted
+          unconditionally like the other sheets so it can play its exit
+          animation: `visible` is what opens and closes it. */}
+      <KeypadSheet
+        visible={showKeypad}
+        onClose={() => setShowKeypad(false)}
+        display={manualDisplay}
+        empty={typed.length === 0}
+        // The same gate the touch timer uses: nothing is recorded until this
+        // session's solves and the current scramble have both landed.
+        disabled={inputBlocked}
+        onDigit={pressDigit}
+        onBackspace={() => setTyped((prev) => prev.slice(0, -1))}
+        onClear={() => setTyped('')}
+        onSubmit={addTyped}
       />
 
       <ScrambleImageSheet
