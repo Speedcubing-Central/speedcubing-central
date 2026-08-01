@@ -13,7 +13,7 @@ import {
 } from '@scc/shared';
 import { usePalette, useSettings } from '../../store/settings';
 import { parseTimeInput } from '../../lib/timeInput';
-import { scrambleImageHeight } from '../../lib/scramble';
+import { scrambleImageHeight, scrambleImageWidth } from '../../lib/scramble';
 import { useScreenScale } from '../../lib/scale';
 import {
   Button,
@@ -60,12 +60,13 @@ export function SolveDetailSheet({
   onOpenAverage: (view: SolveAverage) => void;
 }) {
   const p = usePalette();
-  const { s: sc } = useScreenScale();
+  const { width } = useScreenScale();
   const solvePrecision = useSettings((s) => s.solvePrecision);
   const isFmc = TIMER_ONLY_EVENT_IDS.includes(event);
   // 'comfortable' unconditionally: this sheet scrolls, so it has no height
   // budget to trade against and there is nothing to be gained by shrinking.
-  const netH = scrambleImageHeight(event, 'comfortable', sc);
+  const netH = scrambleImageHeight(event, 'comfortable', width);
+  const netW = scrambleImageWidth(event, width);
 
   // The sheet stays mounted so it can play its exit animation, so `index` goes
   // null while it is still on screen. Hold the last real one so the content
@@ -206,7 +207,7 @@ export function SolveDetailSheet({
               <ScrambleNet
                 eventId={event}
                 scramble={solve.scramble}
-                size={netH}
+                size={netW}
                 maxHeight={netH}
               />
             ) : null}

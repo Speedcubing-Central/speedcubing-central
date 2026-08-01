@@ -17,7 +17,7 @@ import {
 } from '@scc/shared';
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
-import { eventBadge, scrambleImageHeight } from '../../lib/scramble';
+import { eventBadge, scrambleImageHeight, scrambleImageWidth } from '../../lib/scramble';
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
@@ -74,23 +74,36 @@ const SUBSET_NAME: Record<string, string> = Object.fromEntries(SUBSET_EVENTS.map
 // timer. Both are real siblings in a definite-height container, which is the
 // only place a flex share means anything (HANDOFF trap 2).
 //
-// The image takes the larger share, which is the opposite of what it looks like
-// it should be. The timer centres its content, so surplus it wins does not make
-// the digits bigger, it becomes two holes, one above them and one below; and
-// the digits are limited by the screen's WIDTH at these sizes ("15.87" at 104pt
-// is already ~312pt wide in ~337pt of room), so they cannot grow into it even
-// if allowed. Surplus is therefore worth more to the cube than to the timer.
+// The timer takes the larger share, and the image barely grows at all.
 //
-// Tuned against the layout harness: at 1:1 the gap above the digits stayed near
-// 50pt, and past about 2:1 the timer starts giving up real height for
-// diminishing returns.
-const IMAGE_FLEX = 1.5;
-const TIMER_FLEX = 1;
+// An earlier pass had this the other way round, to stop the timer turning
+// surplus into dead space around its centred digits. That fixed the spacing and
+// broke something more important: the timer tile IS the tap target, so every
+// point the image gained came straight out of the area you can hit to start a
+// solve, and the cube ended up dominating a screen whose whole job is being
+// easy to press.
+//
+// The spacing is handled by TIMER_CONTENT_BIAS below instead, which is the
+// right tool for it: it moves the digits within the tile rather than shrinking
+// the tile.
+const IMAGE_FLEX = 1;
+const TIMER_FLEX = 2.2;
 
-// Ceiling on the image's growth, as a multiple of its legibility floor. Without
-// it a tall screen holding a short 3x3 scramble would hand the cube half the
-// display, which is not what anyone opened a timer for.
-const IMAGE_MAX_GROWTH = 2.6;
+// Ceiling on the image's growth, as a multiple of its natural size. Small on
+// purpose: the image is sized for legibility by scrambleImageHeight and there is
+// nothing to gain past that, so this only takes the edge off a roomy screen.
+const IMAGE_MAX_GROWTH = 1.25;
+
+// How far up the timer tile its content sits, as a fraction of the free space
+// that would otherwise be split evenly above and below it.
+//
+// 0 is strict centring, which is what produced the void the cube used to float
+// above: in a tall tile a centred block leaves half the surplus as a gap under
+// the cube. Biasing upward closes that gap while the whole tile stays tappable,
+// so the space it keeps ends up below the hint, where it reads as breathing room
+// before the panel rather than as a hole. Optically the digits still read as
+// centred, since a strictly centred block in a tall box reads as low.
+const TIMER_CONTENT_BIAS = 0.65;
 
 // A floor on the timer tile, and deliberately a DIAGNOSTIC one. The old
 // arrangement had the floor on the footer and let the timer absorb any
@@ -340,7 +353,8 @@ export default function TimerScreen({ navigation }: Props) {
   // constant that suits a 9-row 3x3 leaves a 21-row 7x7 unreadable. Scaled by
   // the screen and then by density, so it is the events that need the room that
   // spend the timer's height, and a 3x3 keeps its digits at their ceiling.
-  const imageHeight = scrambleImageHeight(scrambleEventId, density, sc);
+  const imageHeight = scrambleImageHeight(scrambleEventId, density, width);
+  const imageWidth = scrambleImageWidth(scrambleEventId, width);
 
   // Raised well past the old 64: that ceiling was set when the timer was a
   // bordered card competing with four others, and it left the digits at ~53pt
@@ -358,6 +372,15 @@ export default function TimerScreen({ navigation }: Props) {
   // The hint below them still clears: at 0.60 the content comes to roughly
   // 0.66 * tile + 29, which fits every case the harness models.
   const digitFontSize = timerTileH > 0 ? Math.max(sc(30), Math.min(digitCeiling, timerTileH * 0.6)) : digitCeiling;
+
+  // Padding at the bottom of the timer's content box, which shifts the digits up
+  // by half of it. Derived from the free space the tile actually has, so a tile
+  // barely taller than its content is left alone and only a roomy one is lifted.
+  const timerContentLift = (() => {
+    if (timerTileH <= 0) return 0;
+    const contentH = digitFontSize * 1.1 + space.md + sc(18);
+    return Math.round(Math.max(0, timerTileH - contentH) * TIMER_CONTENT_BIAS);
+  })();
 
   const hint = (() => {
     switch (engine.phase) {
@@ -585,9 +608,12 @@ export default function TimerScreen({ navigation }: Props) {
                   <ScrambleNet
                     eventId={scrambleEventId}
                     scramble={scr.scramble}
-                    // Full usable width as the width budget, so height is what
-                    // binds and the drawing is always as large as its box allows.
-                    size={width - space.md * 2}
+                    // This event's own width budget, not the whole column. A
+                    // wide puzzle given everything available is what made FTO
+                    // and clock span the screen while a 3x3 sat modestly in the
+                    // middle: one box reads completely differently depending on
+                    // the drawing's proportions.
+                    size={imageWidth}
                     // The measured box, once known. No layout jump: the box's
                     // height comes from the flex split, which does not depend on
                     // the drawing inside it, so only the drawing changes size.
@@ -628,7 +654,16 @@ export default function TimerScreen({ navigation }: Props) {
               onPressOut={() => {
                 if (engineEnabled) engine.release();
               }}
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md }}
+              // Centred, then pulled up by padding at the bottom. The Pressable
+              // still fills the tile, so the whole rectangle starts a solve;
+              // only the digits move. See TIMER_CONTENT_BIAS.
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.md,
+                paddingBottom: timerContentLift,
+              }}
             >
               <Text
                 adjustsFontSizeToFit
