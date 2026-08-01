@@ -102,6 +102,10 @@ const PANEL_SLOP = 6;
 // The handle has nothing on it to tap, so nothing to protect.
 const HANDLE_SLOP = 2;
 
+// The grabber's touch target, matching HANDLE_H in the Timer's stats panel. The
+// bar drawn inside it is 5pt; this is the part you can actually hit.
+const GRABBER_H = 22;
+
 // Traces the drag negotiation into the Metro log. Off, but kept: it is what
 // established that the responder claims correctly and the transform was the
 // problem, and this component has no other way to be observed on a device.
@@ -462,11 +466,33 @@ export function Sheet({
             // its drag surface is a band with nothing scrollable in it.
             style={{ paddingTop: space.md, paddingBottom: space.sm }}
           >
-            <View style={{ alignItems: 'center', paddingVertical: space.xs }}>
-              {/* Lights up while a finger owns the panel. Started as a debug
-                  readout and earned its place: it is the only feedback that
-                  the handle did take the gesture, on a control whose whole job
-                  is to be grabbed. */}
+            {/* The grabber, built the way the Timer's stats panel builds its
+                own: a Pressable of real height wrapping a 5pt bar, sitting
+                inside the strip that carries the drag.
+
+                A tap on it closes the sheet. That is the part worth copying.
+                The bar is a 5pt target 12pt below the panel's edge, so aiming
+                at it lands anywhere in a band tens of points tall, and a
+                gesture that only answers to a perfect hit reads as broken. Now
+                every outcome does something: a tap closes, a drag from the
+                strip moves the sheet, and a miss above the sheet drags it too.
+
+                The Pressable claims the touch on contact, and the strip's
+                responder takes it back on movement, which is exactly the
+                arrangement the stats panel uses. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              accessibilityHint="Double tap to close, or drag down"
+              onPress={onClose}
+              // Wide, so the whole width of the sheet's top strip answers to a
+              // tap aimed at the bar in the middle of it.
+              hitSlop={{ top: 8, bottom: 8, left: 140, right: 140 }}
+              style={{ height: GRABBER_H, alignItems: 'center', justifyContent: 'center' }}
+            >
+              {/* Lights up while a finger owns the panel: the only feedback
+                  that the drag was taken, on a control whose whole job is to
+                  be grabbed. */}
               <View
                 style={{
                   width: 44,
@@ -475,7 +501,7 @@ export function Sheet({
                   backgroundColor: dragY !== null ? p.accent : p.border,
                 }}
               />
-            </View>
+            </Pressable>
             {title ? (
               <View
                 style={{
