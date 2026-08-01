@@ -54,10 +54,25 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     if (queueRef.current.length === 0) enqueue();
     const pending = queueRef.current.shift()!;
     fillQueue();
+    // Clear the display now, rather than leaving the old scramble up until the
+    // replacement lands.
+    //
+    // That wait is not a neutral pause. A scramble on screen after a solve
+    // reads as the next one, so people pick the cube up and apply it, and then
+    // have to undo a scramble they should never have been shown. It cost real
+    // solves before this. An honest "working on it" is worse to look at and
+    // better to obey, and the timer is already blocked meanwhile (`loading`
+    // feeds the Timer's inputBlocked), so nothing can be recorded against the
+    // gap either.
+    //
+    // The outgoing value is captured rather than re-read below, because
+    // scrambleRef follows what is displayed and that is about to be nothing.
+    const outgoing = scrambleRef.current;
+    setPrevious(outgoing);
+    setScramble('');
     setLoading(true);
-    const s = await ensureDifferent(pending, scrambleRef.current, eventId);
+    const s = await ensureDifferent(pending, outgoing, eventId);
     if (id === reqId.current) {
-      setPrevious(scrambleRef.current);
       setScramble(s);
       setLoading(false);
     }
@@ -76,9 +91,26 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
   }, [eventId, fillQueue]);
 
   const refresh = useCallback(() => {
-    setPrevious(scrambleRef.current);
+    // Only when there is something to go back to. Between an advance() and its
+    // replacement landing there isn't, and recording that emptiness as the
+    // previous scramble would arm the back button with a blank.
+    if (scrambleRef.current) setPrevious(scrambleRef.current);
     return fetchFresh();
   }, [fetchFresh]);
+
+  // Puts a specific scramble back on screen and cancels anything in flight.
+  //
+  // For undoing an advance() whose reason for happening turned out to fail: the
+  // Timer advances as soon as an attempt ends, before the save it triggers has
+  // been acknowledged, so a save that then fails has to be able to put the
+  // scramble it used back. Distinct from goBack(), which is the user's own
+  // single-level undo and clears `previous` as a side effect.
+  const restore = useCallback((value: string) => {
+    reqId.current++;
+    setScramble(value);
+    setPrevious(null);
+    setLoading(false);
+  }, []);
 
   // Returns to the scramble active before the last advance()/refresh(). A
   // single level of undo, not a full history stack.
@@ -115,5 +147,5 @@ export function useScrambler(eventId: string, sessionId: string | null = null) {
     setLoading(false);
   }, []);
 
-  return { scramble, previous, loading, refresh, advance, goBack, setCustom };
+  return { scramble, previous, loading, refresh, advance, goBack, setCustom, restore };
 }

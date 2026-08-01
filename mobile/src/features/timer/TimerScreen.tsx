@@ -177,6 +177,16 @@ export default function TimerScreen({ navigation }: Props) {
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty, plusTwoCount: number) => {
       setSubmitting(true);
+      // The scramble this attempt used, captured before the display moves on.
+      const used = scr.scramble;
+      // Ahead of the save, not after it, and deliberately not awaited.
+      //
+      // The next scramble is already prefetched (useScrambler keeps a queue of
+      // three in flight), so the seconds between finishing a solve and seeing a
+      // new scramble were almost entirely the save's network round trip, spent
+      // with the solved scramble still on screen. Nothing about picking the next
+      // scramble depends on the save succeeding, so the two run together.
+      scr.advance();
       try {
         let sessionId = data.currentId;
         if (!sessionId) {
@@ -184,8 +194,7 @@ export default function TimerScreen({ navigation }: Props) {
           sessionId = created.id;
         }
         const prevSolves = data.solves;
-        const solve = await data.addSolve(timeMs, penalty, plusTwoCount, scr.scramble, sessionId);
-        scr.advance();
+        const solve = await data.addSolve(timeMs, penalty, plusTwoCount, used, sessionId);
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
           // The overlay owns its own dismissal timing, so no timeout here.
@@ -194,7 +203,11 @@ export default function TimerScreen({ navigation }: Props) {
         return true;
       } catch (e) {
         // A failed save must never silently advance the scramble. Same
-        // reasoning as the web Timer's error handling.
+        // reasoning as the web Timer's error handling: the scramble the attempt
+        // used goes back up, so the retry is against that one and not a new
+        // one. Advancing early doesn't change that guarantee, it just means the
+        // undo is explicit.
+        scr.restore(used);
         Alert.alert('Solve not saved', apiError(e, 'Failed to save solve, try again'));
         return false;
       } finally {
@@ -540,11 +553,17 @@ export default function TimerScreen({ navigation }: Props) {
                 minHeight is the legibility floor from scrambleImageHeight;
                 maxHeight stops a tall screen with a short scramble handing the
                 cube half the display. */}
-            {hasScrambleNet(scrambleEventId) && scr.scramble ? (
+            {hasScrambleNet(scrambleEventId) ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="View the scrambled cube full size"
                 onPress={() => setShowScrambleImage(true)}
+                // The box stays while the next scramble is being fetched, and
+                // only the drawing inside it comes and goes. Unmounting it
+                // instead collapsed a flex child of the column, so every solve
+                // ended with the timer and the scramble jumping up and then
+                // back down again as the replacement landed.
+                disabled={!scr.scramble}
                 onLayout={(e) => setImageBoxH(e.nativeEvent.layout.height)}
                 style={({ pressed }) => ({
                   flex: IMAGE_FLEX,
@@ -562,17 +581,19 @@ export default function TimerScreen({ navigation }: Props) {
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <ScrambleNet
-                  eventId={scrambleEventId}
-                  scramble={scr.scramble}
-                  // Full usable width as the width budget, so height is what
-                  // binds and the drawing is always as large as its box allows.
-                  size={width - space.md * 2}
-                  // The measured box, once known. No layout jump: the box's
-                  // height comes from the flex split, which does not depend on
-                  // the drawing inside it, so only the drawing changes size.
-                  maxHeight={imageBoxH > 0 ? imageBoxH : imageHeight}
-                />
+                {scr.scramble ? (
+                  <ScrambleNet
+                    eventId={scrambleEventId}
+                    scramble={scr.scramble}
+                    // Full usable width as the width budget, so height is what
+                    // binds and the drawing is always as large as its box allows.
+                    size={width - space.md * 2}
+                    // The measured box, once known. No layout jump: the box's
+                    // height comes from the flex split, which does not depend on
+                    // the drawing inside it, so only the drawing changes size.
+                    maxHeight={imageBoxH > 0 ? imageBoxH : imageHeight}
+                  />
+                ) : null}
               </Pressable>
             ) : null}
           </>
