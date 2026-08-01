@@ -406,13 +406,28 @@ export function Sheet({
   // down a long list still dismissable by drag. Finer slop because there is
   // nothing on it to tap, so there is no tap to protect.
   const handlePan = useMemo(() => makeResponder('handle', HANDLE_SLOP, () => true), [makeResponder]);
+  // The dimmed area above the sheet, which also drags it.
+  //
+  // Aiming at the grabber does not reliably hit it: it sits 12pt below the
+  // panel's edge and a fingertip covers rather more than that, so a good half of
+  // the attempts land above the sheet entirely. That used to be a tap, and a tap
+  // there dismisses, so "drag the handle" produced "the sheet vanished when I let
+  // go" often enough to read as the handle not working at all.
+  //
+  // Rather than defend a 5pt target, the miss is made harmless: a drag that
+  // starts anywhere above the sheet moves the sheet. A tap still dismisses,
+  // because this only claims on movement.
+  const backdropPan = useMemo(() => makeResponder('backdrop', PANEL_SLOP, () => true), [makeResponder]);
 
   if (!mounted) return null;
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: backdrop }]}>
+        <Animated.View
+          {...backdropPan.panHandlers}
+          style={[StyleSheet.absoluteFillObject, { opacity: backdrop }]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
