@@ -10,8 +10,25 @@ import { getAccessToken, getRefreshToken, saveTokens, clearTokens, type TokenPai
 // `X-Auth-Mode: bearer` tells the server to include the JWT pair in the
 // login/register/refresh response body (see server/src/routes/auth.ts). The
 // web client never sends it, which is why adding this changed nothing for web.
+// A request that cannot finish has to fail rather than hang.
+//
+// Axios defaults `timeout` to 0, meaning wait forever, and without this the app
+// could sit on its boot spinner indefinitely: useAuth.init() awaits /auth/me
+// before the beta gate will render anything, so a server that accepts the TCP
+// connection but never answers (a wedged dev server, a captive portal, a
+// dropped connection) left "Loading…" on screen with no error and no retry.
+// Actively refused connections were always fine; it is the silent-drop case
+// that hangs, which is also the one a phone hits most often.
+//
+// 15s is long enough for a slow mobile network to answer a cold request and
+// short enough that a stuck one becomes a visible failure rather than a
+// permanent spinner. getScramble sets its own, longer, per-request timeout
+// (see lib/scramble.ts) and is unaffected by this default.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: { 'X-Auth-Mode': 'bearer' },
 });
 
@@ -46,7 +63,10 @@ async function doRefresh(): Promise<TokenPair> {
       const { data } = await axios.post<{ tokens?: TokenPair }>(
         `${API_BASE_URL}/auth/refresh`,
         { refreshToken },
-        { headers: { 'X-Auth-Mode': 'bearer' } },
+        // Bare axios does not inherit the instance's timeout, so it has to be
+        // repeated here or a hung refresh would hang every request queued
+        // behind it.
+        { headers: { 'X-Auth-Mode': 'bearer' }, timeout: REQUEST_TIMEOUT_MS },
       );
       if (!data.tokens) throw new Error('Refresh response did not include tokens');
       await saveTokens(data.tokens);
