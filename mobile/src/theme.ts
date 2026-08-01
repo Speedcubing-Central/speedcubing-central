@@ -112,6 +112,21 @@ export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
 // visibly different dividers. Naming the rule is what stops that recurring.
 export const stroke = { hairline: StyleSheet.hairlineWidth, thin: 1 } as const;
 
+// ── Motion ────────────────────────────────────────────────────────────────
+//
+// Durations for the chrome that leaves as an attempt starts and returns when it
+// ends: the Timer's stats panel and the app's tab bar.
+//
+// Shared, because those two sit at the same edge of the screen and move at the
+// same moment. Given separate values they read as one thing glitching rather
+// than as two things agreeing, which is what happened when the panel cut
+// instantly and the bar took 190ms over it.
+//
+// Out is quicker than in on purpose. Leaving should get out of the way of a
+// solve that is already starting; returning lands while you are reading the
+// time you just got, and a snap there pulls the eye off it.
+export const motion = { immersiveOut: 150, immersiveIn: 190 } as const;
+
 // ── Type families, matching the web client ────────────────────────────────
 //
 // The web client loads Inter (sans) and JetBrains Mono (mono) from Google Fonts

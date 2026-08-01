@@ -37,7 +37,7 @@ import {
 import { PenaltyRow } from './PenaltyRow';
 import { StatRows } from './StatRows';
 import { SolvesList, SolvesColumnHeader } from './SolvesList';
-import { radius, space, stroke } from '../../theme';
+import { motion, radius, space, stroke } from '../../theme';
 
 // ── The Timer's stats panel ───────────────────────────────────────────────
 //
@@ -156,6 +156,9 @@ export function StatsPanel({
   const travel = Math.max(0, expandedH - collapsedH);
 
   const offset = useRef(new Animated.Value(0)).current;
+  // 1 while the panel is on screen, 0 while an attempt is live. Animated
+  // rather than switched so it leaves on the same clock as the tab bar.
+  const chrome = useRef(new Animated.Value(immersive ? 0 : 1)).current;
   const openRef = useRef(open);
   const travelRef = useRef(travel);
   const dragFrom = useRef(0);
@@ -203,19 +206,25 @@ export function StatsPanel({
   }, [travel, offset]);
 
   // An attempt is starting: get out of the way, and stay out.
+  //
+  // The fade and the slide run together, on the same clock as the tab bar (see
+  // `motion` in theme.ts). This used to cut the opacity instantly while sliding
+  // over 160ms, and the bar took a different duration again, so three things at
+  // the bottom of the screen each left differently.
+  //
+  // Only the fade is reversed on the way back. The slide is not: the panel
+  // should return collapsed, which is where it already is.
   useEffect(() => {
-    if (!immersive) {
-      forcedRef.current = false;
-      return;
-    }
-    forcedRef.current = true;
-    if (openRef.current) onOpenChange(false);
-    Animated.timing(offset, {
-      toValue: travelRef.current,
-      duration: 160,
-      useNativeDriver: true,
-    }).start();
-  }, [immersive, offset, onOpenChange]);
+    forcedRef.current = immersive;
+    if (immersive && openRef.current) onOpenChange(false);
+    const duration = immersive ? motion.immersiveOut : motion.immersiveIn;
+    Animated.parallel([
+      Animated.timing(chrome, { toValue: immersive ? 0 : 1, duration, useNativeDriver: true }),
+      ...(immersive
+        ? [Animated.timing(offset, { toValue: travelRef.current, duration, useNativeDriver: true })]
+        : []),
+    ]).start();
+  }, [immersive, offset, chrome, onOpenChange]);
 
   // Coming back from Sessions or Statistics should land on the timer, not on a
   // panel left open three screens ago.
@@ -353,7 +362,7 @@ export function StatsPanel({
         borderTopColor: p.border,
         borderTopLeftRadius: radius.lg,
         borderTopRightRadius: radius.lg,
-        opacity: immersive ? 0 : 1,
+        opacity: chrome,
         overflow: 'hidden',
       }}
     >

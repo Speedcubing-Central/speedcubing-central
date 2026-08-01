@@ -16,7 +16,7 @@ import { usePalette } from '../store/settings';
 import { useUi } from '../store/ui';
 import { Icon, type IconName } from '../components/Icon';
 import { useScreenScale } from '../lib/scale';
-import { font, space } from '../theme';
+import { font, motion, space } from '../theme';
 import type { RootTabParamList } from './RootNavigator';
 
 // The bottom bar, replacing the stock one from @react-navigation/bottom-tabs.
@@ -111,7 +111,7 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
   useEffect(() => {
     Animated.timing(hidden, {
       toValue: immersive ? 1 : 0,
-      duration: immersive ? 140 : 190,
+      duration: immersive ? motion.immersiveOut : motion.immersiveIn,
       useNativeDriver: true,
     }).start();
   }, [immersive, hidden]);
