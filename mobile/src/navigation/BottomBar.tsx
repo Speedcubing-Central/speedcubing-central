@@ -13,6 +13,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePalette } from '../store/settings';
+import { useUi } from '../store/ui';
 import { Icon, type IconName } from '../components/Icon';
 import { useScreenScale } from '../lib/scale';
 import { font, space } from '../theme';
@@ -85,6 +86,23 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
     setExpanded(false);
     go(name);
   };
+
+  // Gone entirely during an attempt, not just hidden: the point is that nothing
+  // but the digits is on screen and nothing but the digits is touchable at the
+  // moment your hands leave the phone for the cube. A bar that is merely
+  // invisible still swallows a press aimed at the timer above it.
+  //
+  // Unmounting also hands its height back to the screen, so the timer grows into
+  // it. That is the same trade the Timer's own chrome already makes when it
+  // unmounts, so the layout change reads as one event rather than two.
+  //
+  // The expanded More row is collapsed on the way in, so leaving the attempt
+  // cannot restore the bar with an overlay open over the timer.
+  useEffect(() => {
+    if (immersive && expanded) setExpanded(false);
+  }, [immersive, expanded]);
+
+  if (immersive) return null;
 
   const row = (
     <BarRow

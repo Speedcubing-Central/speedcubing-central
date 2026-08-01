@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { eventBadge, scrambleImageHeight, scrambleImageWidth } from '../../lib/s
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
+import { useUi } from '../../store/ui';
 import { Button, IconButton, Input, MONO_BOLD, Muted } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
@@ -332,6 +333,20 @@ export default function TimerScreen({ navigation }: Props) {
   // moment your hands are leaving the phone for the cube.
   const immersive =
     engine.phase === 'inspecting' || engine.phase === 'holding' || engine.phase === 'ready' || engine.phase === 'running';
+
+  // Tell the root navigator to pull its tab bar while an attempt is live. The
+  // Timer hides its own chrome directly, but the bar belongs to the navigator
+  // above it, and it is a custom bar, so React Navigation's own
+  // `tabBarStyle: { display: 'none' }` never reaches it.
+  //
+  // Cleared on unmount as well as on leaving the phase: navigating away
+  // mid-attempt would otherwise leave the app with no tab bar and no way to get
+  // it back.
+  const setImmersive = useUi((s) => s.setImmersive);
+  useEffect(() => {
+    setImmersive(immersive);
+  }, [immersive, setImmersive]);
+  useEffect(() => () => setImmersive(false), [setImmersive]);
 
   // One decision, read by the header and the panel, so they cannot disagree
   // about how much room there is.
