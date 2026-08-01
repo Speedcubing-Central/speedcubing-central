@@ -247,14 +247,14 @@ function MoreOverlay({
       setMounted(true);
       Animated.spring(anim, {
         toValue: 1,
-        useNativeDriver: true,
+        useNativeDriver: false,
         damping: 24,
         stiffness: 280,
         mass: 0.8,
       }).start();
       return;
     }
-    Animated.timing(anim, { toValue: 0, duration: 150, useNativeDriver: true }).start(({ finished }) => {
+    Animated.timing(anim, { toValue: 0, duration: 150, useNativeDriver: false }).start(({ finished }) => {
       if (finished) setMounted(false);
     });
     // `mounted` is deliberately not a dependency: it flips false at the end of
@@ -290,10 +290,10 @@ function MoreOverlay({
         onClose();
         return;
       }
-      Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 24, stiffness: 280 }).start();
+      Animated.spring(anim, { toValue: 1, useNativeDriver: false, damping: 24, stiffness: 280 }).start();
     },
     onPanResponderTerminate: () => {
-      Animated.spring(anim, { toValue: 1, useNativeDriver: true }).start();
+      Animated.spring(anim, { toValue: 1, useNativeDriver: false }).start();
     },
     onPanResponderTerminationRequest: () => false,
   });

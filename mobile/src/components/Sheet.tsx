@@ -94,6 +94,25 @@ const PANEL_SLOP = 6;
 // The handle has nothing on it to tap, so nothing to protect.
 const HANDLE_SLOP = 2;
 
+// TEMPORARY diagnostic. Traces the drag negotiation into the Metro log, which is
+// the only way to see what the responder system is doing on a device with no
+// debugger attached. Delete this and every `trace(` call with it.
+const DRAG_TRACE = true;
+
+// ── Why these animations are JS driven ─────────────────────────────────────
+//
+// Measured, not assumed. With the native driver the drag was claimed on the
+// first try, granted, and fed setValue all the way to a 440pt gesture, and the
+// panel did not move a pixel: the responder was never the problem, the transform
+// was. The Timer's stats panel does the same thing with the native driver and
+// works, and the one difference between them is that this lives inside a Modal,
+// which on the New Architecture hosts its children in a separate surface.
+//
+// A sheet drag is one transform on one view while nothing else is happening, so
+// the JS thread drives it comfortably. Every animation of these two values has
+// to agree: an Animated.Value that has once been driven natively throws if a JS
+// driven animation is later started on it.
+
 function travelFor(dy: number): number {
   return dy >= 0 ? dy : dy * UPWARD_RESISTANCE;
 }
@@ -184,12 +203,12 @@ export function Sheet({
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: false,
           damping: 26,
           stiffness: 260,
           mass: 0.9,
         }),
-        Animated.timing(backdrop, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(backdrop, { toValue: 1, duration: 180, useNativeDriver: false }),
       ]).start();
       return;
     }
@@ -198,8 +217,8 @@ export function Sheet({
     // lands here, so there's only one exit animation to reason about. A drag
     // release animates from wherever the finger left the panel, not from 0.
     Animated.parallel([
-      Animated.timing(translateY, { toValue: screenHeight, duration: 200, useNativeDriver: true }),
-      Animated.timing(backdrop, { toValue: 0, duration: 160, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: screenHeight, duration: 200, useNativeDriver: false }),
+      Animated.timing(backdrop, { toValue: 0, duration: 160, useNativeDriver: false }),
     ]).start(({ finished }) => {
       if (finished) setMounted(false);
     });
@@ -232,14 +251,24 @@ export function Sheet({
   // One set of drag handlers, given to two responders that differ only in when
   // they are willing to take the gesture.
   const makeResponder = useCallback(
-    (slop: number, claims: (g: PanResponderGestureState) => boolean) => {
+    (who: string, slop: number, claims: (g: PanResponderGestureState) => boolean) => {
       const wants = (g: PanResponderGestureState) =>
         Math.abs(g.dy) > slop && Math.abs(g.dy) > Math.abs(g.dx) && claims(g);
+      // TEMPORARY. Traces one gesture per touch into the Metro log so the drag
+      // can be diagnosed without a debugger attached. Remove with DRAG_TRACE.
+      let traced = false;
+      let moved = false;
+      const trace = (msg: string) => {
+        if (DRAG_TRACE) console.log(`[sheet:${who}] ${msg}`);
+      };
       return PanResponder.create({
         // Never on touch-down, so a tap anywhere inside the drag surface is
         // still a tap: these sheets are full of buttons.
         onStartShouldSetPanResponder: () => false,
-        onStartShouldSetPanResponderCapture: () => false,
+        onStartShouldSetPanResponderCapture: () => {
+          traced = false;
+          return false;
+        },
         // Claimed on the way DOWN the tree, not on the way back up.
         //
         // This is what the first version got wrong, and why dragging a sheet
@@ -255,25 +284,45 @@ export function Sheet({
         // Safe precisely because `claims` is narrow: for a scrolling sheet it is
         // true only at the top of the list and only downward, which is the one
         // gesture the list has no use for. Everything else still reaches it.
-        onMoveShouldSetPanResponderCapture: (_e, g) => wants(g),
+        onMoveShouldSetPanResponderCapture: (_e, g) => {
+          const ok = wants(g);
+          if (!traced && (ok || Math.abs(g.dy) > 14)) {
+            traced = true;
+            trace(
+              `capture dy=${g.dy.toFixed(0)} dx=${g.dx.toFixed(0)} scrollers=${scrollersRef.current} atTop=${atTopRef.current} claim=${ok}`,
+            );
+          }
+          return ok;
+        },
         onMoveShouldSetPanResponder: (_e, g) => wants(g),
+        onPanResponderGrant: () => {
+          moved = false;
+          trace('granted');
+        },
         onPanResponderMove: (_e, g) => {
-          translateY.setValue(travelFor(g.dy));
+          const to = travelFor(g.dy);
+          translateY.setValue(to);
+          if (!moved) {
+            moved = true;
+            trace(`first move -> translateY=${to.toFixed(0)}`);
+          }
         },
         onPanResponderRelease: (_e, g) => {
+          trace(`release dy=${g.dy.toFixed(0)} vy=${g.vy.toFixed(2)}`);
           if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
             onClose();
             return;
           }
           Animated.spring(translateY, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
             damping: 30,
             stiffness: 300,
           }).start();
         },
         onPanResponderTerminate: () => {
-          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+          trace('TERMINATED mid-drag');
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: false }).start();
         },
         // Never hand the gesture back mid-drag, so a list underneath the finger
         // cannot take over a drag that has already started moving the sheet.
@@ -288,6 +337,7 @@ export function Sheet({
   const panelPan = useMemo(
     () =>
       makeResponder(
+        'panel',
         PANEL_SLOP,
         (g) => scrollersRef.current === 0 || (atTopRef.current && g.dy > 0),
       ),
@@ -296,7 +346,7 @@ export function Sheet({
   // The handle. Always the sheet's, which is what makes a sheet scrolled halfway
   // down a long list still dismissable by drag. Finer slop because there is
   // nothing on it to tap, so there is no tap to protect.
-  const handlePan = useMemo(() => makeResponder(HANDLE_SLOP, () => true), [makeResponder]);
+  const handlePan = useMemo(() => makeResponder('handle', HANDLE_SLOP, () => true), [makeResponder]);
 
   if (!mounted) return null;
 

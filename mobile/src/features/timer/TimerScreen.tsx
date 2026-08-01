@@ -35,7 +35,8 @@ import { TimerMenuSheet, type TimerMenuItem } from './TimerMenuSheet';
 import { StatsPanel } from './StatsPanel';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
-import { useTimerEngine, formatInspectionDisplay } from './useTimerEngine';
+import { useTimerEngine } from './useTimerEngine';
+import { TimerDigits } from './TimerDigits';
 import type { TimerStackParamList } from '../../navigation/TimerStack';
 import { font, mix, radius, space } from '../../theme';
 
@@ -283,29 +284,18 @@ export default function TimerScreen({ navigation }: Props) {
       : formatTime(ms, penalty, solvePrecision, plusTwoCount);
   };
 
-  const display = useMemo(() => {
+  // What the digits show when nothing is ticking. The live value is owned by
+  // TimerDigits, which subscribes to the engine, so this deliberately does NOT
+  // depend on elapsed: that dependency is what re-rendered the whole screen 60
+  // times a second.
+  const restingText = useMemo(() => {
     const phase = engine.phase;
-    if (inspection && (phase === 'inspecting' || phase === 'holding' || phase === 'ready')) {
-      return formatInspectionDisplay(inspectionDirection, engine.inspectionElapsed, engine.inspectionRemaining);
-    }
-    if (phase === 'running') return runningStr(engine.elapsed);
-    if (phase === 'stopped') return formatTime(Math.round(engine.elapsed), 'NONE', solvePrecision);
+    if (phase === 'stopped') return formatTime(Math.round(engine.stoppedElapsed), 'NONE', solvePrecision);
     if ((phase === 'holding' || phase === 'ready') && !inspection) return formatTime(0, 'NONE', solvePrecision);
     if (newest) return fmt(newest.time, newest.penalty, newest.plusTwoCount);
     return formatTime(0, 'NONE', solvePrecision);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    engine.phase,
-    engine.elapsed,
-    engine.inspectionElapsed,
-    engine.inspectionRemaining,
-    newest,
-    inspection,
-    inspectionDirection,
-    timerUpdate,
-    solvePrecision,
-    isFmc,
-  ]);
+  }, [engine.phase, engine.stoppedElapsed, newest, inspection, solvePrecision, isFmc]);
 
   const digitColor = (() => {
     const phase = engine.phase;
@@ -665,25 +655,17 @@ export default function TimerScreen({ navigation }: Props) {
                 paddingBottom: timerContentLift,
               }}
             >
-              <Text
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                // The digits are sized from the tile they were given, so the OS
-                // text setting must not scale them again on top of that: the
-                // result would be a number too tall for the box it was measured
-                // into, which is the clipping this replaced.
-                allowFontScaling={false}
-                style={{
-                  color: digitColor,
-                  fontFamily: MONO_BOLD,
-                  fontSize: digitFontSize,
-                  lineHeight: digitFontSize * 1.1,
-                  fontVariant: ['tabular-nums'],
-                  paddingHorizontal: space.lg,
-                }}
-              >
-                {display}
-              </Text>
+              <TimerDigits
+                phase={engine.phase}
+                subscribe={engine.subscribe}
+                inspection={inspection}
+                inspectionDirection={inspectionDirection}
+                timerUpdate={timerUpdate}
+                solvePrecision={solvePrecision}
+                restingText={restingText}
+                color={digitColor}
+                fontSize={digitFontSize}
+              />
               <Muted
                 numberOfLines={1}
                 maxFontSizeMultiplier={maxFontMultiplier}
