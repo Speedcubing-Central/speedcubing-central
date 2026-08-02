@@ -96,6 +96,15 @@ const PANEL_COLLAPSED_MIN_H = 72;
 const PANEL_COLLAPSED_MAX_H = 180;
 // The timer is never fully covered, so it always reads as the screen you are on.
 const MIN_TIMER_VISIBLE_H = 120;
+// How far a finger has to travel before this is a drag and not a tap that
+// wobbled. It was 2, which is "any movement at all", and the strip is full of
+// things you tap: the penalty buttons, the three figures, the grabber. Claiming
+// the gesture cancels whatever press was under the finger, so a +2 that drifted
+// two pixels did nothing, and a control that ignores every third press reads as
+// a slow one. Sheet.tsx found the same thing and settled on 6 (about a
+// millimetre and a half); this is the same number for the same reason, and the
+// two bottom surfaces should not disagree about what counts as a drag anyway.
+const DRAG_SLOP = 6;
 // Shorter than Sheet's 110 because `travel` here is a fraction of a screen.
 const PANEL_TOGGLE_DISTANCE = 64;
 const PANEL_TOGGLE_VELOCITY = 0.7;
@@ -265,7 +274,7 @@ export function StatsPanel({
         // is what lets the whole strip be the drag surface.
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_e, g) =>
-          !forcedRef.current && Math.abs(g.dy) > 2 && Math.abs(g.dy) > Math.abs(g.dx),
+          !forcedRef.current && Math.abs(g.dy) > DRAG_SLOP && Math.abs(g.dy) > Math.abs(g.dx),
         onPanResponderGrant: () => {
           dragFrom.current = openRef.current ? 0 : travelRef.current;
           setEverOpened(true);

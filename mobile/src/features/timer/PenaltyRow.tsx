@@ -26,7 +26,12 @@ export function PenaltyRow({
   const isPlusTwo = penalty === 'NONE' && plusTwoCount > 0;
   const isDnf = penalty === 'DNF';
 
-  const optionStyle = (active: boolean, activeColor: string) => ({
+  // `pressed` is part of this, not decoration. These buttons live inside the
+  // stats panel's drag surface, so a press can still be taken from them by a
+  // gesture that turns out to be a drag, and a control that answers a touch
+  // only once the state behind it has changed reads as slow even when it is
+  // not. Dimming on contact is immediate and owes nothing to the round trip.
+  const optionStyle = (active: boolean, activeColor: string, pressed: boolean) => ({
     flex: 1,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -34,7 +39,8 @@ export function PenaltyRow({
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: active ? activeColor : p.border,
-    backgroundColor: active ? `${activeColor}26` : 'transparent',
+    backgroundColor: active ? `${activeColor}26` : pressed ? p.cardHover : 'transparent',
+    opacity: pressed ? 0.75 : 1,
   });
 
   return (
@@ -43,7 +49,7 @@ export function PenaltyRow({
         accessibilityRole="button"
         accessibilityState={{ selected: isOk }}
         onPress={() => onChange('NONE', 0)}
-        style={optionStyle(isOk, p.green)}
+        style={({ pressed }) => optionStyle(isOk, p.green, pressed)}
       >
         <Text style={{ color: isOk ? p.green : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>OK</Text>
       </Pressable>
@@ -65,12 +71,13 @@ export function PenaltyRow({
               accessibilityRole="button"
               accessibilityLabel="Remove one +2"
               onPress={() => onChange('NONE', plusTwoCount - 1)}
-              style={{
+              style={({ pressed }) => ({
                 paddingHorizontal: 12,
                 justifyContent: 'center',
                 borderRightWidth: StyleSheet.hairlineWidth,
                 borderRightColor: p.yellow,
-              }}
+                opacity: pressed ? 0.6 : 1,
+              })}
             >
               <Text style={{ color: p.yellow, fontFamily: font.sansBold, fontSize: 15 }}>−</Text>
             </Pressable>
@@ -81,13 +88,14 @@ export function PenaltyRow({
             accessibilityLabel={isPlusTwo ? `Add another +2, currently plus ${plusTwoCount * 2}` : 'Add +2'}
             onPress={() => onChange('NONE', Math.min(MAX_PLUS_TWO_COUNT, plusTwoCount + 1))}
             disabled={plusTwoCount >= MAX_PLUS_TWO_COUNT}
-            style={{
+            style={({ pressed }) => ({
               flex: 1,
               alignItems: 'center',
               justifyContent: 'center',
               paddingVertical: 11,
-              opacity: plusTwoCount >= MAX_PLUS_TWO_COUNT ? 0.5 : 1,
-            }}
+              backgroundColor: !isPlusTwo && pressed ? p.cardHover : 'transparent',
+              opacity: plusTwoCount >= MAX_PLUS_TWO_COUNT ? 0.5 : pressed ? 0.75 : 1,
+            })}
           >
             <Text style={{ color: isPlusTwo ? p.yellow : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>
               {isPlusTwo ? (plusTwoCount === 1 ? '+2' : `+${plusTwoCount * 2}`) : '+2'}
@@ -100,7 +108,7 @@ export function PenaltyRow({
         accessibilityRole="button"
         accessibilityState={{ selected: isDnf }}
         onPress={() => onChange('DNF', 0)}
-        style={optionStyle(isDnf, p.red)}
+        style={({ pressed }) => optionStyle(isDnf, p.red, pressed)}
       >
         <Text style={{ color: isDnf ? p.red : p.textMuted, fontFamily: font.sansBold, fontSize: 13 }}>DNF</Text>
       </Pressable>
