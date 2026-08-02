@@ -547,9 +547,27 @@ export default function TimerScreen({ navigation }: Props) {
         style={{ flex: 1, paddingHorizontal: space.md }}
         onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}
       >
-        {!immersive && (
-          <>
-            {/* ── Header ──
+        {/* ── The chrome, hidden during an attempt but NEVER unmounted ──
+            `display: 'none'` rather than a conditional render. Yoga drops a
+            display-none node from layout exactly as if it were not there, so
+            the timer still takes the whole column during an attempt, but the
+            subtree stays mounted and keeps its state.
+
+            That state is the point. Unmounting threw away ScrambleNet's
+            rendered image every attempt, so stopping the timer meant remounting
+            it with nothing to draw: a spinner where the cube goes, a cubing.js
+            render, an SVG parse of a few hundred elements, and two relayouts of
+            the column, all on the JS thread in the frame you stop. That is what
+            made the screen feel slow to come back, and it is also what starved
+            the tab bar's fade-in, which cannot begin until JS is free to start
+            it (hence the bar sometimes still being gone afterwards).
+
+            Kept mounted, coming out of an attempt costs a layout pass. The new
+            scramble's image still has to be drawn, but that happens off the
+            critical path with the previous drawing held in place meanwhile,
+            which is what ScrambleNet was already written to do. */}
+        <>
+          {/* ── Header ──
                 Event first, then the session it scopes: a session belongs to an
                 event (the Sessions screen is titled "3x3 Sessions"), so reading
                 left to right goes broad to narrow. The event keeps the filled
@@ -564,6 +582,7 @@ export default function TimerScreen({ navigation }: Props) {
                 returns about 76pt to the name. */}
             <View
               style={{
+                display: immersive ? 'none' : 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: rhythm.tight,
@@ -636,6 +655,7 @@ export default function TimerScreen({ navigation }: Props) {
                 numberOfLines={1}
                 maxFontSizeMultiplier={maxFontMultiplier}
                 style={{
+                  display: immersive ? 'none' : 'flex',
                   color: p.textMuted,
                   fontFamily: font.sans,
                   fontSize: sc(11),
@@ -647,7 +667,7 @@ export default function TimerScreen({ navigation }: Props) {
               </Text>
             )}
 
-            <View style={{ marginBottom: rhythm.group }}>
+            <View style={{ display: immersive ? 'none' : 'flex', marginBottom: rhythm.group }}>
               <ScrambleView
                 eventId={scrambleEventId}
                 scramble={scr.scramble}
@@ -691,6 +711,7 @@ export default function TimerScreen({ navigation }: Props) {
                 disabled={!scr.scramble}
                 onLayout={(e) => setImageBoxH(e.nativeEvent.layout.height)}
                 style={({ pressed }) => ({
+                  display: immersive ? 'none' : 'flex',
                   flex: IMAGE_FLEX,
                   minHeight: imageHeight,
                   maxHeight: Math.round(imageHeight * IMAGE_MAX_GROWTH),
@@ -724,8 +745,7 @@ export default function TimerScreen({ navigation }: Props) {
                 ) : null}
               </Pressable>
             ) : null}
-          </>
-        )}
+        </>
 
         {/* ── The timer surface ──
             No fill of its own, and no longer any shape of its own either. The

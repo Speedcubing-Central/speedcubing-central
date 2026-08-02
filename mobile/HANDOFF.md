@@ -227,6 +227,31 @@ a timer. As a sheet it costs the column nothing, the readout goes back to being
 the same size as the touch timer's digits, and the scramble stays visible above
 it while you type.
 
+### Hiding the Timer's chrome by unmounting it costs the frame you stop on
+
+The chrome goes away during an attempt, and the obvious way to write that is
+`{!immersive && <>…</>}`. It reads well and it is wrong, because everything it
+removes has to be rebuilt at the single worst moment in the app: the frame the
+timer stops.
+
+The expensive one is the cube. Unmounting throws away `ScrambleNet`'s rendered
+image, so coming back meant a spinner where the cube goes, a cubing.js render,
+an SVG parse of a few hundred elements, and two relayouts of the column, all on
+the JS thread, on top of the solve being recorded. It reads as the screen taking
+a beat to come back, and it starves anything else that needs JS in that moment,
+which is how the tab bar could still be missing after the timer had stopped: its
+fade-in cannot start until JS is free to start it.
+
+Use `display: 'none'` instead. Yoga drops a display-none node from layout
+exactly as if it were absent, so the timer still gets the whole column, but the
+subtree stays mounted and keeps its state. The cost of leaving an attempt is
+then a layout pass, and the new scramble's drawing arrives on its own time with
+the previous one held in place, which `ScrambleNet` was already written to do.
+
+The same reasoning is why the tab bar and the stats panel are never unmounted
+either. Anything that has to reappear the instant a solve ends should already
+exist.
+
 ### OS text scaling is not optional
 
 iOS Dynamic Type at max multiplies labels ~1.35x. Text whose size the layout

@@ -111,12 +111,27 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
   // would be the worst of the three, since the press it swallows is the one
   // stopping the solve.
   const hidden = useRef(new Animated.Value(immersive ? 1 : 0)).current;
+  // Whether the lid is in the tree at all. The fade is the nice version; this is
+  // the guarantee underneath it.
+  //
+  // An animation is started from JS, and the frame a solve ends is the busiest
+  // this app's JS thread ever is, so the start can be late. Late enough, and the
+  // bar is still sitting under an opaque lid well after the attempt is over,
+  // which is what "the bottom bar is still gone" was. Unmounting the lid on a
+  // timer means the bar comes back whether or not the animation ever ran: the
+  // fade only has to be pretty, not correct.
+  const [lidMounted, setLidMounted] = useState(immersive);
   useEffect(() => {
+    if (immersive) setLidMounted(true);
     Animated.timing(hidden, {
       toValue: immersive ? 1 : 0,
       duration: immersive ? motion.immersiveOut : motion.immersiveIn,
       useNativeDriver: true,
     }).start();
+    if (immersive) return;
+    // Slightly past the fade, so the two do not race to the same frame.
+    const done = setTimeout(() => setLidMounted(false), motion.immersiveIn + 80);
+    return () => clearTimeout(done);
   }, [immersive, hidden]);
 
   // The expanded More row is collapsed on the way in, so leaving the attempt
@@ -163,14 +178,16 @@ export function BottomBar({ state, navigation }: BottomTabBarProps) {
             property, which keeps this on the native driver: a colour
             interpolation would run on the JS thread, and that is the thread the
             running timer is already using sixty times a second. */}
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: timerTint ?? p.bg,
-            opacity: hidden,
-          }}
-        />
+        {lidMounted && (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: timerTint ?? p.bg,
+              opacity: hidden,
+            }}
+          />
+        )}
       </View>
       <MoreOverlay
         visible={expanded}
