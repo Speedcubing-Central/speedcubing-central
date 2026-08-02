@@ -14,6 +14,12 @@ import { guestStore, hydrateGuestStore } from './guestStore';
 // drift from what the web client sees. The guest branch (localStorage on web,
 // AsyncStorage here) is the only local-only path, and it only ever applies when
 // there's no account to sync to.
+
+// Distinguishes solves that exist locally but not yet on the server. A counter
+// rather than a random id so it is obvious in a log what it is, and module
+// scope so two mounts of this hook cannot mint the same one.
+let tempSolveSeq = 0;
+
 export function useTimerData(eventId: string) {
   const { user } = useAuth();
   const isGuest = !user;
@@ -142,6 +148,28 @@ export function useTimerData(eventId: string) {
     [isGuest],
   );
 
+  // ── Recording a solve does not wait for the server ────────────────────────
+  //
+  // It used to. The POST was awaited before the solve reached the list, and
+  // everything downstream waited with it: the stats panel kept showing the
+  // previous solve and the previous ao5, the PB overlay held back, the next
+  // scramble was not even requested yet, and `inputBlocked` stayed true, so the
+  // next attempt could not start. On a phone talking to production that is a
+  // few hundred milliseconds of the app looking like it missed the solve,
+  // every solve, at the exact moment a cuber is reaching to start the next one.
+  //
+  // So the solve is inserted locally the instant the timer stops, under a
+  // temporary id, and the request goes out behind it. Failure removes it again
+  // and says why. This is the same trade the edits below make, and the same one
+  // the guest path has always made (its "server" is synchronous local storage).
+  //
+  // The temporary id is the one real hazard: a penalty tapped on a solve whose
+  // create is still in flight would PATCH an id the server has never heard of.
+  // `pendingCreates` closes that. Any mutation resolves its id through it first,
+  // so an edit made in the gap waits for the create it belongs to and then goes
+  // out against the real id. Nothing in the UI has to know a solve is pending.
+  const pendingCreates = useRef(new Map<string, Promise<SolveDTO>>());
+
   const addSolve = useCallback(
     async (
       time: number,
@@ -153,21 +181,95 @@ export function useTimerData(eventId: string) {
     ) => {
       const id = sessionId ?? currentId;
       if (!id) return;
-      let solve: SolveDTO;
+
       if (isGuest) {
-        solve = guestStore.addSolve(id, time, penalty, plusTwoCount, scramble, solution);
-      } else {
-        solve = (
-          await api.post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, plusTwoCount, scramble, solution })
-        ).data;
+        const solve = guestStore.addSolve(id, time, penalty, plusTwoCount, scramble, solution);
+        setSolves((prev) => [solve, ...prev]);
+        setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, solveCount: (s.solveCount ?? 0) + 1 } : s)));
+        setLastSessionForEvent(eventId, id);
+        return solve;
       }
-      setSolves((prev) => [solve, ...prev]);
+
+      const tempId = `pending-${++tempSolveSeq}`;
+      const optimistic: SolveDTO = {
+        id: tempId,
+        sessionId: id,
+        userId: user?.id ?? '',
+        time,
+        penalty,
+        plusTwoCount: penalty === 'DNF' ? 0 : plusTwoCount,
+        scramble,
+        solution,
+        // The server stamps its own, and the reconcile below adopts it. This
+        // one only has to order correctly against the solves already in the
+        // list, which are all older.
+        createdAt: new Date().toISOString(),
+      };
+      setSolves((prev) => [optimistic, ...prev]);
       setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, solveCount: (s.solveCount ?? 0) + 1 } : s)));
       setLastSessionForEvent(eventId, id);
-      return solve;
+
+      const request = api
+        .post<SolveDTO>(`/sessions/${id}/solves`, { time, penalty, plusTwoCount, scramble, solution })
+        .then((r) => r.data);
+      // Kept for the life of the hook rather than deleted on settle. Deleting
+      // would open a race of its own: React applies the id swap below on its
+      // own schedule, so for a moment the UI can still be holding the temporary
+      // id after the entry is gone, and a tap in that moment would send it.
+      pendingCreates.current.set(tempId, request);
+
+      request.then(
+        (saved) => {
+          // Identity from the server, everything else from the local copy,
+          // because the local copy is the one that may have been edited while
+          // the request was in flight. Those edits are already on their way
+          // separately (see resolveSolveId), so taking the server's body here
+          // would show them being undone and then reappearing.
+          setSolves((prev) =>
+            prev.map((s) =>
+              s.id === tempId ? { ...s, id: saved.id, sessionId: saved.sessionId, createdAt: saved.createdAt } : s,
+            ),
+          );
+        },
+        (e) => {
+          setSolves((prev) => prev.filter((s) => s.id !== tempId));
+          setSessions((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, solveCount: Math.max(0, (s.solveCount ?? 0) - 1) } : s)),
+          );
+          Alert.alert('Solve not saved', apiError(e, 'Please try again.'));
+        },
+      );
+
+      return optimistic;
     },
-    [currentId, isGuest, eventId, setLastSessionForEvent],
+    [currentId, isGuest, eventId, setLastSessionForEvent, user?.id],
   );
+
+  // Resolves once this solve exists on the server, rejects if its create
+  // failed. Instant for a guest solve or one that was saved a while ago.
+  //
+  // For the one caller that has something of its own to undo when a save fails:
+  // the Timer moves to the next scramble the moment an attempt ends, and if the
+  // save then fails it wants that scramble back. Removing the solve and saying
+  // why is this hook's job and is already done by the time this rejects.
+  const whenSaved = useCallback(async (solveId: string): Promise<void> => {
+    const pending = pendingCreates.current.get(solveId);
+    if (pending) await pending;
+  }, []);
+
+  // The id the server knows this solve by, waiting for its create if that is
+  // still in flight. Null means the create failed, so the solve no longer
+  // exists to edit and the caller should quietly stop: the failure has already
+  // been reported once by addSolve, and saying it twice helps nobody.
+  const resolveSolveId = useCallback(async (solveId: string): Promise<string | null> => {
+    const pending = pendingCreates.current.get(solveId);
+    if (!pending) return solveId;
+    try {
+      return (await pending).id;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // ── Edits are applied locally first, then sent ────────────────────────────
   //
@@ -202,7 +304,7 @@ export function useTimerData(eventId: string) {
     async (
       solveId: string,
       apply: (s: SolveDTO) => SolveDTO,
-      send: () => Promise<unknown>,
+      send: (serverId: string) => Promise<unknown>,
       failure: string,
     ) => {
       if (!currentId) return;
@@ -215,7 +317,12 @@ export function useTimerData(eventId: string) {
         }),
       );
       try {
-        await send();
+        // The solve may exist only locally still, so `send` is given the id the
+        // server knows rather than the one the UI is holding. On a solve that
+        // was already saved this resolves in the same tick.
+        const serverId = await resolveSolveId(solveId);
+        if (serverId === null) return;
+        await send(serverId);
       } catch (e) {
         if (previous) {
           const restore = previous;
@@ -224,7 +331,7 @@ export function useTimerData(eventId: string) {
         report(e, failure);
       }
     },
-    [currentId, report],
+    [currentId, report, resolveSolveId],
   );
 
   const updatePenalty = useCallback(
@@ -234,9 +341,9 @@ export function useTimerData(eventId: string) {
       await patchSolve(
         solveId,
         (s) => ({ ...s, penalty, plusTwoCount: count }),
-        async () => {
+        async (serverId) => {
           if (isGuest) guestStore.updatePenalty(currentId, solveId, penalty, count);
-          else await api.patch(`/solves/${solveId}`, { penalty, plusTwoCount: count });
+          else await api.patch(`/solves/${serverId}`, { penalty, plusTwoCount: count });
         },
         'Penalty not saved',
       );
@@ -250,9 +357,9 @@ export function useTimerData(eventId: string) {
       await patchSolve(
         solveId,
         (s) => ({ ...s, time }),
-        async () => {
+        async (serverId) => {
           if (isGuest) guestStore.updateTime(currentId, solveId, time);
-          else await api.patch(`/solves/${solveId}`, { time });
+          else await api.patch(`/solves/${serverId}`, { time });
         },
         'Time not saved',
       );
@@ -267,9 +374,9 @@ export function useTimerData(eventId: string) {
       await patchSolve(
         solveId,
         (s) => ({ ...s, comment: trimmed }),
-        async () => {
+        async (serverId) => {
           if (isGuest) guestStore.updateComment(currentId, solveId, comment);
-          else await api.patch(`/solves/${solveId}`, { comment });
+          else await api.patch(`/solves/${serverId}`, { comment });
         },
         'Comment not saved',
       );
@@ -291,8 +398,15 @@ export function useTimerData(eventId: string) {
         return prev.filter((s) => s.id !== solveId);
       });
       try {
-        if (isGuest) guestStore.deleteSolve(currentId, solveId);
-        else await api.delete(`/solves/${solveId}`);
+        if (isGuest) {
+          guestStore.deleteSolve(currentId, solveId);
+        } else {
+          // Same reason as patchSolve: a solve deleted seconds after it was
+          // timed may still be on its way to the server.
+          const serverId = await resolveSolveId(solveId);
+          if (serverId === null) return;
+          await api.delete(`/solves/${serverId}`);
+        }
       } catch (e) {
         if (removed) {
           const { solve, index } = removed;
@@ -307,7 +421,7 @@ export function useTimerData(eventId: string) {
         report(e, 'Solve not deleted');
       }
     },
-    [currentId, isGuest, report],
+    [currentId, isGuest, report, resolveSolveId],
   );
 
   const deleteSolves = useCallback(
@@ -318,8 +432,16 @@ export function useTimerData(eventId: string) {
       // nothing happened" to solve, and reverting it would mean restoring
       // several positions in a newest-first list rather than one.
       try {
-        if (isGuest) guestStore.deleteSolvesBulk(currentId, solveIds);
-        else await api.post('/solves/bulk-delete', { ids: solveIds });
+        if (isGuest) {
+          guestStore.deleteSolvesBulk(currentId, solveIds);
+        } else {
+          // A selection can include a solve whose create is still in flight.
+          // Nulls are creates that failed, so there is nothing to delete.
+          const serverIds = (await Promise.all(solveIds.map(resolveSolveId))).filter(
+            (id): id is string => id !== null,
+          );
+          if (serverIds.length > 0) await api.post('/solves/bulk-delete', { ids: serverIds });
+        }
       } catch (e) {
         report(e, `${solveIds.length === 1 ? 'Solve' : 'Solves'} not deleted`);
         return;
@@ -332,7 +454,7 @@ export function useTimerData(eventId: string) {
         ),
       );
     },
-    [currentId, isGuest, report],
+    [currentId, isGuest, report, resolveSolveId],
   );
 
   // Re-reads the current session's solves from the server. Used when returning
@@ -346,7 +468,11 @@ export function useTimerData(eventId: string) {
       setSolves([...guestStore.listSolves(currentId)]);
     } else {
       const { data } = await api.get<SolveDTO[]>(`/sessions/${currentId}/solves`);
-      setSolves(data);
+      // Solves still on their way to the server are not in this response, and
+      // dropping them would make a solve that just finished vanish from the
+      // list until the next refresh. They keep their place at the front; the
+      // list is newest first and they are the newest things there are.
+      setSolves((prev) => [...prev.filter((s) => pendingCreates.current.has(s.id)), ...data]);
     }
   }, [loadSessions, currentId, isGuest]);
 
@@ -363,6 +489,7 @@ export function useTimerData(eventId: string) {
     renameSession,
     deleteSession,
     addSolve,
+    whenSaved,
     updatePenalty,
     updateTime,
     updateComment,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -38,7 +38,7 @@ import { StatsPanel } from './StatsPanel';
 import { KeypadSheet } from './Keypad';
 import { useTimerDataContext } from './TimerDataContext';
 import { useScrambler } from './useScrambler';
-import { useTimerEngine } from './useTimerEngine';
+import { useTimerEngine, type TimerPhase } from './useTimerEngine';
 import { TimerDigits } from './TimerDigits';
 import type { TimerStackParamList } from '../../navigation/TimerStack';
 import { font, mix, radius, space } from '../../theme';
@@ -204,6 +204,11 @@ export default function TimerScreen({ navigation }: Props) {
   // against stale stats.
   const inputBlocked = data.solvesLoading || scr.loading || submitting;
 
+  // The engine's phase, readable from callbacks that outlive the render they
+  // were made in. `engine` is created below (it takes onComplete, so it cannot
+  // come first), and this is only ever read at call time, never at definition.
+  const phaseRef = useRef<TimerPhase>('idle');
+
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty, plusTwoCount: number) => {
       setSubmitting(true);
@@ -224,19 +229,33 @@ export default function TimerScreen({ navigation }: Props) {
           sessionId = created.id;
         }
         const prevSolves = data.solves;
+        // Lands in the list immediately and goes to the server behind us, so
+        // everything below happens at the speed of the phone rather than of the
+        // network. See useTimerData's note on recording a solve.
         const solve = await data.addSolve(timeMs, penalty, plusTwoCount, used, sessionId);
         if (solve && celebratePBs) {
           const hits = detectNewPBs(prevSolves, solve);
           // The overlay owns its own dismissal timing, so no timeout here.
           if (hits.length > 0) setPbHits(hits);
         }
+        if (solve) {
+          // A failed save must never silently advance the scramble: the one the
+          // attempt used goes back up, so the retry is against that and not a
+          // new one. The hook has already removed the solve and reported the
+          // failure by the time this rejects; the scramble is what is ours.
+          //
+          // Unless another attempt is under way, which is possible now that the
+          // save resolves in its own time. Nothing may change the scramble out
+          // from under a live attempt, so a late failure gives up its undo
+          // rather than take that risk.
+          data.whenSaved(solve.id).catch(() => {
+            if (phaseRef.current === 'idle' || phaseRef.current === 'stopped') scr.restore(used);
+          });
+        }
         return true;
       } catch (e) {
-        // A failed save must never silently advance the scramble. Same
-        // reasoning as the web Timer's error handling: the scramble the attempt
-        // used goes back up, so the retry is against that one and not a new
-        // one. Advancing early doesn't change that guarantee, it just means the
-        // undo is explicit.
+        // Only the session create reaches here now, and it is the one failure
+        // that means there is nowhere to put the solve at all.
         scr.restore(used);
         Alert.alert('Solve not saved', apiError(e, 'Failed to save solve, try again'));
         return false;
@@ -279,6 +298,7 @@ export default function TimerScreen({ navigation }: Props) {
     enabled: engineEnabled,
     onComplete,
   });
+  phaseRef.current = engine.phase;
 
   // What a digit means in this event. FMC results are stored as a move count,
   // not a duration (`formatMoveCount` prints solve.time verbatim), so its digits

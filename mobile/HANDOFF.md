@@ -99,6 +99,29 @@ Web Workers, and scrambles already come from the server.
 A hand-written NxN facelet simulator (`lib/cubeNet.ts`) preceded this and was
 deleted. cubing.js covers a strict superset.
 
+### Recording a solve does not wait for the server
+
+The solve is inserted into the list the instant the timer stops, under a
+temporary id, and the POST goes out behind it. Everything downstream used to
+wait on that round trip: the stats panel kept showing the previous solve and the
+previous ao5, the PB overlay held back, and `inputBlocked` stayed true so the
+next attempt could not start. On a phone talking to production that is a few
+hundred milliseconds of the app looking like it missed the solve, at exactly the
+moment a cuber reaches to start the next one.
+
+Three things make that safe, and all three are load bearing:
+
+- **`pendingCreates`** maps the temporary id to the in-flight request, and every
+  mutation resolves its id through it before sending. A +2 tapped on a solve
+  whose create has not landed waits for that create and then patches the real
+  id. Entries are never deleted, because React applies the id swap on its own
+  schedule and the UI can still be holding the temporary id for a moment after.
+- **A failed create removes the solve again** and says why, and `whenSaved` lets
+  the Timer put back the scramble that attempt used, but only if no new attempt
+  has started in the meantime.
+- **`reload` keeps pending solves**, since they are not in the server's response
+  yet and dropping them would make a just-finished solve disappear.
+
 ### WCA Regulation 9f rounding
 
 Singles are **truncated** to the hundredth; averages and means are **rounded**,
