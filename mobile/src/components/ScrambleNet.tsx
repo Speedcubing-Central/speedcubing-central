@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { SvgXml } from 'react-native-svg';
+import { SvgAst } from 'react-native-svg';
 import { usePalette } from '../store/settings';
-import { hasScrambleImage, renderScrambleImage, type ScrambleImage } from '../lib/cubingSvg';
+import { hasScrambleImage } from '../lib/cubingSvg';
+import { prepareScrambleDrawing, preparedScrambleDrawing, type ScrambleDrawing } from '../lib/scrambleDrawing';
 
 // The scramble image: the state the scramble produces, so you can check your
 // cube matches before starting.
@@ -12,7 +13,18 @@ import { hasScrambleImage, renderScrambleImage, type ScrambleImage } from '../li
 // This used to be a hand-written NxN facelet net, which meant every side event
 // (megaminx, pyraminx, skewb, square-1, clock, FTO, kilominx, redi) had no image
 // at all; all of them are covered now.
-export function ScrambleNet({
+//
+// Preparing a drawing (rendering the SVG and parsing it into elements) is the
+// expensive part and does not happen here: lib/scrambleDrawing does it ahead of
+// time for the scramble the Timer is about to show. This component asks for the
+// prepared answer during render, so a prewarmed scramble appears in the same
+// commit as the text it belongs to, with no spinner and no intermediate frame
+// showing the previous cube.
+//
+// Memoised because it is a child of the Timer screen, which re-renders several
+// times in the moment a solve is recorded. Every one of those renders used to
+// rebuild a few hundred SVG elements for a picture that had not changed.
+export const ScrambleNet = memo(function ScrambleNet({
   eventId,
   scramble,
   size,
@@ -31,39 +43,49 @@ export function ScrambleNet({
   maxHeight?: number;
 }) {
   const p = usePalette();
-  const [image, setImage] = useState<ScrambleImage | null>(null);
+
+  // undefined means "not prepared yet", which is why this is not simply falsy
+  // tested: null is the settled answer for an event with no artwork.
+  const prepared = preparedScrambleDrawing(eventId, scramble);
+
+  // The last drawing that was actually on screen. Its only job is to stay up
+  // while an unprepared scramble is being prepared, rather than blanking the
+  // tile: between solves the puzzle is already loaded and the replacement lands
+  // in a frame or two, so blanking would flash an empty box for no reason. It
+  // is dropped when the *event* changes, since a different puzzle has different
+  // proportions and the old cube at the new one's size is visibly wrong.
+  const [held, setHeld] = useState<{ event: string; drawing: ScrambleDrawing | null }>(() => ({
+    event: eventId,
+    drawing: prepared ?? null,
+  }));
+
+  const shown = prepared !== undefined ? prepared : held.event === eventId ? held.drawing : null;
 
   useEffect(() => {
-    // Loading a puzzle's artwork is async (it pulls a dynamic chunk the first
-    // time). `cancelled` keeps a slow first load from painting over a newer
-    // scramble that resolved ahead of it.
-    let cancelled = false;
-    if (!scramble || !hasScrambleImage(eventId)) {
-      setImage(null);
+    if (prepared !== undefined) {
+      // Already on screen; just record it as what to fall back to next time.
+      setHeld((prev) =>
+        prev.drawing === prepared && prev.event === eventId ? prev : { event: eventId, drawing: prepared },
+      );
       return;
     }
-    renderScrambleImage(eventId, scramble).then((img) => {
-      if (!cancelled) setImage(img);
+    // A miss: the scramble arrived faster than its prewarm, or there was never
+    // one (a custom scramble, or going back to the previous one). `cancelled`
+    // keeps a slow preparation from painting over a newer scramble that got
+    // ahead of it.
+    let cancelled = false;
+    prepareScrambleDrawing(eventId, scramble).then((drawing) => {
+      if (!cancelled) setHeld({ event: eventId, drawing });
     });
     return () => {
       cancelled = true;
     };
-    // Deliberately not clearing the previous image first. Between solves the
-    // puzzle is already loaded and the next drawing arrives in a frame or two,
-    // so blanking would only flash the tile empty and jog the layout; holding
-    // the old one until the new one is ready is steadier. It IS cleared when the
-    // event changes, since a different puzzle has a different aspect ratio and
-    // showing the old cube at the new one's size would be visibly wrong.
-  }, [eventId, scramble]);
-
-  useEffect(() => {
-    setImage(null);
-  }, [eventId]);
+  }, [prepared, eventId, scramble]);
 
   // Before the first drawing for a puzzle arrives, show a spinner in the space
   // the image will occupy. The caller fixes the tile's width, so nothing moves
   // when the drawing lands; this just avoids an empty tile in the meantime.
-  if (!image) {
+  if (!shown || !shown.ast) {
     return (
       <View style={{ width: size, height: maxHeight ?? size, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="small" color={p.textMuted} />
@@ -73,14 +95,14 @@ export function ScrambleNet({
 
   // Fit inside both budgets, preserving the drawing's own aspect ratio.
   let width = size;
-  let height = width / image.aspect;
+  let height = width / shown.aspect;
   if (maxHeight !== undefined && height > maxHeight) {
     height = maxHeight;
-    width = height * image.aspect;
+    width = height * shown.aspect;
   }
 
-  return <SvgXml xml={image.xml} width={width} height={height} />;
-}
+  return <SvgAst ast={shown.ast} override={{ width, height }} />;
+});
 
 /** Whether an image can be drawn at all, so callers can lay out without a hole. */
 export function hasScrambleNet(eventId: string): boolean {

@@ -54,22 +54,40 @@ const LIGHT: Omit<Palette, 'accent'> = {
   red: '#dc2626',
 };
 
+// The last palette built, so repeat calls with the same three inputs hand back
+// the same object.
+//
+// `usePalette` is called by roughly every component in the app, on every render,
+// and this used to allocate a fresh palette each time. That is cheap in itself.
+// What it cost was identity: a `p` that is never twice the same object makes any
+// useMemo, useEffect or memo() that depends on it re-run unconditionally, which
+// is the opposite of what those are for. One entry is enough, because the inputs
+// only change when the user edits their theme.
+let lastPalette: { key: string; palette: Palette } | null = null;
+
 export function getPalette(themeId: string, theme: 'dark' | 'light', accentOverride?: string): Palette {
+  const key = `${themeId}|${theme}|${accentOverride ?? ''}`;
+  if (lastPalette?.key === key) return lastPalette.palette;
+
   const preset = THEME_PRESETS.find((p) => p.id === themeId) ?? THEME_PRESETS[0];
   const accent = accentOverride || preset.accent;
-  if (theme === 'light') return { ...LIGHT, accent };
-  return {
-    accent,
-    bg: preset.bg,
-    card: preset.card,
-    cardHover: preset.cardHover,
-    border: preset.border,
-    text: '#f3f4f6',
-    textMuted: '#8b91a3',
-    green: '#22c55e',
-    yellow: '#facc15',
-    red: '#ef4444',
-  };
+  const palette: Palette =
+    theme === 'light'
+      ? { ...LIGHT, accent }
+      : {
+          accent,
+          bg: preset.bg,
+          card: preset.card,
+          cardHover: preset.cardHover,
+          border: preset.border,
+          text: '#f3f4f6',
+          textMuted: '#8b91a3',
+          green: '#22c55e',
+          yellow: '#facc15',
+          red: '#ef4444',
+        };
+  lastPalette = { key, palette };
+  return palette;
 }
 
 // Composites `overlay` over `base` at `alpha` and returns an opaque colour.

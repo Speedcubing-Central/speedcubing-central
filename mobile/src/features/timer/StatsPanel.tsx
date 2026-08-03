@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Alert,
@@ -128,7 +128,14 @@ export interface StatsPanelProps {
   onOpenSolvesScreen: () => void;
 }
 
-export function StatsPanel({
+// Memoised, and the Timer keeps every callback prop stable so that it takes.
+// This is the heaviest child on the screen: once it has been opened it owns the
+// full statistics table and a FlatList of the whole session. A solve pushes
+// about eight state changes through the Timer (the phase, the submit flag, the
+// scramble, the solves list, two measured heights, a PB), and without this each
+// of them rebuilt all of that, in the moment the screen is meant to be coming
+// back after an attempt.
+export const StatsPanel = memo(function StatsPanel({
   solves,
   event,
   columnH,
@@ -570,7 +577,7 @@ export function StatsPanel({
     const view = makeAverageView(solves, 0, size);
     if (view) onOpenAverage(view);
   }
-}
+});
 
 // One figure in the collapsed strip. Label above value, because a label beside a
 // mono time needs about 100pt and three of those do not fit once the scramble

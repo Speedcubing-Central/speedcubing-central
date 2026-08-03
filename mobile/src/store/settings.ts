@@ -92,8 +92,18 @@ export const useSettings = create<SettingsState>()(
         set({ themeId, accentColor: preset.accent });
       },
       setCurrentEvent: (currentEvent) => set({ currentEvent }),
+      // Returning the state unchanged is a real no-op in zustand (it compares
+      // with Object.is before notifying), and this is called on every solve
+      // with, almost always, the session it already holds. Writing anyway cost
+      // a notification to every subscriber of this store, which includes the
+      // Timer screen, plus a JSON serialise and an AsyncStorage write of the
+      // whole settings blob, in the frame the timer stops.
       setLastSessionForEvent: (eventId, sessionId) =>
-        set((s) => ({ lastSessionByEvent: { ...s.lastSessionByEvent, [eventId]: sessionId } })),
+        set((s) =>
+          s.lastSessionByEvent[eventId] === sessionId
+            ? s
+            : { lastSessionByEvent: { ...s.lastSessionByEvent, [eventId]: sessionId } },
+        ),
       set: (patch) => set(patch),
     }),
     {

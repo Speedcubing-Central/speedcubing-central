@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { usePalette, useSettings } from '../store/settings';
 import { carrotScramble, formatScramble, isSquareOne, sq1Pairs } from '../lib/scramble';
@@ -24,7 +25,12 @@ import { useScreenScale } from '../lib/scale';
 // cube scrambled right" as a statistic and gave it a 50pt box, 2.4pt per
 // sticker on a 7x7. It belongs in the scramble zone, next to what it is an
 // image of. What it cannot be is a child of *this* view, which is auto-height.
-export function ScrambleView({
+//
+// Memoised: the Timer re-renders about eight times in the moment a solve is
+// recorded, and re-wrapping a 100-move scramble on every one of them is work
+// for a string that changed at most once. Its callback props are useCallback'd
+// by the Timer for the same reason.
+export const ScrambleView = memo(function ScrambleView({
   eventId,
   scramble,
   loading,
@@ -185,4 +191,4 @@ export function ScrambleView({
 
     </View>
   );
-}
+});

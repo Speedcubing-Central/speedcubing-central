@@ -19,6 +19,7 @@ import {
 import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { eventBadge, scrambleImageHeight, scrambleImageWidth } from '../../lib/scramble';
+import { prewarmScrambleDrawing } from '../../lib/scrambleDrawing';
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
@@ -157,7 +158,11 @@ export default function TimerScreen({ navigation }: Props) {
   // throughout. Same rule as the web Timer.
   const currentSession = data.sessions.find((s) => s.id === data.currentId);
   const scrambleEventId = currentSession?.subset || event;
-  const scr = useScrambler(scrambleEventId, data.currentId);
+  // Builds the scramble image for whatever is next in the prefetch queue, which
+  // is known well before the current solve ends. Without this, rendering and
+  // parsing a few hundred SVG elements landed in the frame the timer stopped,
+  // alongside recording the solve and bringing the chrome back.
+  const scr = useScrambler(scrambleEventId, data.currentId, prewarmScrambleDrawing);
 
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -503,6 +508,25 @@ export default function TimerScreen({ navigation }: Props) {
     }
   })();
 
+  // ── Stable identities for the two heavy children ──
+  //
+  // ScrambleView and StatsPanel are memoised, and an arrow function created in
+  // this render defeats that completely. It matters here more than usual: a
+  // single solve pushes about eight state changes through this component (the
+  // phase, the submit flag, the scramble, the solves list, two measured heights,
+  // a PB), and each one used to rebuild both subtrees, one of which owns the
+  // solves list.
+  const openScrambleImage = useCallback(() => setShowScrambleImage(true), []);
+  const openEditScramble = useCallback(() => setShowEditScramble(true), []);
+  const refreshScramble = useCallback(() => {
+    void scr.refresh();
+  }, [scr]);
+  const copyScramble = useCallback(() => {
+    void Clipboard.setStringAsync(normalizeScramble(scr.scramble));
+  }, [scr.scramble]);
+  const openStatsScreen = useCallback(() => navigation.navigate('Stats'), [navigation]);
+  const openSolvesScreen = useCallback(() => navigation.navigate('Solves'), [navigation]);
+
   const sessionLabel = currentSession
     ? `${currentSession.name}${currentSession.subset ? ` (${SUBSET_NAME[currentSession.subset] ?? currentSession.subset})` : ''}`
     : 'No session';
@@ -672,12 +696,12 @@ export default function TimerScreen({ navigation }: Props) {
                 eventId={scrambleEventId}
                 scramble={scr.scramble}
                 loading={scr.loading}
-                onRefresh={() => scr.refresh()}
+                onRefresh={refreshScramble}
                 onGoBack={scr.goBack}
                 canGoBack={scr.previous !== null && !scr.loading && (engine.phase === 'idle' || engine.phase === 'stopped')}
-                onEdit={() => setShowEditScramble(true)}
-                onCopy={() => Clipboard.setStringAsync(normalizeScramble(scr.scramble))}
-                onOpenImage={() => setShowScrambleImage(true)}
+                onEdit={openEditScramble}
+                onCopy={copyScramble}
+                onOpenImage={openScrambleImage}
               />
             </View>
 
@@ -702,7 +726,7 @@ export default function TimerScreen({ navigation }: Props) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="View the scrambled cube full size"
-                onPress={() => setShowScrambleImage(true)}
+                onPress={openScrambleImage}
                 // The box stays while the next scramble is being fetched, and
                 // only the drawing inside it comes and goes. Unmounting it
                 // instead collapsed a flex child of the column, so every solve
@@ -922,8 +946,8 @@ export default function TimerScreen({ navigation }: Props) {
         onDeleteSolves={data.deleteSolves}
         onOpenAverage={setAvgView}
         onOpenSolve={setDetailIndex}
-        onOpenStatsScreen={() => navigation.navigate('Stats')}
-        onOpenSolvesScreen={() => navigation.navigate('Solves')}
+        onOpenStatsScreen={openStatsScreen}
+        onOpenSolvesScreen={openSolvesScreen}
       />
 
       {/* Both sheets stay mounted and are driven by `visible`, so they can play
