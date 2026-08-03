@@ -217,7 +217,12 @@ There is no admin account or admin role — see Roles below.
   (a sidebar needs a landing slot, a tab bar doesn't), and the desktop Timer's
   permanently-visible stats table and solves list became pushed sub-screens
   (`navigation/TimerStack.tsx`), leaving only the last solve and current Ao5 on screen
-  while solving. Beyond the Timer, tabs are stubs.
+  while solving. **Battle Mode** is built to the same shape and is at feature
+  parity with the web page (lobby, public rooms, private rooms with passwords,
+  algorithm-set rooms, live rounds with inspection and penalties, chat, host
+  event changes, round results): the room's column is the Timer's column, and
+  the desktop page's right-hand stack of stats/leaderboard/chat/history is a
+  draggable panel over it. Beyond those two, tabs are stubs.
   - **Auth is bearer-token, not cookie.** A native client has no cookie jar, so it
     sends `X-Auth-Mode: bearer` to `/api/auth/{login,register,refresh}` and gets the
     JWT pair in the response body, stores it in `expo-secure-store` (which is

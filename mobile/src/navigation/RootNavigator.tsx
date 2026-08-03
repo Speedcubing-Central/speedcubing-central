@@ -2,8 +2,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BottomBar } from './BottomBar';
 import { TimerStack } from './TimerStack';
 import { SettingsStack } from './SettingsStack';
+import { BattleStack } from './BattleStack';
 import AlgorithmsScreen from '../features/algorithms/AlgorithmsScreen';
-import BattleScreen from '../features/battle/BattleScreen';
 import RelaysScreen from '../features/relays/RelaysScreen';
 import CalculatorScreen from '../features/calculator/CalculatorScreen';
 import ReconstructionScreen from '../features/reconstruction/ReconstructionScreen';
@@ -56,7 +56,7 @@ export function RootNavigator() {
       <Tab.Screen name="Calculator" component={CalculatorScreen} />
       <Tab.Screen name="Algorithms" component={AlgorithmsScreen} />
       <Tab.Screen name="Settings" component={SettingsStack} />
-      <Tab.Screen name="Battle" component={BattleScreen} />
+      <Tab.Screen name="Battle" component={BattleStack} />
       <Tab.Screen name="Relays" component={RelaysScreen} />
       <Tab.Screen name="Reconstruction" component={ReconstructionScreen} />
       <Tab.Screen name="Results" component={ResultsScreen} />

@@ -17,7 +17,8 @@ client, so solves, sessions and Battle rooms are shared across platforms.
 
 **Complete:** auth (email/password + native WCA), the Timer tab and its
 sub-screens (Statistics, Solves, Sessions, Timer settings), scramble images for
-every event, settings, beta gating.
+every event, settings, beta gating, and **Battle Mode** (lobby and live rooms,
+at feature parity with the web page).
 
 The Timer's bottom strip is a **draggable stats panel** (`features/timer/
 StatsPanel.tsx`), not a footer. Collapsed it shows the last solve with its
@@ -26,9 +27,17 @@ table and the whole solves list without leaving the Timer. The pushed Statistics
 and Solves screens remain, for browsing. Read section 6 before redesigning it and
 section 3 before changing how it is positioned.
 
+Battle Mode has the same shape, deliberately (`navigation/BattleStack.tsx`, a
+lobby and a room). The room's column *is* the Timer's column, and its right-hand
+desktop stack (your stats, the leaderboard, chat, your round history) is a
+draggable panel, `features/battle/BattlePanel.tsx`. Two things there were forced
+by measurement rather than chosen, and section 3 has both: the cube is dropped
+while the penalty controls are up, and the panel's figures row is dropped at the
+tightest density.
+
 **Stubs** (render a "not in this build" panel, `components/StubScreen.tsx`):
-Calculator, Reconstruction, Results. Algorithms, Battle and Relays are partial:
-they render real state but no gameplay.
+Calculator, Reconstruction, Results. Algorithms and Relays are partial: they
+render real state but no gameplay.
 
 Navigation is a bottom tab bar with **no Home tab** (`navigation/RootNavigator.tsx`).
 A sidebar needs a landing slot; a tab bar doesn't. Timer is the initial route.
@@ -292,6 +301,33 @@ The same reasoning is why the tab bar and the stats panel are never unmounted
 either. Anything that has to reappear the instant a solve ends should already
 exist.
 
+### A Battle room cannot show the cube and the penalty controls at once
+
+Not a preference. Measured in Yoga across five devices, seven events and three
+text sizes: with both present the room column overflowed on **every device
+modelled** for the deep-scramble events, and on an iPhone SE even for a 3x3. The
+screen does not scroll, so overflow does not mean cramped, it means the penalty
+buttons are off the bottom of the display and the round cannot be submitted at
+all. That exact failure reached a tester on the Timer once already.
+
+So the cube goes `display: 'none'` the moment a solve is stopped (`solveOver` in
+`BattleRoomScreen`). It is the right thing to lose anyway: once you have stopped
+the timer the cube answers a question you are done with.
+
+Two smaller consequences of the same squeeze, both also measured:
+
+- The room sizes its cube **one density tier tighter** than the column reports.
+  The room carries a header the Timer has no equivalent of and must keep space
+  for controls that appear mid-round. Without it an SE on a square-1 scramble
+  overflowed by 10pt, square-1 being the one puzzle whose artwork is taller than
+  it is wide.
+- `BattlePanel` drops its three-figure row at `minimal` density and moves the
+  points into the row above, so the strip is one row instead of two.
+
+Recreate the harness (`scratchpad`, same approach as the Timer's) before
+changing this column. It is the only thing between an edit here and a tester who
+cannot submit a time.
+
 ### OS text scaling is not optional
 
 iOS Dynamic Type at max multiplies labels ~1.35x. Text whose size the layout
@@ -462,8 +498,8 @@ order rather than shrinking everything until something clips.
   into one overflow returned about 76pt to the name, and it now takes the
   header's spare width and truncates deliberately at one line. Only worth
   revisiting if a tester complains again.
-- **Stub tabs**: Calculator, Reconstruction, Results. Battle, Algorithms and
-  Relays need gameplay.
+- **Stub tabs**: Calculator, Reconstruction, Results. Algorithms and Relays
+  need gameplay.
 - **Alg diagrams**: investigated, not built. `pg().get3d()` returns cubing.js's
   3D geometry headlessly (stickers with `coords`/`color`/`orbit`/`ord`/`ori`),
   and `stickeringMask()` works too, so the web `PG3D` diagrams could be
