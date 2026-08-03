@@ -122,6 +122,39 @@ Three things make that safe, and all three are load bearing:
 - **`reload` keeps pending solves**, since they are not in the server's response
   yet and dropping them would make a just-finished solve disappear.
 
+### The next scramble's image is built before the solve ends
+
+Turning a scramble into something react-native-svg will draw is two steps, and
+both are plain JS on the thread running the timer: `renderScrambleImage`
+(0.35ms for a 3x3, 1.05ms for a 7x7, measured) and then parsing the result,
+which is the expensive half because it yields 81 elements for a 3x3 and 313 for
+a 7x7, each becoming a native view.
+
+None of that has to happen when the timer stops, and it used to. `useScrambler`
+now announces whatever reaches the front of its prefetch queue, seconds ahead of
+time, and `lib/scrambleDrawing` prepares it after interactions, in the stretch
+where the solver is reading the time they just got. `ScrambleNet` reads the
+prepared answer **during render**, not in an effect, so the new cube arrives in
+the same commit as the new text rather than a frame after it.
+
+Two things here are easy to undo by accident:
+
+- **`advance()` swaps straight to a prefetched scramble.** It used to clear the
+  display first and fetch afterwards, which tore the cube down and rebuilt it on
+  every solve. The clearing exists for a real reason, kept in the cold path: a
+  scramble left up after a solve reads as the next one, people apply it, and
+  they have to undo a scramble they should never have seen. Replacing it with
+  the genuine next scramble serves that better than a placeholder does. Do not
+  "simplify" the two paths back into one.
+- **`preparedScrambleDrawing` is a pure lookup** and must stay one, because it is
+  called during render. It deliberately does not touch the LRU on the way past;
+  the entry on screen is always the second newest, so it is never near eviction.
+
+`ScrambleView` and `StatsPanel` are memoised and the Timer keeps their callback
+props stable with `useCallback`. That is not decoration: one solve pushes about
+eight state changes through `TimerScreen`, and an arrow function created in
+render defeats the memo completely.
+
 ### WCA Regulation 9f rounding
 
 Singles are **truncated** to the hundredth; averages and means are **rounded**,
@@ -245,8 +278,15 @@ fade-in cannot start until JS is free to start it.
 Use `display: 'none'` instead. Yoga drops a display-none node from layout
 exactly as if it were absent, so the timer still gets the whole column, but the
 subtree stays mounted and keeps its state. The cost of leaving an attempt is
-then a layout pass, and the new scramble's drawing arrives on its own time with
-the previous one held in place, which `ScrambleNet` was already written to do.
+then a layout pass.
+
+Keeping the subtree mounted was necessary and, on its own, was not sufficient:
+`advance()` set the scramble to an empty string before fetching, so `ScrambleNet`
+cleared its image anyway and the cube was still torn down and rebuilt every
+solve. Mounted-but-blanked looks exactly like unmounted. That is fixed
+separately (see "The next scramble's image is built before the solve ends"), and
+it is worth knowing the two have to hold together: either one alone leaves the
+cost in place.
 
 The same reasoning is why the tab bar and the stats panel are never unmounted
 either. Anything that has to reappear the instant a solve ends should already
