@@ -104,11 +104,23 @@ export default function BattleLobbyScreen({ navigation }: Props) {
   return (
     <Screen edges={['top']} gap={0}>
       <ScrollView
+        // `flex: 1` is what makes this scroll at all, and therefore what makes
+        // pull-to-refresh work. A ScrollView with no flex inside a column
+        // container sizes itself to its content, so it has no bounded viewport
+        // to scroll within: the list simply overflows and is clipped, and the
+        // pull gesture has nothing to act on. Screen's own scrolling variant
+        // does the same thing for the same reason.
+        style={{ flex: 1 }}
         contentContainerStyle={{ gap: space.lg, paddingBottom: space.xl }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
+            // tintColor is the iOS spinner; colors and progressBackgroundColor
+            // are Android's, which would otherwise draw a default-light spinner
+            // on this app's dark background.
             tintColor={p.textMuted}
+            colors={[p.accent]}
+            progressBackgroundColor={p.card}
             onRefresh={async () => {
               setRefreshing(true);
               await load();

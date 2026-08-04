@@ -100,7 +100,11 @@ export function RoundResultOverlay({
           </Text>
         </View>
 
-        <ScrollView contentContainerStyle={{ gap: 2 }}>
+        {/* flexShrink, not flex: 1. The card is capped at 80% of the screen and
+            the heading and button below are fixed, so this has to be the part
+            that gives when ten players do not fit. `flex: 1` would also make it
+            fill when the list is short, leaving a gap above the button. */}
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 2 }}>
           {result.results.map((r, i) => (
             <View
               key={r.participantId}

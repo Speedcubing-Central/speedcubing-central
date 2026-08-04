@@ -435,8 +435,14 @@ export const BattlePanel = memo(function BattlePanel({
               />
             </View>
 
+            {/* Every tab's list needs `flex: 1`, and it is load bearing rather
+                than cosmetic: a ScrollView with no flex in a column container
+                sizes to its content, so it has no bounded viewport and does not
+                scroll, it just overflows and is clipped. A full room is ten
+                players, which is past the panel's height. */}
             {tab === 'players' && (
               <ScrollView
+                style={{ flex: 1 }}
                 contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: space.lg }}
                 scrollEnabled={open}
               >
@@ -508,6 +514,9 @@ export const BattlePanel = memo(function BattlePanel({
               <View style={{ flex: 1 }}>
                 <ScrollView
                   ref={chatScrollRef}
+                  // Also what leaves room for the input row below it, rather
+                  // than growing past it as the log fills up.
+                  style={{ flex: 1 }}
                   contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: space.sm, gap: 6 }}
                   scrollEnabled={open}
                 >
@@ -570,6 +579,7 @@ export const BattlePanel = memo(function BattlePanel({
 
             {tab === 'history' && (
               <ScrollView
+                style={{ flex: 1 }}
                 contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: space.lg, gap: space.md }}
                 scrollEnabled={open}
               >
