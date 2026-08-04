@@ -28,6 +28,13 @@ import { EventAndAlgSetSelect } from './EventPicker';
 // while observing the flex-1 element's own box via ResizeObserver is not.
 const TIMER_MIN_HEIGHT = 160;
 const COLUMN_GAP = 16; // gap-4
+// Width of the penalty controls when a stopped solve puts them *beside* the
+// digit rather than under it, plus the gap to their left — keep in sync with
+// the `md:w-[240px]` / `md:gap-8` classes on that row below. 240 covers the
+// widest the OK/+2/DNF row gets (stacking a +2 reveals a "−" affordance
+// inside it) and the Submit button's longest label.
+const PENALTY_COL_WIDTH = 240;
+const PENALTY_COL_GAP = 32; // md:gap-8
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -533,26 +540,40 @@ export default function BattleRoom() {
   // so a stacked +2 revealing the extra Confirm button overflowed and the
   // card grew a scrollbar mid-round.
   //
-  // Reserve the measured stack *plus* ~40, because this number is also the
-  // card's only source of breathing room: the digit is fitted to
-  // `clientHeight - reservedBelow` and the card has no vertical padding, so
-  // reserving exactly what the stack needs sizes the digit to fill every
-  // last pixel, and the result is flush against both edges (4px of slack on
-  // a 260px card — it reads as not fitting even though nothing overflows).
-  // The surplus is what `justify-center` splits into a real margin above the
-  // digit and below the Submit button. Short columns give it back: once the
-  // digit hits useFittedFontSize's 40px floor the stack is a fixed 154,
-  // which still fits the card's 160px minimum, just with nothing to spare.
+  // Reserve the measured stack *plus* ~40 in the layouts that stack, because
+  // this number is also the card's only source of breathing room: the digit
+  // is fitted to `clientHeight - reservedBelow` and the card has no vertical
+  // padding, so reserving exactly what the stack needs sizes the digit to
+  // fill every last pixel and the result is flush against both edges. The
+  // surplus is what `justify-center` splits into a real margin.
+  //
+  // awaitingSubmit is the exception, and the reason the whole card stopped
+  // feeling cramped: from md up its controls sit *beside* the digit, so the
+  // digit's height budget is the card itself and only the breathing room
+  // comes off it. 48 rather than the 40 that margin actually needs, because
+  // the fitted digit takes every pixel the reserve doesn't: with the reserve
+  // set to exactly the margin, a card whose flex-distributed height lands on
+  // a fraction rounds a pixel over (a 172px content box reporting
+  // scrollHeight 173) and overflow-y-auto answers a 1px overflow with a real
+  // 10px scrollbar. The spare few pixels absorb that rounding.
+  // Below md they're still stacked underneath, where the full
+  // 154 (16 hint + 38 penalty row + 36 Submit + three 8px gaps, plus the
+  // margin) applies — under-reserving there fits a digit too tall for the
+  // card and it starts scrolling, which is how a stacked +2 revealing an
+  // extra button used to grow a scrollbar mid-round.
   const reservedBelow = (() => {
     if (!room || room.status === 'WAITING') return 60;
     if (submitted && editing) return 150;
     if (submitted) return 80;
-    if (awaitingSubmit) return 154;
+    if (awaitingSubmit) return isDesktop ? 48 : 154;
     if (settings.entryMode === 'typing') return 110;
     if (engine.phase === 'idle' || isInspectionPhase) return 60;
     return 30;
   })();
-  const [timerCardRef, digitFontSize] = useFittedFontSize(reservedBelow);
+  // The other half of that trade: what the digit gives up horizontally to buy
+  // the vertical room back. Only the side-by-side layout reserves anything.
+  const reservedRight = awaitingSubmit && isDesktop ? PENALTY_COL_WIDTH + PENALTY_COL_GAP : 0;
+  const [timerCardRef, digitFontSize] = useFittedFontSize(reservedBelow, reservedRight);
 
   // ── Name prompt (guest opened link directly) ─────────────────────────────
   if (namePrompt) {
@@ -729,38 +750,58 @@ export default function BattleRoom() {
                invisible until you happened to pick the one penalty that
                revealed it. The digit shows the penalised result, so picking
                +2 or DNF visibly changes the number you're about to send.
-               gap-2, not gap-4: this is the tallest stack the card ever
-               holds, and at the card's protected 160px minimum the extra
-               spacing is the difference between fitting and scrolling. */
-            <div className="flex flex-col items-center gap-2">
+
+               From md up the controls sit beside the digit instead of under
+               it, because this card is short and wide: stacked, the hint,
+               penalty row and Submit button cost 114px of the little height
+               there is, while most of the card's width sits empty either
+               side of the time. Side by side the card only has to be as tall
+               as the taller column, so the digit gets the full height back —
+               at a 740px-tall window that is a 134px digit instead of the
+               40px floor it was pinned to. Below md the card is narrow
+               instead of short, so they stay stacked there.
+
+               The digit takes the leftover width as flex-1 rather than the
+               row being centered as a whole: its text is a different width
+               for "12.34" than for "DNF", and a centered row would slide the
+               buttons sideways as you picked penalties — moving Submit out
+               from under the cursor that just chose DNF. A fixed-width
+               control column and a flexible digit box keep every button
+               exactly where it was. gap-2 between the stacked pieces, not
+               gap-4: below md this is still the tallest thing the card ever
+               holds, and at its 160px minimum the extra spacing is the
+               difference between fitting and scrolling. */
+            <div className="flex flex-col items-center gap-2 w-full md:flex-row md:items-center md:gap-8">
               <div
                 className={clsx(
-                  'font-mono font-bold leading-none transition-colors',
+                  'font-mono font-bold leading-none transition-colors md:flex-1 md:min-w-0 md:text-right',
                   pendingPenalty === 'DNF' ? 'text-red-400' : pendingPlusTwoCount > 0 ? 'text-yellow-400' : timerColor(),
                 )}
                 style={{ fontSize: digitFontSize }}
               >
                 {formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount)}
               </div>
-              <div className="text-xs text-muted">Choose a penalty, then submit</div>
-              <PenaltyButtons
-                penalty={pendingPenalty}
-                plusTwoCount={pendingPlusTwoCount}
-                onChange={(p, c) => {
-                  setPendingPenalty(p);
-                  setPendingPlusTwoCount(c);
-                }}
-              />
-              <button
-                className="btn-primary px-8"
-                onClick={() => submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount)}
-              >
-                {pendingPenalty === 'DNF'
-                  ? 'Submit DNF'
-                  : pendingPlusTwoCount > 0
-                    ? `Submit +${pendingPlusTwoCount * 2}`
-                    : 'Submit'}
-              </button>
+              <div className="flex flex-col items-center gap-2 md:w-[240px] md:shrink-0">
+                <div className="text-xs text-muted">Choose a penalty, then submit</div>
+                <PenaltyButtons
+                  penalty={pendingPenalty}
+                  plusTwoCount={pendingPlusTwoCount}
+                  onChange={(p, c) => {
+                    setPendingPenalty(p);
+                    setPendingPlusTwoCount(c);
+                  }}
+                />
+                <button
+                  className="btn-primary px-8"
+                  onClick={() => submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount)}
+                >
+                  {pendingPenalty === 'DNF'
+                    ? 'Submit DNF'
+                    : pendingPlusTwoCount > 0
+                      ? `Submit +${pendingPlusTwoCount * 2}`
+                      : 'Submit'}
+                </button>
+              </div>
             </div>
           ) : settings.entryMode === 'typing' ? (
             /* Typing mode */

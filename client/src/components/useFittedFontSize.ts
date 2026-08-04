@@ -32,7 +32,12 @@ import { useCallback, useLayoutEffect, useState, type RefCallback } from 'react'
 // with the outgoing node and then the incoming one on every swap, so
 // storing that in state and keying the ResizeObserver effect off it
 // reacts correctly every time, not just on first mount.
-export function useFittedFontSize(reservedBelow: number): [RefCallback<HTMLDivElement>, number] {
+// `reservedRight` is the same idea on the other axis: the width of anything
+// sitting *beside* the digit rather than under it (Battle Mode's penalty
+// controls, once a solve is stopped). It defaults to 0, so callers with a
+// digit that spans the full container are unaffected — without it, a digit
+// fitted to the whole width would grow into whatever shares its row.
+export function useFittedFontSize(reservedBelow: number, reservedRight = 0): [RefCallback<HTMLDivElement>, number] {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState(144); // 9rem, matches the old max
   const ref = useCallback((el: HTMLDivElement | null) => setNode(el), []);
@@ -41,14 +46,14 @@ export function useFittedFontSize(reservedBelow: number): [RefCallback<HTMLDivEl
     if (!node) return;
     const recompute = () => {
       const heightCap = node.clientHeight - reservedBelow;
-      const widthCap = node.clientWidth * 0.34;
+      const widthCap = (node.clientWidth - reservedRight) * 0.34;
       setSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
     };
     recompute();
     const ro = new ResizeObserver(recompute);
     ro.observe(node);
     return () => ro.disconnect();
-  }, [node, reservedBelow]);
+  }, [node, reservedBelow, reservedRight]);
 
   return [ref, size];
 }
