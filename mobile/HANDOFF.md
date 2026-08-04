@@ -301,6 +301,33 @@ The same reasoning is why the tab bar and the stats panel are never unmounted
 either. Anything that has to reappear the instant a solve ends should already
 exist.
 
+### Two sheets that can be open at once must be nested, not siblings
+
+A `Sheet` is a React Native `Modal`. On iOS a Modal presents itself from
+`reactViewController`, which walks the **UIResponder chain** to the first view
+controller above it (`UIView+React.m`). Two sibling modals therefore both find
+the root view controller, so the second one asks a controller that is already
+presenting to present again, and UIKit refuses. No error reaches JS. The sheet
+just never appears.
+
+That is what "the event picker does nothing when creating a room" was.
+
+Fabric mounts a modal's children into its **own**
+`RCTFabricModalHostViewController` (`mountChildComponentView` in
+`RCTModalHostViewComponentView.mm`), so a Sheet rendered *inside* another
+Sheet's children walks up to that controller instead, which is presenting
+nothing and can present it. `Modal` is `position: absolute`, so nesting one
+costs the parent no layout.
+
+Sheets that are merely **mutually exclusive** are fine as siblings, which is why
+the host's copy of the same picker in the Battle room always worked, and why
+every sheet on the Timer screen does. The rule is about sheets that can be open
+*simultaneously*.
+
+Nesting has one consequence to handle: closing the outer sheet unmounts the
+inner one without its own `onClose` running, so reset the inner sheet's flag
+when the outer one closes or it will be up again on reopen.
+
 ### A Battle room cannot show the cube and the penalty controls at once
 
 Not a preference. Measured in Yoga across five devices, seven events and three

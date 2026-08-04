@@ -79,6 +79,13 @@ export function CreateRoomSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stored.ready]);
 
+  // Closing this sheet takes the nested picker down with it, since the picker's
+  // modal lives inside this one's. Without clearing the flag, reopening create
+  // would come straight back up with the picker already over it.
+  useEffect(() => {
+    if (!visible) setShowEvents(false);
+  }, [visible]);
+
   async function create() {
     const displayName = user?.displayName ?? guest.trim();
     if (!displayName) {
@@ -118,8 +125,30 @@ export function CreateRoomSheet({
   }
 
   return (
-    <>
-      <Sheet visible={visible} onClose={onClose} title="Create a room" fillHeight maxHeightRatio={0.85}>
+    // ── The event picker is nested INSIDE this sheet, not beside it ──
+    //
+    // It used to be a sibling, and it silently did nothing: tapping Event
+    // opened a picker that never appeared.
+    //
+    // A Sheet is a React Native `Modal`, and on iOS a Modal presents itself from
+    // `reactViewController`, which walks the UIResponder chain to the first view
+    // controller above it. Two sibling modals both find the root one, so the
+    // second asks a view controller that is already presenting to present again,
+    // and UIKit simply refuses.
+    //
+    // Fabric's modal mounts its children into its OWN
+    // RCTFabricModalHostViewController (see mountChildComponentView in
+    // RCTModalHostViewComponentView.mm), so a modal nested in this one walks up
+    // to that controller instead, which is presenting nothing and can therefore
+    // present the picker over the top.
+    //
+    // The rule this leaves behind: two sheets that can be open at the same time
+    // must be nested, never siblings. Sheets that are merely mutually exclusive
+    // (this one and JoinRoomSheet, or the room's settings and change-event
+    // sheets) are fine as siblings, which is why the host's copy of this very
+    // picker always worked.
+    <Sheet visible={visible} onClose={onClose} title="Create a room" fillHeight maxHeightRatio={0.85}>
+      <>
         <SheetScrollView>
           <View style={{ gap: space.md, paddingBottom: keyboard }}>
             {!user && (
@@ -176,19 +205,19 @@ export function CreateRoomSheet({
             />
           </View>
         </SheetScrollView>
-      </Sheet>
 
-      <BattleEventSheet
-        visible={showEvents}
-        eventId={eventId}
-        algSetId={algSetId}
-        onClose={() => setShowEvents(false)}
-        onApply={(e, s) => {
-          setEventId(e);
-          setAlgSetId(s);
-        }}
-      />
-    </>
+        <BattleEventSheet
+          visible={showEvents}
+          eventId={eventId}
+          algSetId={algSetId}
+          onClose={() => setShowEvents(false)}
+          onApply={(e, s) => {
+            setEventId(e);
+            setAlgSetId(s);
+          }}
+        />
+      </>
+    </Sheet>
   );
 }
 
