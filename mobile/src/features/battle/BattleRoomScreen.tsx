@@ -350,9 +350,21 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
   const digitColor = (() => {
     if (engine.phase === 'ready') return p.green;
     if (engine.phase === 'holding') return settings.inspection ? p.yellow : p.red;
-    // Yellow, not green, while a stacked +2 is waiting to be confirmed: green
-    // here means "this is what the room has", and during that window it is not.
-    if (unsent) return p.yellow;
+    // While a penalty is being chosen, or a change to an already-sent one has
+    // not been committed, the digits are a preview of what Submit will send,
+    // not a result. Colouring them by the pending penalty is what makes that
+    // legible at a glance: the number already changes (a +2 moves it, a DNF
+    // replaces it), and this says *why* in the same yellow and red the buttons
+    // underneath use. Matches the web room, which colours the same state the
+    // same way.
+    //
+    // Green is reserved for "this is what the room has", so it deliberately
+    // does not apply until the result is actually in and unmodified.
+    if (awaitingSubmit || unsent) {
+      if (pendingPenalty === 'DNF') return p.red;
+      if (pendingPlusTwoCount > 0) return p.yellow;
+      return p.text;
+    }
     if (submitted) return p.green;
     return p.text;
   })();
@@ -633,6 +645,10 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
               penalty={pendingPenalty}
               plusTwoCount={pendingPlusTwoCount}
               onChange={(penalty, count) => {
+                // A selection tick. Choosing a penalty no longer sends anything,
+                // so without this the only feedback that a tap registered is the
+                // button's own highlight, which your thumb is on top of.
+                Haptics.selectionAsync().catch(() => undefined);
                 if (awaitingSubmit) {
                   // Before the time is in, nothing here sends: the buttons pick
                   // a penalty and the Submit button below sends it. Same rule as
@@ -664,11 +680,17 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
               {(awaitingSubmit || pendingPlusTwoCount > 0) && (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityHint="Sends your time for this round"
                   onPress={() => submit(pendingPenalty, pendingTime, pendingPlusTwoCount)}
                   style={({ pressed }) => ({
                     flex: 1,
                     alignItems: 'center',
-                    paddingVertical: 11,
+                    // 13, not the 11 the row's other controls use: this is now
+                    // the only thing that commits a round, and at 11 it came to
+                    // about 40pt, under the 44 a touch target is meant to be.
+                    // The penalty buttons above are selections you can correct;
+                    // a mistap on this one sends the wrong result.
+                    paddingVertical: 13,
                     borderRadius: radius.sm,
                     backgroundColor: p.accent,
                     opacity: pressed ? 0.8 : 1,
