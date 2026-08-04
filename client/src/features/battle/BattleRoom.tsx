@@ -36,6 +36,41 @@ const COLUMN_GAP = 16; // gap-4
 const PENALTY_COL_WIDTH = 240;
 const PENALTY_COL_GAP = 32; // md:gap-8
 
+// The roster is the one part of the column whose height is set by the room
+// rather than by the layout: a row per player, up to 10. It scrolls past
+// ROSTER_MAX_HEIGHT, which alone is not enough — 10 players make the card 218
+// tall, and on a 700px-tall window that put the column 30px past the viewport
+// and scrolled the whole page mid-round (the timer at its minimum and the
+// cube already at its floor, so nothing else had anything left to give).
+// So the cap is also fitted to the column: what is left once the header, the
+// timer's minimum, the scramble panel's floor and the gaps are accounted for.
+// It only ever binds on short columns — a tall one clamps back to
+// ROSTER_MAX_HEIGHT and is unchanged, and a 2-4 player roster is shorter than
+// the cap either way, so the common cases never see it.
+//
+// SCRAMBLE_MIN_HEIGHT is that panel's floor: useDiagramFit's 90px cube plus
+// the 132 the panel measures around it here (its own chrome and a one-or-two
+// line scramble). It has to be a constant rather than a measurement, because
+// measuring the panel to size the roster would feed straight back into the
+// roster-to-panel budget below and ratchet. A 7-line megaminx scramble is
+// taller than this allows for, so that case reclaims a little less than it
+// should — still far better than the unbounded roster it replaces.
+const ROSTER_MAX_HEIGHT = 160;
+const ROSTER_MIN_HEIGHT = 60; // ~2 rows and a glimpse of the third
+const ROSTER_CHROME = 58; // p-4 (32) + the "Players" label and its mb-2 (26)
+const SCRAMBLE_MIN_HEIGHT = 222;
+
+// The leaderboard is the same story in the right-hand column, and it bites at
+// the same moment: it lists every player too, and at 10 of them its own
+// max-h-56 leaves the column 32px over, since Stats and Chat's minimum have
+// already claimed the rest. Capping only the roster would have moved the page
+// scroll from one column to the other rather than removing it. Same shape of
+// fix: preferred cap on a column with room, fitted to the column when not.
+const LEADERBOARD_MAX_HEIGHT = 224; // max-h-56
+const LEADERBOARD_MIN_HEIGHT = 72; // ~2 rows
+const LEADERBOARD_CHROME = 62; // p-4 (32) + the "Leaderboard" label and its mb-3 (30)
+const CHAT_MIN_HEIGHT = 180; // the elastic region's floor, below
+
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
   return (
@@ -515,20 +550,44 @@ export default function BattleRoom() {
   const colHeight = useElementHeight(leftColRef);
   const isDesktop = useIsDesktop();
   const showScramble = room?.status === 'ACTIVE' && !!room.scramble;
+  const statsRef = useRef<HTMLDivElement>(null);
   const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
+  const [rosterMaxHeight, setRosterMaxHeight] = useState(ROSTER_MAX_HEIGHT);
+  const [leaderboardMaxHeight, setLeaderboardMaxHeight] = useState(LEADERBOARD_MAX_HEIGHT);
   useEffect(() => {
     if (!isDesktop || colHeight <= 0) {
       setScrambleMaxHeight(undefined);
+      setRosterMaxHeight(ROSTER_MAX_HEIGHT);
+      setLeaderboardMaxHeight(LEADERBOARD_MAX_HEIGHT);
       return;
     }
     const headerH = headerRef.current?.offsetHeight ?? 0;
-    const participantsH = participantsRef.current?.offsetHeight ?? 0;
     // header→scramble→timer→participants (3 gaps), or header→timer→participants (2) when there's no scramble to show.
     const gapCount = showScramble ? 3 : 2;
+    // The roster is capped first, off the column and the header alone. Both
+    // are independent of the roster, and of the two boxes it competes with,
+    // so the dependency runs one way: column → roster → scramble budget →
+    // cube. Sizing it off the panel instead would close that into a loop.
+    const rosterCap = colHeight - headerH - TIMER_MIN_HEIGHT
+      - (showScramble ? SCRAMBLE_MIN_HEIGHT : 0) - ROSTER_CHROME - COLUMN_GAP * gapCount;
+    setRosterMaxHeight(Math.max(ROSTER_MIN_HEIGHT, Math.min(ROSTER_MAX_HEIGHT, rosterCap)));
+    // Read *after* setting the cap (and re-run once it lands, hence the dep):
+    // a roster measured before its own cap applied would hand the scramble
+    // panel a budget short by the difference and shrink the cube for nothing.
+    const participantsH = participantsRef.current?.offsetHeight ?? 0;
     const budget = colHeight - headerH - TIMER_MIN_HEIGHT - participantsH - COLUMN_GAP * gapCount;
+
+    // Right-hand column, same idea. It's the other half of this grid row, so
+    // it's exactly as tall as the left one. Stats is measured (fixed content,
+    // and nothing here feeds back into it); Chat is elastic but floored, so
+    // the leaderboard gets what's left over that floor.
+    const statsH = statsRef.current?.offsetHeight ?? 0;
+    const leaderboardCap = colHeight - statsH - CHAT_MIN_HEIGHT - LEADERBOARD_CHROME - COLUMN_GAP * 2;
+    setLeaderboardMaxHeight(Math.max(LEADERBOARD_MIN_HEIGHT, Math.min(LEADERBOARD_MAX_HEIGHT, leaderboardCap)));
+
     const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
     return () => clearTimeout(timeout);
-  }, [isDesktop, colHeight, showScramble]);
+  }, [isDesktop, colHeight, showScramble, rosterMaxHeight]);
 
   // Reserved space below the digit varies by which sub-state the timer card
   // is showing (penalty buttons, an edit row, "waiting for others" + an edit
@@ -849,10 +908,14 @@ export default function BattleRoom() {
 
         {/* Participant statuses — capped with internal scroll (up to 10
             players) rather than growing unboundedly and pushing the column
-            past its budget. */}
+            past its budget. The cap is ROSTER_MAX_HEIGHT on a column with the
+            room for it, and fitted to the column when there isn't. */}
         <div ref={participantsRef} className="card p-4 shrink-0">
           <div className="label mb-2">Players</div>
-          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+          <div
+            className="space-y-2 overflow-y-auto pr-1"
+            style={{ maxHeight: isDesktop ? rosterMaxHeight : ROSTER_MAX_HEIGHT }}
+          >
             {room.participants.map((p) => {
               const st = participantStatus(p);
               const isMe = p.id === myId;
@@ -877,7 +940,7 @@ export default function BattleRoom() {
       {/* ── RIGHT: Stats + Leaderboard ── */}
       <div className="flex flex-col gap-4 min-h-0">
         {/* Personal stats */}
-        <div className="card p-4 shrink-0">
+        <div ref={statsRef} className="card p-4 shrink-0">
           <div className="label mb-3">Your Stats</div>
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -908,7 +971,10 @@ export default function BattleRoom() {
           {leaderboard.length === 0 ? (
             <div className="text-xs text-muted">No players yet</div>
           ) : (
-            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+            <div
+              className="space-y-1 overflow-y-auto pr-1"
+              style={{ maxHeight: isDesktop ? leaderboardMaxHeight : LEADERBOARD_MAX_HEIGHT }}
+            >
               {leaderboard.map((p, i) => {
                 const isMe = p.id === myId;
                 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -934,7 +1000,7 @@ export default function BattleRoom() {
 
         {/* Chat — the column's one elastic region, absorbing whatever's
             left after Stats/Leaderboard/History (all shrink-0, capped). */}
-        <div className="card p-4 flex flex-col flex-1 min-h-0" style={{ minHeight: 180 }}>
+        <div className="card p-4 flex flex-col flex-1 min-h-0" style={{ minHeight: CHAT_MIN_HEIGHT }}>
           <div className="label mb-2">Chat</div>
           <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
             {chatMessages.length === 0 ? (
