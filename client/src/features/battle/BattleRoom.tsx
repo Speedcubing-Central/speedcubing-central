@@ -528,17 +528,26 @@ export default function BattleRoom() {
   // link, ...) — each is a fixed, known amount for that particular state,
   // not something that needs measuring. Under-reserving doesn't just crowd
   // the layout, it fits a digit too tall for the card and the card starts
-  // scrolling: awaitingSubmit reserves for its full stack (16 hint + 38
-  // penalty row + 36 Submit + three 8px gaps = 114, measured), which the
-  // old value of 100 did not, so a stacked +2 revealing the extra Confirm
-  // button overflowed and the card grew a scrollbar mid-round. Kept under
-  // the card's 160px minimum minus the 40px font floor, so the stack still
-  // fits when the column is squeezed as far as it can go.
+  // scrolling: awaitingSubmit's stack measures 114 (16 hint + 38 penalty row
+  // + 36 Submit + three 8px gaps), which the old value of 100 did not cover,
+  // so a stacked +2 revealing the extra Confirm button overflowed and the
+  // card grew a scrollbar mid-round.
+  //
+  // Reserve the measured stack *plus* ~40, because this number is also the
+  // card's only source of breathing room: the digit is fitted to
+  // `clientHeight - reservedBelow` and the card has no vertical padding, so
+  // reserving exactly what the stack needs sizes the digit to fill every
+  // last pixel, and the result is flush against both edges (4px of slack on
+  // a 260px card — it reads as not fitting even though nothing overflows).
+  // The surplus is what `justify-center` splits into a real margin above the
+  // digit and below the Submit button. Short columns give it back: once the
+  // digit hits useFittedFontSize's 40px floor the stack is a fixed 154,
+  // which still fits the card's 160px minimum, just with nothing to spare.
   const reservedBelow = (() => {
     if (!room || room.status === 'WAITING') return 60;
     if (submitted && editing) return 150;
     if (submitted) return 80;
-    if (awaitingSubmit) return 120;
+    if (awaitingSubmit) return 154;
     if (settings.entryMode === 'typing') return 110;
     if (engine.phase === 'idle' || isInspectionPhase) return 60;
     return 30;
