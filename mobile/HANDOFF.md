@@ -164,6 +164,30 @@ props stable with `useCallback`. That is not decoration: one solve pushes about
 eight state changes through `TimerScreen`, and an arrow function created in
 render defeats the memo completely.
 
+### A Battle participant is owned by exactly one socket
+
+Server-side (`socket.ts`), but a phone is what makes it matter, so it belongs
+here too.
+
+A dropped connection does not remove a player immediately: `RECONNECT_GRACE_MS`
+(12s) gives them time to come back and resume the same row with the same points.
+The hazard is that the server can take up to `PING_TIMEOUT_MS` (90s) to notice
+the old connection is dead, and the client reconnects long before that. So for a
+minute and a half the participant has two connections, and when the dead one is
+finally reaped its disconnect would schedule a cleanup for a player who is
+sitting there connected.
+
+That is the bug testers hit: two players, a scramble, and about twelve seconds
+later the room reverts to "next round starting" and stays there, because
+dropping below two players resets the room to WAITING and only a join ever
+starts a round.
+
+`participantOwner` (participantId -> socket.id) fixes it: a disconnect only
+cleans up if that socket is still the owner. **A phone hits this far more than a
+browser does**, because locking the screen or backgrounding the app drops the
+websocket every time and reconnects on resume, so it is not an edge case here,
+it is the normal path.
+
 ### WCA Regulation 9f rounding
 
 Singles are **truncated** to the hundredth; averages and means are **rounded**,

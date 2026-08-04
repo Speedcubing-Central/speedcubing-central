@@ -169,6 +169,25 @@ export function attachSocket(server: HttpServer): IOServer {
   // participant (by userId, or by name for guests) rejoins in time.
   const pendingCleanup = new Map<string, ReturnType<typeof setTimeout>>();
 
+  // participantId -> the id of the socket that currently owns it.
+  //
+  // A reconnect hands the same participant to a NEW connection while the old
+  // one can still look alive to this server for up to PING_TIMEOUT_MS, which is
+  // 90 seconds. Without this, when the old connection is finally timed out its
+  // disconnect handler schedules the reconnect-grace cleanup for a participant
+  // that a live connection has been using for the past minute and a half, and
+  // twelve seconds later deletes them.
+  //
+  // That is not theoretical. It is the reported bug: two players, a scramble
+  // appears, and about twelve seconds later it vanishes and the room is stuck on
+  // "next round starting" until somebody leaves and rejoins, because dropping
+  // below two players resets the room to WAITING (leaveRoomCleanup) and only a
+  // join ever starts a round.
+  //
+  // So a disconnect only cleans up if this socket is still the participant's
+  // owner. A ghost connection speaks for nobody.
+  const participantOwner = new Map<string, string>();
+
   // socket.id -> number of incorrect room-password attempts this connection
   // has made, so a raw socket client can't brute-force a private room's
   // password by just retrying join_room. Cleared on disconnect.
@@ -345,6 +364,9 @@ export function attachSocket(server: HttpServer): IOServer {
   // Remove a participant from their room, handling in-progress round cleanup.
   // Used by leave_room, disconnect, and the single-room enforcement in join_room.
   async function leaveRoomCleanup(participantId: string, code: string): Promise<void> {
+    // The row is about to go, so nothing may still claim to own it. This is
+    // also what keeps the map from growing for the life of the process.
+    participantOwner.delete(participantId);
     const room = await prisma.battleRoom.findUnique({
       where: { code },
       include: { participants: true },
@@ -527,6 +549,10 @@ export function attachSocket(server: HttpServer): IOServer {
         myParticipantId = participant.id;
         myCode = code;
         myName = participant.guestName ?? 'Player';
+        // This connection now speaks for this participant. Any older connection
+        // still holding it is a ghost, and its eventual disconnect must not
+        // remove a player who is sitting here connected. See participantOwner.
+        participantOwner.set(participant.id, socket.id);
         socket.join(code);
 
         // Auto-start round when this join brings us to ≥2 players.
@@ -696,6 +722,12 @@ export function attachSocket(server: HttpServer): IOServer {
       failedPasswordAttempts.delete(socket.id);
       chatTimestamps.delete(socket.id);
       if (!myParticipantId || !myCode) return;
+      // A newer connection has taken this participant over, so this socket is a
+      // ghost: the player is still here, on the connection that replaced this
+      // one. Scheduling a cleanup would evict them from a room they are sitting
+      // in. See participantOwner for how this happens and what it looked like.
+      if (participantOwner.get(myParticipantId) !== socket.id) return;
+      participantOwner.delete(myParticipantId);
       const participantId = myParticipantId;
       const code = myCode;
       // Defer the actual removal (see RECONNECT_GRACE_MS) instead of
