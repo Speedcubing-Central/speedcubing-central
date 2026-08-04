@@ -11,7 +11,7 @@
       "name": "client",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:client"],
-      "port": 5174
+      "port": 5173
     }
   ]
 }

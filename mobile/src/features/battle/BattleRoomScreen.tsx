@@ -156,7 +156,7 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
 
   const onTimerComplete = useCallback((timeMs: number) => {
     // Stopping does not submit. The penalty choice comes first, exactly as on
-    // web: OK and DNF send immediately, +2 stacks and needs confirming.
+    // web: the buttons select, and the Submit button below them sends.
     setPendingTime(timeMs);
     setPendingPenalty('NONE');
     setPendingPlusTwoCount(0);
@@ -411,7 +411,7 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
     }
     if (unsent) return `Confirm to update your time to +${pendingPlusTwoCount * 2}`;
     if (submitted) return 'Submitted. Waiting for the others…';
-    if (awaitingSubmit) return 'Choose a penalty to submit';
+    if (awaitingSubmit) return 'Choose a penalty, then submit';
     if (manualEntry) return typed ? 'Tap to finish this entry' : 'Tap to enter your time';
     switch (engine.phase) {
       case 'idle':
@@ -633,9 +633,19 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
               penalty={pendingPenalty}
               plusTwoCount={pendingPlusTwoCount}
               onChange={(penalty, count) => {
-                // OK and DNF are decisions, so they send. A +2 is a tally you
-                // may still be adding to, so it waits for Confirm. Same rule as
-                // the web room's penalty buttons.
+                if (awaitingSubmit) {
+                  // Before the time is in, nothing here sends: the buttons pick
+                  // a penalty and the Submit button below sends it. Same rule as
+                  // the web room. OK and DNF used to send on tap, which made the
+                  // step that commits your time invisible unless you happened to
+                  // stack a +2 and reveal the Confirm button.
+                  setPendingPenalty(penalty);
+                  setPendingPlusTwoCount(count);
+                  return;
+                }
+                // After it is in, this is a correction to a result the server
+                // already has. OK and DNF are decisions, so they send. A +2 is a
+                // tally you may still be adding to, so it waits for Confirm.
                 if (penalty === 'DNF' || count === 0) {
                   submit(penalty, pendingTime, count);
                 } else {
@@ -651,7 +661,7 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
               }}
             />
             <View style={{ flexDirection: 'row', gap: space.sm }}>
-              {pendingPlusTwoCount > 0 && (
+              {(awaitingSubmit || pendingPlusTwoCount > 0) && (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => submit(pendingPenalty, pendingTime, pendingPlusTwoCount)}
@@ -665,7 +675,13 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
                   })}
                 >
                   <Text style={{ color: '#fff', fontFamily: font.sansBold, fontSize: 13 }}>
-                    Confirm +{pendingPlusTwoCount * 2}
+                    {!awaitingSubmit
+                      ? `Confirm +${pendingPlusTwoCount * 2}`
+                      : pendingPenalty === 'DNF'
+                        ? 'Submit DNF'
+                        : pendingPlusTwoCount > 0
+                          ? `Submit +${pendingPlusTwoCount * 2}`
+                          : 'Submit'}
                   </Text>
                 </Pressable>
               )}

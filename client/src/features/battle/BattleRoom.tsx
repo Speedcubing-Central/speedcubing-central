@@ -471,7 +471,9 @@ export default function BattleRoom() {
   }
 
   function timerDisplay() {
-    if (awaitingSubmit || engine.phase === 'stopped') {
+    // Not the awaiting-penalty state: that branch renders the *penalised*
+    // time itself, since that's the number the Submit button will send.
+    if (engine.phase === 'stopped') {
       return formatTime(pendingTime, 'NONE', settings.solvePrecision);
     }
     if (isInspectionPhase) {
@@ -524,12 +526,19 @@ export default function BattleRoom() {
   // Reserved space below the digit varies by which sub-state the timer card
   // is showing (penalty buttons, an edit row, "waiting for others" + an edit
   // link, ...) — each is a fixed, known amount for that particular state,
-  // not something that needs measuring.
+  // not something that needs measuring. Under-reserving doesn't just crowd
+  // the layout, it fits a digit too tall for the card and the card starts
+  // scrolling: awaitingSubmit reserves for its full stack (16 hint + 38
+  // penalty row + 36 Submit + three 8px gaps = 114, measured), which the
+  // old value of 100 did not, so a stacked +2 revealing the extra Confirm
+  // button overflowed and the card grew a scrollbar mid-round. Kept under
+  // the card's 160px minimum minus the 40px font floor, so the stack still
+  // fits when the column is squeezed as far as it can go.
   const reservedBelow = (() => {
     if (!room || room.status === 'WAITING') return 60;
     if (submitted && editing) return 150;
     if (submitted) return 80;
-    if (awaitingSubmit) return 100;
+    if (awaitingSubmit) return 120;
     if (settings.entryMode === 'typing') return 110;
     if (engine.phase === 'idle' || isInspectionPhase) return 60;
     return 30;
@@ -702,34 +711,47 @@ export default function BattleRoom() {
               </button>
             </div>
           ) : awaitingSubmit ? (
-            /* Stopped — choose penalty. OK/DNF submit immediately; +2 stacks
-               locally (tap again to add another) and needs an explicit
-               Confirm (or Enter) to actually submit, so multiple +2s can be
-               added before committing. */
-            <div className="flex flex-col items-center gap-4">
-              <div className={clsx('font-mono font-bold leading-none transition-colors', timerColor())} style={{ fontSize: digitFontSize }}>
-                {timerDisplay()}
+            /* Stopped: choose a penalty, then submit. Nothing here sends on
+               its own: the buttons only *select*, and the always-present
+               Submit button (or Enter) is the single thing that commits. The
+               penalty buttons used to double as the submit action for OK and
+               DNF, with a Confirm button that only appeared once a +2 was
+               stacked, so the step that actually sends your time was
+               invisible until you happened to pick the one penalty that
+               revealed it. The digit shows the penalised result, so picking
+               +2 or DNF visibly changes the number you're about to send.
+               gap-2, not gap-4: this is the tallest stack the card ever
+               holds, and at the card's protected 160px minimum the extra
+               spacing is the difference between fitting and scrolling. */
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className={clsx(
+                  'font-mono font-bold leading-none transition-colors',
+                  pendingPenalty === 'DNF' ? 'text-red-400' : pendingPlusTwoCount > 0 ? 'text-yellow-400' : timerColor(),
+                )}
+                style={{ fontSize: digitFontSize }}
+              >
+                {formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount)}
               </div>
+              <div className="text-xs text-muted">Choose a penalty, then submit</div>
               <PenaltyButtons
                 penalty={pendingPenalty}
                 plusTwoCount={pendingPlusTwoCount}
                 onChange={(p, c) => {
-                  if (p === 'DNF' || c === 0) {
-                    submitSolve(p, pendingTime, c);
-                  } else {
-                    setPendingPenalty(p);
-                    setPendingPlusTwoCount(c);
-                  }
+                  setPendingPenalty(p);
+                  setPendingPlusTwoCount(c);
                 }}
               />
-              {pendingPlusTwoCount > 0 && (
-                <button
-                  className="px-6 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent/90 transition-colors"
-                  onClick={() => submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount)}
-                >
-                  Confirm +{pendingPlusTwoCount * 2}
-                </button>
-              )}
+              <button
+                className="btn-primary px-8"
+                onClick={() => submitSolve(pendingPenalty, pendingTime, pendingPlusTwoCount)}
+              >
+                {pendingPenalty === 'DNF'
+                  ? 'Submit DNF'
+                  : pendingPlusTwoCount > 0
+                    ? `Submit +${pendingPlusTwoCount * 2}`
+                    : 'Submit'}
+              </button>
             </div>
           ) : settings.entryMode === 'typing' ? (
             /* Typing mode */
