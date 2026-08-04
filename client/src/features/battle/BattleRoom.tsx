@@ -27,22 +27,6 @@ import { EventAndAlgSetSelect } from './EventPicker';
 // genuinely racy (see the fix history on the solo relay runner's clock),
 // while observing the flex-1 element's own box via ResizeObserver is not.
 const TIMER_MIN_HEIGHT = 160;
-// What the scramble panel's budget reserves for the timer card, as opposed to
-// TIMER_MIN_HEIGHT, which is only the point at which the layout breaks. The
-// two were the same number, and that handed the scramble panel every pixel of
-// surplus in the column: it grew toward its preferred 300px cube first, and
-// the timer got a turn only once that was satisfied. On anything shorter than
-// roughly a 900px viewport the cube never was satisfied, so the timer sat at
-// its bare minimum with the digit pinned to useFittedFontSize's 40px floor and
-// the penalty buttons crowding it — cramped at every window size a laptop
-// actually has. Reserving a *usable* height instead (154 stack + ~95 digit)
-// reverses the priority: the timer is served first and the cube spends the
-// surplus, shrinking toward useDiagramFit's 90px floor on short viewports and
-// still reaching its preferred size on tall ones. It cannot cause the overflow
-// the budget exists to prevent, because neither floor moved: the panel still
-// stops shrinking at a 90px cube and the timer card still can't be pushed
-// below TIMER_MIN_HEIGHT, so the worst case is exactly what it was before.
-const TIMER_COMFORT_HEIGHT = 250;
 const COLUMN_GAP = 16; // gap-4
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -513,7 +497,7 @@ export default function BattleRoom() {
   // ── Height budget: fills the viewport like TimerPage, instead of letting
   // the page grow past it and scroll. The scramble panel is capped by a
   // budget computed from stable, timer-independent measurements (header +
-  // participants list + the timer's reserved share); the timer card
+  // participants list + the timer's own protected minimum); the timer card
   // itself is flex-1 with its digit size observed directly off its own
   // rendered height (useFittedFontSize) rather than derived by subtracting
   // a sibling's measured size from the column total — see TIMER_MIN_HEIGHT's
@@ -534,7 +518,7 @@ export default function BattleRoom() {
     const participantsH = participantsRef.current?.offsetHeight ?? 0;
     // header→scramble→timer→participants (3 gaps), or header→timer→participants (2) when there's no scramble to show.
     const gapCount = showScramble ? 3 : 2;
-    const budget = colHeight - headerH - TIMER_COMFORT_HEIGHT - participantsH - COLUMN_GAP * gapCount;
+    const budget = colHeight - headerH - TIMER_MIN_HEIGHT - participantsH - COLUMN_GAP * gapCount;
     const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
     return () => clearTimeout(timeout);
   }, [isDesktop, colHeight, showScramble]);
