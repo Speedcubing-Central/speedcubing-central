@@ -314,7 +314,22 @@ async function load(puzzleId: string): Promise<LoadedPuzzle | null> {
 function loadCached(puzzleId: string): Promise<LoadedPuzzle | null> {
   let p = cache.get(puzzleId);
   if (!p) {
-    p = load(puzzleId);
+    // A FAILURE MUST NOT BE CACHED.
+    //
+    // `load` swallows everything and returns null, so caching its result
+    // unconditionally meant one transient failure (a slow chunk import, a
+    // moment of memory pressure on an older phone) poisoned this puzzle for the
+    // entire life of the app process: every scramble image for it became a
+    // spinner that never resolved, on every screen, and only force-quitting
+    // cleared it. Nothing retried, because the failed promise was the cache
+    // entry.
+    //
+    // That is what "my friend cannot see the scramble image" was, on a device
+    // where the same build worked for everyone else.
+    p = load(puzzleId).then((loaded) => {
+      if (!loaded) cache.delete(puzzleId);
+      return loaded;
+    });
     cache.set(puzzleId, p);
   }
   return p;

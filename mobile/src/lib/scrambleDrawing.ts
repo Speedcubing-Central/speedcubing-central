@@ -42,14 +42,19 @@ export interface ScrambleDrawing {
 // an event switch.
 const MAX_ENTRIES = 8;
 
-const drawings = new Map<string, ScrambleDrawing | null>();
+// Successes only. A drawing that failed to build is deliberately not recorded,
+// so the next attempt retries instead of being handed the failure again: see
+// prepareScrambleDrawing, and the same rule one layer down in cubingSvg's
+// loadCached, which is where a single failure used to poison a whole puzzle for
+// the life of the app.
+const drawings = new Map<string, ScrambleDrawing>();
 const inFlight = new Map<string, Promise<ScrambleDrawing | null>>();
 
 function keyFor(eventId: string, scramble: string): string {
   return `${eventId}|${scramble}`;
 }
 
-function remember(key: string, drawing: ScrambleDrawing | null): void {
+function remember(key: string, drawing: ScrambleDrawing): void {
   // Re-insert on write so iteration order is least-recently-used first.
   drawings.delete(key);
   drawings.set(key, drawing);
@@ -101,7 +106,13 @@ export function prepareScrambleDrawing(eventId: string, scramble: string): Promi
       } catch {
         ast = null;
       }
-      const drawing: ScrambleDrawing | null = image && ast ? { ast, aspect: image.aspect } : null;
+      if (!image || !ast) {
+        // Not cached. A failure here is usually the puzzle's artwork having
+        // failed to load, which is transient, so the next scramble gets a fresh
+        // attempt rather than inheriting this one's bad luck.
+        return null;
+      }
+      const drawing: ScrambleDrawing = { ast, aspect: image.aspect };
       remember(key, drawing);
       return drawing;
     })

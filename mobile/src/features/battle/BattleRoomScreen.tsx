@@ -265,13 +265,24 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
     return formatTime(parsed.time, 'NONE', settings.solvePrecision, parsed.plusTwoCount);
   }, [typed, manualPrecision, settings.solvePrecision]);
 
+  // A typed time goes to the penalty choice, exactly like a timed one, and
+  // exactly like the web room's own typing mode (handleTypingSubmit there sets
+  // awaitingSubmit rather than sending).
+  //
+  // It used to send immediately, and that is a real problem rather than a
+  // shortcut: the round is scored the moment the last player's time lands, so
+  // whoever finishes last had their result committed before they could add a +2
+  // to it. Nothing on this screen is in a hurry until you say so.
   const addTyped = useCallback(() => {
     const parsed = parseTimeInput(typed, manualPrecision);
     if (!parsed) return;
-    submit(parsed.penalty, parsed.time, parsed.plusTwoCount);
+    setPendingTime(parsed.time);
+    setPendingPenalty(parsed.penalty);
+    setPendingPlusTwoCount(parsed.plusTwoCount);
+    setAwaitingSubmit(true);
     setTyped('');
     setShowKeypad(false);
-  }, [typed, manualPrecision, submit]);
+  }, [typed, manualPrecision]);
 
   // ── Display ──────────────────────────────────────────────────────────────
 
@@ -550,7 +561,10 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
               if (engineEnabled && !manualEntry) engine.release();
             }}
             onPress={() => {
-              if (manualEntry && canSolve) setShowKeypad(true);
+              // Not while a penalty is being chosen: the keypad would cover the
+              // buttons that are waiting on you, and reopening it is not what a
+              // tap means at that point.
+              if (manualEntry && canSolve && !awaitingSubmit) setShowKeypad(true);
             }}
             disabled={!canSolve && !submitted}
             style={{

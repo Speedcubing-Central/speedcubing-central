@@ -325,6 +325,23 @@ The same reasoning is why the tab bar and the stats panel are never unmounted
 either. Anything that has to reappear the instant a solve ends should already
 exist.
 
+### Never cache a failure
+
+`lib/cubingSvg.ts` caches each puzzle's artwork by promise, and `load()` catches
+everything and returns null. Caching that result unconditionally meant the first
+transient failure became the permanent answer: every scramble image for that
+puzzle, on every screen, was a spinner that never resolved, and only
+force-quitting the app cleared it, because the failed promise *was* the cache
+entry and nothing ever retried.
+
+It presents as one tester seeing no cube on a build that works for everyone
+else, which is exactly how it was reported. `lib/scrambleDrawing.ts` had the
+same shape per scramble.
+
+Both now cache successes only, so the next attempt retries. Keep it that way for
+anything else memoised by promise here: the whole point of these caches is that
+the work is expensive, and expensive work is exactly what fails transiently.
+
 ### Two sheets that can be open at once must be nested, not siblings
 
 A `Sheet` is a React Native `Modal`. On iOS a Modal presents itself from
