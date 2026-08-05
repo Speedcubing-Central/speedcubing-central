@@ -225,11 +225,24 @@ export function useTimerData(eventId: string) {
           // the request was in flight. Those edits are already on their way
           // separately (see resolveSolveId), so taking the server's body here
           // would show them being undone and then reappearing.
-          setSolves((prev) =>
-            prev.map((s) =>
-              s.id === tempId ? { ...s, id: saved.id, sessionId: saved.sessionId, createdAt: saved.createdAt } : s,
-            ),
-          );
+          // findIndex + slice, not map. map calls a closure once per solve and
+          // builds the result element by element; slice is a single copy. Only
+          // one entry changes, and it is almost always the first, so walking the
+          // whole session to rebuild it identically was pure garbage: on an
+          // 18,000-solve session this runs on every solve, and garbage is what a
+          // Hermes GC pause is made of.
+          setSolves((prev) => {
+            const at = prev.findIndex((s) => s.id === tempId);
+            if (at === -1) return prev;
+            const next = prev.slice();
+            next[at] = {
+              ...prev[at],
+              id: saved.id,
+              sessionId: saved.sessionId,
+              createdAt: saved.createdAt,
+            };
+            return next;
+          });
         },
         (e) => {
           setSolves((prev) => prev.filter((s) => s.id !== tempId));
@@ -309,13 +322,17 @@ export function useTimerData(eventId: string) {
     ) => {
       if (!currentId) return;
       let previous: SolveDTO | undefined;
-      setSolves((prev) =>
-        prev.map((s) => {
-          if (s.id !== solveId) return s;
-          previous = s;
-          return apply(s);
-        }),
-      );
+      // Same reasoning as the id swap above: one solve changes, so copy the
+      // array once rather than rebuilding it a closure call at a time. A
+      // penalty tap on a long session was doing the latter.
+      setSolves((prev) => {
+        const at = prev.findIndex((s) => s.id === solveId);
+        if (at === -1) return prev;
+        previous = prev[at];
+        const next = prev.slice();
+        next[at] = apply(prev[at]);
+        return next;
+      });
       try {
         // The solve may exist only locally still, so `send` is given the id the
         // server knows rather than the one the UI is holding. On a solve that
@@ -326,7 +343,13 @@ export function useTimerData(eventId: string) {
       } catch (e) {
         if (previous) {
           const restore = previous;
-          setSolves((prev) => prev.map((s) => (s.id === solveId ? restore : s)));
+          setSolves((prev) => {
+            const at = prev.findIndex((s) => s.id === solveId);
+            if (at === -1) return prev;
+            const next = prev.slice();
+            next[at] = restore;
+            return next;
+          });
         }
         report(e, failure);
       }

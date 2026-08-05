@@ -109,6 +109,10 @@ const DRAG_SLOP = 6;
 const PANEL_TOGGLE_DISTANCE = 64;
 const PANEL_TOGGLE_VELOCITY = 0.7;
 
+// Shared, so the not-yet-opened case allocates nothing and keeps a stable
+// identity for anything downstream comparing props. See `order` below.
+const EMPTY_ORDER: number[] = [];
+
 export interface StatsPanelProps {
   solves: SolveDTO[];
   event: string;
@@ -324,7 +328,18 @@ export const StatsPanel = memo(function StatsPanel({
     };
   }, [solves]);
 
-  const order = useMemo(() => sortedSolveIndices(solves, sortBy), [solves, sortBy]);
+  // Only once the body exists to show it.
+  //
+  // This allocates an array as long as the session and, for anything but date
+  // order, sorts a second one built from it. It was being recomputed on every
+  // solve whether or not the list was on screen, and the collapsed strip is the
+  // normal state: nothing rendered it. On an 18,000-solve session that is a
+  // few hundred kilobytes of garbage produced per solve for a value nobody
+  // read, and garbage is what a Hermes GC pause is made of.
+  const order = useMemo(
+    () => (everOpened ? sortedSolveIndices(solves, sortBy) : EMPTY_ORDER),
+    [everOpened, solves, sortBy],
+  );
 
   const fmtAvg = (v: number | null): string => {
     if (v === null) return EMPTY;

@@ -30,13 +30,25 @@ export interface SingleStats {
   worst: number | null;
 }
 
+// One pass, no intermediate arrays, and no spread.
+//
+// This used to build two arrays the length of the session (a map then a filter)
+// and then call `Math.min(...finite)`. Spreading an array as arguments pushes
+// every element onto the call stack: at a few hundred solves that is merely
+// wasteful, at 18,000 it is a large stack frame built and torn down on every
+// call, and engines start throwing somewhere past this range. A session is
+// unbounded and grows forever, so the array-length-as-argument-count pattern was
+// a latent crash as much as a cost.
 export function singleStats(solves: SolveDTO[]): SingleStats {
-  const finite = solves.map((s) => effectiveTime(s.time, s.penalty, s.plusTwoCount)).filter((v) => isFinite(v));
-  return {
-    count: solves.length,
-    best: finite.length ? Math.min(...finite) : null,
-    worst: finite.length ? Math.max(...finite) : null,
-  };
+  let best: number | null = null;
+  let worst: number | null = null;
+  for (const s of solves) {
+    const t = effectiveTime(s.time, s.penalty, s.plusTwoCount);
+    if (!isFinite(t)) continue;
+    if (best === null || t < best) best = t;
+    if (worst === null || t > worst) worst = t;
+  }
+  return { count: solves.length, best, worst };
 }
 
 function computeAvg(window: TimedSolve[], size: number) {
