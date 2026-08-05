@@ -683,20 +683,20 @@ export default function BattleRoom() {
   })();
   // The other half of that trade: what the digit gives up horizontally to buy
   // the vertical room back. Only the side-by-side layout reserves anything.
-  // Width of the digit's box in that side-by-side row, in `ch` — the digit is
-  // monospace, so one ch is one glyph and this is exact. The row is centred as
-  // a unit, so this width decides where the buttons sit, and it is a
-  // high-water mark rather than the current label: it starts at whatever the
-  // solve stopped at and only ever grows while penalties are toggled.
+  // How many characters the digit's font has to be sized for, as a high-water
+  // mark: it starts at whatever the solve stopped at and only ever grows while
+  // penalties are toggled. Fitting the font to each label as it comes would
+  // mean a digit that grows back every time a penalty is cleared, and one that
+  // is smaller for "12.09+16" than the "12.09" it started as is much less
+  // jarring than one that keeps changing size in both directions.
   //
-  // Tracking the label exactly would re-centre the row on every width change
-  // and slide Submit out from under the cursor that just clicked. Reserving
-  // the widest label the solve *could* reach doesn't work either — that's
-  // "16.91+16", eight stacked +2s and their suffix, and a box that wide around
-  // a four-character time is the void this was meant to remove. Growing only
-  // upward gets both: choosing DNF or OK never moves anything (both are
-  // narrower), and the one move left is the first +2, after which further
-  // stacking is stable too.
+  // Only the font uses it. The *box* is the current label's width, below —
+  // a box held at the high-water mark stayed as wide as the longest label the
+  // solve had reached, and since the text within it is right-aligned, picking
+  // DNF left the three characters hard against the buttons with the width of
+  // five characters of nothing to their left. The row was still centred as
+  // geometry; it read as pushed to the right, which is the same thing as being
+  // off-centre to anyone looking at it.
   const pendingLabel = formatTime(pendingTime ?? 0, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount);
   const [digitBoxCh, setDigitBoxCh] = useState(pendingLabel.length);
   useEffect(() => {
@@ -922,11 +922,11 @@ export default function BattleRoom() {
                40px floor it was pinned to. Below md the card is narrow
                instead of short, so they stay stacked there.
 
-               The row is centred as a unit, and both boxes in it have a fixed
-               width for that to be safe: the control column is 240, and the
-               digit's box is digitBoxCh (see above). It was flex-1 before,
-               which pinned the pair flush right and left the slack piled up
-               on the left of the card. gap-2 between the stacked pieces, not
+               The row is centred as a unit, and both boxes in it have a width
+               of their own for that to mean anything: the control column is
+               240, and the digit's box is its label (see above). It was flex-1
+               before, which pinned the pair flush right and left the slack
+               piled up on the left of the card. gap-2 between the stacked pieces, not
                gap-4: below md this is still the tallest thing the card ever
                holds, and at its 160px minimum the extra spacing is the
                difference between fitting and scrolling. */
@@ -938,14 +938,22 @@ export default function BattleRoom() {
                 )}
                 style={{
                   fontSize: digitFontSize,
-                  // min() so a digit fitted to the full remaining width can't
-                  // push the control column off the card's right edge.
-                  width: isDesktop ? `min(${digitBoxCh}ch, 100%)` : undefined,
+                  // The label's own width, so the pair is centred around what
+                  // is actually on screen — the digit is monospace, so one ch
+                  // is one glyph and this is exact. min() so a digit fitted to
+                  // the full remaining width can't push the control column off
+                  // the card's right edge.
+                  width: isDesktop ? `min(${pendingLabel.length}ch, 100%)` : undefined,
                 }}
               >
                 {formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount)}
               </div>
-              <div className="flex flex-col items-center gap-2 md:w-[240px] md:shrink-0">
+              {/* Content width, not PENALTY_COL_WIDTH: that constant is what
+                  the digit's font *reserves*, deliberately the widest this
+                  column ever gets, and pinning the column to it left the
+                  difference as air inside its right edge — 28px of it, which
+                  the centred row then carried as a lean to the right. */}
+              <div className="flex flex-col items-center gap-2 md:shrink-0">
                 <div className="text-xs text-muted">Choose a penalty, then submit</div>
                 <PenaltyButtons
                   penalty={pendingPenalty}
