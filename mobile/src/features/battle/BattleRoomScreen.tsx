@@ -11,7 +11,7 @@ import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
 import { useUi } from '../../store/ui';
-import { EMPTY, IconButton, Loading, MONO_BOLD, Muted } from '../../components/ui';
+import { Button, EMPTY, IconButton, Loading, MONO_BOLD, Muted } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import { ScrambleView } from '../../components/ScrambleView';
 import { ScrambleNet, hasScrambleNet } from '../../components/ScrambleNet';
@@ -92,6 +92,7 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
     setLastResult,
     error,
     setError,
+    connectionError,
     myHistory,
     chatMessages,
     myParticipantId,
@@ -195,15 +196,32 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
   // round completion for everyone else too, not just for it. This is the same
   // fix the web client carries, and the same reason.
   const joined = useRef(false);
+  // True from the moment we ask to join until the server answers with room
+  // state. An error arriving inside that window means the join itself failed,
+  // whatever the message happens to say, which is what makes this a rule rather
+  // than a list of message strings to match against.
+  const joinPending = useRef(false);
+  // Set once we have decided this room cannot be entered, so the rejoin below
+  // stops trying and a second error cannot stack another alert behind the first.
+  const givingUp = useRef(false);
+
   useEffect(() => {
+    if (givingUp.current) return;
     if (!connected) {
       joined.current = false;
       return;
     }
     if (!displayName || joined.current) return;
     joined.current = true;
+    joinPending.current = true;
     joinRoom({ code, name: displayName, password });
   }, [connected, displayName, code, password, joinRoom]);
+
+  // The join was answered, so anything that goes wrong from here is about a
+  // room we are actually in.
+  useEffect(() => {
+    if (room) joinPending.current = false;
+  }, [room]);
 
   // Which participant row is ours. Matched by account when signed in, by name
   // otherwise, the same pair of rules the server itself uses.
@@ -232,11 +250,29 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
 
   // Socket errors surface as an alert and are cleared, so the same one does not
   // re-fire on the next render.
+  //
+  // A failed join ends the screen. Previously every error was just an alert, so
+  // dismissing "Room not found" left you sitting on "Joining ABC123…" with
+  // nothing behind it, and every reconnect re-sent the join and raised the same
+  // alert again. There is nothing to wait for: the room was not entered, and on
+  // this path it usually no longer exists (an empty room deletes itself, so
+  // arriving as the last player leaves is exactly when this happens).
   useEffect(() => {
     if (!error) return;
-    Alert.alert('Battle', error);
     setError(null);
-  }, [error, setError]);
+    // Already on the way out. Further errors are noise from the connection
+    // winding down and must not queue a second alert behind the first.
+    if (givingUp.current) return;
+
+    if (joinPending.current) {
+      givingUp.current = true;
+      Alert.alert('Battle', error, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+      return;
+    }
+    Alert.alert('Battle', error);
+  }, [error, setError, navigation]);
 
   const handleLeave = useCallback(() => {
     leaveRoom(code);
@@ -396,7 +432,19 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
   if (!connected) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
-        <Loading label="Connecting…" />
+        {/* The reason, when there is one, rather than a spinner that says
+            nothing. socket.io keeps retrying underneath, so this stays a
+            waiting state and not an error screen, but "the tunnel is down"
+            and "the server is slow" should not look identical. */}
+        <Loading label={connectionError ? 'Reconnecting…' : 'Connecting…'} />
+        {connectionError ? (
+          <Muted style={{ textAlign: 'center', paddingHorizontal: space.xl, paddingBottom: space.xl }}>
+            {connectionError}
+          </Muted>
+        ) : null}
+        <View style={{ padding: space.lg }}>
+          <Button label="Back to rooms" onPress={() => navigation.goBack()} />
+        </View>
       </SafeAreaView>
     );
   }
@@ -405,6 +453,12 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: p.bg }}>
         <Loading label={`Joining ${code}…`} />
+        {/* A way out that does not depend on an error arriving. If the server
+            never answers the join at all, the alert path below never fires and
+            this screen would otherwise be a dead end. */}
+        <View style={{ padding: space.lg }}>
+          <Button label="Back to rooms" onPress={() => navigation.goBack()} />
+        </View>
       </SafeAreaView>
     );
   }

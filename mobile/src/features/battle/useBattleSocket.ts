@@ -38,7 +38,13 @@ export function useBattleSocket() {
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<BattleRoomDTO | null>(null);
   const [lastResult, setLastResult] = useState<RoundResult | null>(null);
+  // Errors the *room* raised: room not found, wrong password, room full, not
+  // the host. These say something about this room and are worth acting on.
   const [error, setError] = useState<string | null>(null);
+  // Errors the *connection* raised. Kept apart because socket.io retries these
+  // by itself and they say nothing about the room, so treating them like a room
+  // error would throw someone out of a perfectly good room over a tunnel blip.
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   // Personal history, accumulated across rounds for as long as this screen is
   // open. Not persisted anywhere, same as on web.
   const [myHistory, setMyHistory] = useState<PersonalSolve[]>([]);
@@ -57,7 +63,10 @@ export function useBattleSocket() {
     const socket = createSocket();
     socketRef.current = socket;
 
-    socket.on('connect', () => setConnected(true));
+    socket.on('connect', () => {
+      setConnected(true);
+      setConnectionError(null);
+    });
     // Clearing `room` and not just the flag: the room screen only shows its
     // "joining" state for a fully null room, so without this the window between
     // a reconnect and the fresh room_state would render the pre-drop snapshot,
@@ -66,7 +75,7 @@ export function useBattleSocket() {
       setConnected(false);
       setRoom(null);
     });
-    socket.on('connect_error', (e) => setError(e.message || 'Could not reach the server'));
+    socket.on('connect_error', (e) => setConnectionError(e.message || 'Could not reach the server'));
 
     socket.on('room_state', (r) => {
       const key = `${r.eventId}:${r.algSetId ?? ''}`;
@@ -162,6 +171,7 @@ export function useBattleSocket() {
     setLastResult,
     error,
     setError,
+    connectionError,
     myHistory,
     chatMessages,
     myParticipantId,
