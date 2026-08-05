@@ -683,9 +683,6 @@ export default function BattleRoom() {
   })();
   // The other half of that trade: what the digit gives up horizontally to buy
   // the vertical room back. Only the side-by-side layout reserves anything.
-  const reservedRight = awaitingSubmit && isDesktop ? PENALTY_COL_WIDTH + PENALTY_COL_GAP : 0;
-  const [timerCardRef, digitFontSize] = useFittedFontSize(reservedBelow, reservedRight);
-
   // Width of the digit's box in that side-by-side row, in `ch` — the digit is
   // monospace, so one ch is one glyph and this is exact. The row is centred as
   // a unit, so this width decides where the buttons sit, and it is a
@@ -708,6 +705,23 @@ export default function BattleRoom() {
   useEffect(() => {
     setDigitBoxCh((ch) => Math.max(ch, pendingLabel.length));
   }, [pendingLabel]);
+
+  // That same count is what the digit's font has to be fitted to, not just its
+  // box. Sizing the font as if every label were five characters and then
+  // putting a six-character one in it ("12.09+") is how a stopped solve came
+  // to render straight across the penalty buttons: the box was the right width
+  // for the text, and the text was far too big for the box.
+  //
+  // Only the states that show a *penalised* time pass it. The others (a
+  // running clock, "0.00", "—") keep the hook's default and stay exactly as
+  // they were — a running label changes length as it counts, and resizing the
+  // digit mid-solve would be worse than the width it saves.
+  const reservedRight = awaitingSubmit && isDesktop ? PENALTY_COL_WIDTH + PENALTY_COL_GAP : 0;
+  const [timerCardRef, digitFontSize] = useFittedFontSize(
+    reservedBelow,
+    reservedRight,
+    awaitingSubmit || submitted ? digitBoxCh : undefined,
+  );
 
   // ── Name prompt (guest opened link directly) ─────────────────────────────
   if (namePrompt) {

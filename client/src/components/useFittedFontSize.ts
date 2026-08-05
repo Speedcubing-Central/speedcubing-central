@@ -37,7 +37,22 @@ import { useCallback, useLayoutEffect, useState, type RefCallback } from 'react'
 // controls, once a solve is stopped). It defaults to 0, so callers with a
 // digit that spans the full container are unaffected — without it, a digit
 // fitted to the whole width would grow into whatever shares its row.
-export function useFittedFontSize(reservedBelow: number, reservedRight = 0): [RefCallback<HTMLDivElement>, number] {
+//
+// `chars` is how many characters that width has to hold. It used to be baked
+// into the width cap as a single factor of 0.34, which is 1/(0.6 × 5): the
+// advance of a monospace glyph, times a label of five, as in "12.09". Labels
+// are not always five — "12.09+" is six and a stacked "12.09+16" is eight —
+// and the cap went on sizing all of them as five, so the text ran 20-60% wider
+// than the room it was fitted to and, in Battle Mode, straight over the
+// penalty buttons beside it. Passing the real count is the whole fix; the
+// default of 5 keeps every existing caller exactly where it was.
+const MONO_ADVANCE_EM = 0.6; // one glyph's width in a monospace font, in em
+
+export function useFittedFontSize(
+  reservedBelow: number,
+  reservedRight = 0,
+  chars = 5,
+): [RefCallback<HTMLDivElement>, number] {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState(144); // 9rem, matches the old max
   const ref = useCallback((el: HTMLDivElement | null) => setNode(el), []);
@@ -45,15 +60,24 @@ export function useFittedFontSize(reservedBelow: number, reservedRight = 0): [Re
   useLayoutEffect(() => {
     if (!node) return;
     const recompute = () => {
-      const heightCap = node.clientHeight - reservedBelow;
-      const widthCap = (node.clientWidth - reservedRight) * 0.34;
+      // clientWidth/clientHeight include the container's own padding, and the
+      // text only gets the content box. Battle Mode's card is px-6, so the
+      // width cap was fitting the digit to 48px it never had — a stacked
+      // "17.99+16" overflowed by exactly that and ran over the buttons beside
+      // it. Subtracting the padding is what makes these caps mean what they
+      // say; it costs nothing on a container without any.
+      const cs = getComputedStyle(node);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const heightCap = node.clientHeight - padY - reservedBelow;
+      const widthCap = (node.clientWidth - padX - reservedRight) / (MONO_ADVANCE_EM * Math.max(1, chars));
       setSize(Math.max(40, Math.min(heightCap, widthCap, 144)));
     };
     recompute();
     const ro = new ResizeObserver(recompute);
     ro.observe(node);
     return () => ro.disconnect();
-  }, [node, reservedBelow, reservedRight]);
+  }, [node, reservedBelow, reservedRight, chars]);
 
   return [ref, size];
 }
