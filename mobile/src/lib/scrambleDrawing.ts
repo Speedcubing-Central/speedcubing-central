@@ -1,4 +1,3 @@
-import { InteractionManager } from 'react-native';
 import { parse, type JsxAST } from 'react-native-svg';
 import { hasScrambleImage, renderScrambleImage } from './cubingSvg';
 
@@ -125,21 +124,34 @@ export function prepareScrambleDrawing(eventId: string, scramble: string): Promi
   return work;
 }
 
+// Long enough to be clear of the frame the timer stops and the animations that
+// follow it, short enough that the next scramble is ready long before the next
+// solve ends. There are seconds of slack either side of this number.
+const PREWARM_DELAY_MS = 250;
+
 /**
  * Prepares a scramble the app expects to show soon, off the critical path.
  *
- * Deferred until interactions have finished on purpose. The upcoming scramble
- * becomes known at the moment the previous one is swapped in, which is the
- * frame the timer stops, so doing this eagerly would just move the cost from
- * one stop frame to another. After interactions it lands in the quiet stretch
- * where the solver is reading their time.
+ * The upcoming scramble becomes known at the moment the previous one is swapped
+ * in, which is the frame the timer stops, so this must not run eagerly or it
+ * would just move the cost from one stop frame to another.
+ *
+ * A plain timer, deliberately, and NOT `InteractionManager.runAfterInteractions`
+ * which this used to use. That waits for every outstanding interaction handle to
+ * be released, and `Animated.timing`/`spring` take one out for their duration
+ * unless told otherwise. The Timer starts several on every attempt (the stats
+ * panel, the tab bar), so one animation that never reports finishing (an
+ * interrupted spring, a component unmounting mid-animation) leaves a handle
+ * behind and the callback never runs at all: prewarming silently stops for the
+ * rest of the session and every solve pays full price again. The job here is
+ * only "not in the stop frame", and a delay does that without being starvable.
  */
 export function prewarmScrambleDrawing(eventId: string, scramble: string): () => void {
   if (!scramble || !hasScrambleImage(eventId)) return () => undefined;
   if (drawings.has(keyFor(eventId, scramble))) return () => undefined;
 
-  const handle = InteractionManager.runAfterInteractions(() => {
+  const handle = setTimeout(() => {
     void prepareScrambleDrawing(eventId, scramble);
-  });
-  return () => handle.cancel();
+  }, PREWARM_DELAY_MS);
+  return () => clearTimeout(handle);
 }

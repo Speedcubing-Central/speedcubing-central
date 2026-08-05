@@ -131,6 +131,11 @@ const TIMER_CONTENT_BIAS = 0.65;
 // `density` dropping content.
 const TIMER_MIN_H = 140;
 
+// Granularity the cube's measured box is reported at. See `setImageBoxH`: below
+// this the drawing is resized for a change too small to see, and resizing it is
+// the one operation whose cost grows with the number of stickers.
+const IMAGE_BOX_STEP = 8;
+
 
 export default function TimerScreen({ navigation }: Props) {
   const p = usePalette();
@@ -188,7 +193,22 @@ export default function TimerScreen({ navigation }: Props) {
   // share it won. Measuring is safe here and cannot loop: the box's height
   // comes from the flex split against the timer, which does not depend on the
   // drawing inside it.
-  const [imageBoxH, setImageBoxH] = useState(0);
+  // Quantised as it is measured, not where it is used, so a re-render caused by
+  // anything else cannot smuggle a new value through.
+  //
+  // The box's height comes from the flex split, so it moves by a point or two
+  // whenever the scramble above it wraps to a different number of lines. Passed
+  // straight through, every one of those changed the drawing's height prop, and
+  // changing the root <Svg>'s size makes react-native-svg re-lay out every
+  // element inside it: 81 for a 3x3, 313 for a 7x7. That is the one part of
+  // showing a cube whose cost scales with the puzzle, and it was being paid for
+  // a difference nobody can see.
+  const [imageBoxH, setImageBoxHRaw] = useState(0);
+  const setImageBoxH = useCallback((h: number) => {
+    // Floor rather than round: the drawing has to stay inside the box it was
+    // given, and rounding up would let it exceed it by a few points.
+    setImageBoxHRaw(Math.floor(h / IMAGE_BOX_STEP) * IMAGE_BOX_STEP);
+  }, []);
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pbHits, setPbHits] = useState<PbHit[] | null>(null);
@@ -340,11 +360,22 @@ export default function TimerScreen({ navigation }: Props) {
   const addTyped = useCallback(async () => {
     const parsed = parseTimeInput(typed, manualPrecision);
     if (!parsed) return;
+    // The sheet starts closing NOW, before the solve is recorded rather than
+    // after it. This is the whole of the wait in typing mode: `onComplete` was
+    // awaited first, so the keypad sat there for the round trip through
+    // recording and only then began a 200ms exit, and a Sheet's exit is JS
+    // driven (see Sheet.tsx on why it cannot use the native driver inside a
+    // Modal), so it was also competing for the thread doing the recording.
+    // Closing first lets the two overlap instead of queueing.
+    setShowKeypad(false);
     const saved = await onComplete(parsed.time, parsed.penalty, parsed.plusTwoCount);
     if (saved) {
+      // Cleared only on success, so a failed save still has the entry waiting
+      // in the keypad rather than making you type it again.
       setTyped('');
-      setShowKeypad(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    } else {
+      setShowKeypad(true);
     }
   }, [typed, manualPrecision, onComplete]);
 

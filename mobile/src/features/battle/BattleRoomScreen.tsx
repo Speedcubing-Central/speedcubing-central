@@ -67,6 +67,12 @@ const IMAGE_MAX_GROWTH = 1.25;
 const TIMER_CONTENT_BIAS = 0.65;
 const TIMER_MIN_H = 140;
 
+// See the Timer's copy: the cube's box moves by a point or two whenever the
+// scramble above it wraps differently, and passing that straight through
+// resizes the drawing, which makes react-native-svg re-lay out every element in
+// it. Reported in steps so it only changes when it meaningfully has.
+const IMAGE_BOX_STEP = 8;
+
 export default function BattleRoomScreen({ route, navigation }: Props) {
   const p = usePalette();
   const { s: sc, fontScale, maxFontMultiplier, width } = useScreenScale();
@@ -130,7 +136,11 @@ export default function BattleRoomScreen({ route, navigation }: Props) {
   const [columnH, setColumnH] = useState(0);
   const [timerTileH, setTimerTileH] = useState(0);
   const [panelCollapsedH, setPanelCollapsedH] = useState(0);
-  const [imageBoxH, setImageBoxH] = useState(0);
+  const [imageBoxH, setImageBoxHRaw] = useState(0);
+  const setImageBoxH = useCallback((h: number) => {
+    // Floor, so the drawing always stays inside the box it was given.
+    setImageBoxHRaw(Math.floor(h / IMAGE_BOX_STEP) * IMAGE_BOX_STEP);
+  }, []);
 
   const phaseRef = useRef<TimerPhase>('idle');
 
