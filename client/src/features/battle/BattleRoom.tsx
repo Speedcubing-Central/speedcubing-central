@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatTime, getEvent, type Penalty } from '@scc/shared';
@@ -70,6 +70,18 @@ const LEADERBOARD_MAX_HEIGHT = 224; // max-h-56
 const LEADERBOARD_MIN_HEIGHT = 72; // ~2 rows
 const LEADERBOARD_CHROME = 62; // p-4 (32) + the "Leaderboard" label and its mb-3 (30)
 const CHAT_MIN_HEIGHT = 180; // the elastic region's floor, below
+
+// Round history is the third list in that column that grows on its own — a
+// row per round played, with no end to the rounds a room can run. Its
+// max-h-48 was never reachable: Stats, the leaderboard and Chat's floor claim
+// the column between them, so every pixel it took came straight off the
+// bottom of the page and scrolled it. It is last in the column and the least
+// urgent thing in it, so it gets what's left rather than a share of its own,
+// and the leaderboard's cap keeps HISTORY_MIN_CARD back for it.
+const HISTORY_MAX_HEIGHT = 192; // max-h-48
+const HISTORY_MIN_HEIGHT = 36; // ~2 rows
+const HISTORY_CHROME = 62; // p-4 (32) + the "My Round History" label and its mb-3 (30)
+const HISTORY_MIN_CARD = HISTORY_MIN_HEIGHT + HISTORY_CHROME;
 
 function BattleSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings();
@@ -551,14 +563,22 @@ export default function BattleRoom() {
   const isDesktop = useIsDesktop();
   const showScramble = room?.status === 'ACTIVE' && !!room.scramble;
   const statsRef = useRef<HTMLDivElement>(null);
+  const leaderboardRef = useRef<HTMLDivElement>(null);
   const [scrambleMaxHeight, setScrambleMaxHeight] = useState<number | undefined>(undefined);
   const [rosterMaxHeight, setRosterMaxHeight] = useState(ROSTER_MAX_HEIGHT);
   const [leaderboardMaxHeight, setLeaderboardMaxHeight] = useState(LEADERBOARD_MAX_HEIGHT);
+  const [historyMaxHeight, setHistoryMaxHeight] = useState(HISTORY_MAX_HEIGHT);
+  // Both right-hand caps move when the lists they sit beside change length,
+  // so the room's roster and the rounds played are inputs to this, not just
+  // the window size.
+  const playerCount = room?.participants.length ?? 0;
+  const historyCount = myHistory.length;
   useEffect(() => {
     if (!isDesktop || colHeight <= 0) {
       setScrambleMaxHeight(undefined);
       setRosterMaxHeight(ROSTER_MAX_HEIGHT);
       setLeaderboardMaxHeight(LEADERBOARD_MAX_HEIGHT);
+      setHistoryMaxHeight(HISTORY_MAX_HEIGHT);
       return;
     }
     const headerH = headerRef.current?.offsetHeight ?? 0;
@@ -580,14 +600,25 @@ export default function BattleRoom() {
     // Right-hand column, same idea. It's the other half of this grid row, so
     // it's exactly as tall as the left one. Stats is measured (fixed content,
     // and nothing here feeds back into it); Chat is elastic but floored, so
-    // the leaderboard gets what's left over that floor.
+    // the leaderboard gets what's left over that floor, less the little it
+    // has to keep back for history when there is any.
     const statsH = statsRef.current?.offsetHeight ?? 0;
-    const leaderboardCap = colHeight - statsH - CHAT_MIN_HEIGHT - LEADERBOARD_CHROME - COLUMN_GAP * 2;
+    const hasHistory = historyCount > 0;
+    const rightGaps = COLUMN_GAP * (hasHistory ? 3 : 2);
+    const leaderboardCap = colHeight - statsH - CHAT_MIN_HEIGHT
+      - (hasHistory ? HISTORY_MIN_CARD : 0) - LEADERBOARD_CHROME - rightGaps;
     setLeaderboardMaxHeight(Math.max(LEADERBOARD_MIN_HEIGHT, Math.min(LEADERBOARD_MAX_HEIGHT, leaderboardCap)));
+    // History takes what the leaderboard actually used, not what it was
+    // allowed — a 3-player leaderboard is well under its cap, and that
+    // difference is history's to spend. Measured after the cap lands (the dep
+    // below), and one-way: nothing sizes the leaderboard off history.
+    const leaderboardH = leaderboardRef.current?.offsetHeight ?? 0;
+    const historyCap = colHeight - statsH - CHAT_MIN_HEIGHT - leaderboardH - HISTORY_CHROME - rightGaps;
+    setHistoryMaxHeight(Math.max(HISTORY_MIN_HEIGHT, Math.min(HISTORY_MAX_HEIGHT, historyCap)));
 
     const timeout = setTimeout(() => setScrambleMaxHeight(budget), 150);
     return () => clearTimeout(timeout);
-  }, [isDesktop, colHeight, showScramble, rosterMaxHeight]);
+  }, [isDesktop, colHeight, showScramble, rosterMaxHeight, leaderboardMaxHeight, playerCount, historyCount]);
 
   // Reserved space below the digit varies by which sub-state the timer card
   // is showing (penalty buttons, an edit row, "waiting for others" + an edit
@@ -633,6 +664,29 @@ export default function BattleRoom() {
   // the vertical room back. Only the side-by-side layout reserves anything.
   const reservedRight = awaitingSubmit && isDesktop ? PENALTY_COL_WIDTH + PENALTY_COL_GAP : 0;
   const [timerCardRef, digitFontSize] = useFittedFontSize(reservedBelow, reservedRight);
+
+  // Width of the digit's box in that side-by-side row, in `ch` — the digit is
+  // monospace, so one ch is one glyph and this is exact. The row is centred as
+  // a unit, so this width decides where the buttons sit, and it is a
+  // high-water mark rather than the current label: it starts at whatever the
+  // solve stopped at and only ever grows while penalties are toggled.
+  //
+  // Tracking the label exactly would re-centre the row on every width change
+  // and slide Submit out from under the cursor that just clicked. Reserving
+  // the widest label the solve *could* reach doesn't work either — that's
+  // "16.91+16", eight stacked +2s and their suffix, and a box that wide around
+  // a four-character time is the void this was meant to remove. Growing only
+  // upward gets both: choosing DNF or OK never moves anything (both are
+  // narrower), and the one move left is the first +2, after which further
+  // stacking is stable too.
+  const pendingLabel = formatTime(pendingTime ?? 0, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount);
+  const [digitBoxCh, setDigitBoxCh] = useState(pendingLabel.length);
+  useEffect(() => {
+    setDigitBoxCh(formatTime(pendingTime ?? 0, 'NONE', settings.solvePrecision, 0).length);
+  }, [pendingTime, settings.solvePrecision]);
+  useEffect(() => {
+    setDigitBoxCh((ch) => Math.max(ch, pendingLabel.length));
+  }, [pendingLabel]);
 
   // ── Name prompt (guest opened link directly) ─────────────────────────────
   if (namePrompt) {
@@ -820,23 +874,26 @@ export default function BattleRoom() {
                40px floor it was pinned to. Below md the card is narrow
                instead of short, so they stay stacked there.
 
-               The digit takes the leftover width as flex-1 rather than the
-               row being centered as a whole: its text is a different width
-               for "12.34" than for "DNF", and a centered row would slide the
-               buttons sideways as you picked penalties — moving Submit out
-               from under the cursor that just chose DNF. A fixed-width
-               control column and a flexible digit box keep every button
-               exactly where it was. gap-2 between the stacked pieces, not
+               The row is centred as a unit, and both boxes in it have a fixed
+               width for that to be safe: the control column is 240, and the
+               digit's box is digitBoxCh (see above). It was flex-1 before,
+               which pinned the pair flush right and left the slack piled up
+               on the left of the card. gap-2 between the stacked pieces, not
                gap-4: below md this is still the tallest thing the card ever
                holds, and at its 160px minimum the extra spacing is the
                difference between fitting and scrolling. */
-            <div className="flex flex-col items-center gap-2 w-full md:flex-row md:items-center md:gap-8">
+            <div className="flex flex-col items-center gap-2 w-full md:flex-row md:items-center md:justify-center md:gap-8">
               <div
                 className={clsx(
-                  'font-mono font-bold leading-none transition-colors md:flex-1 md:min-w-0 md:text-right',
+                  'font-mono font-bold leading-none transition-colors md:min-w-0 md:text-right',
                   pendingPenalty === 'DNF' ? 'text-red-400' : pendingPlusTwoCount > 0 ? 'text-yellow-400' : timerColor(),
                 )}
-                style={{ fontSize: digitFontSize }}
+                style={{
+                  fontSize: digitFontSize,
+                  // min() so a digit fitted to the full remaining width can't
+                  // push the control column off the card's right edge.
+                  width: isDesktop ? `min(${digitBoxCh}ch, 100%)` : undefined,
+                }}
               >
                 {formatTime(pendingTime, pendingPenalty, settings.solvePrecision, pendingPlusTwoCount)}
               </div>
@@ -966,7 +1023,7 @@ export default function BattleRoom() {
         {/* Leaderboard — capped with internal scroll (like the players
             list) rather than flex-1, so Chat below gets to be the column's
             one genuinely elastic region. */}
-        <div className="card p-4 shrink-0">
+        <div ref={leaderboardRef} className="card p-4 shrink-0">
           <div className="label mb-3">Leaderboard</div>
           {leaderboard.length === 0 ? (
             <div className="text-xs text-muted">No players yet</div>
@@ -1043,7 +1100,10 @@ export default function BattleRoom() {
         {myHistory.length > 0 && (
           <div className="card p-4 shrink-0">
             <div className="label mb-3">My Round History</div>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
+            <div
+              className="space-y-1 overflow-y-auto pr-1"
+              style={{ maxHeight: isDesktop ? historyMaxHeight : HISTORY_MAX_HEIGHT }}
+            >
               {[...myHistory].reverse().map((s, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-muted font-mono">
                   <span className="w-4 text-right">{myHistory.length - i}.</span>
