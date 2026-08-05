@@ -322,6 +322,10 @@ export default function BattleRoom() {
   // actually scores the round; see socket.ts's solve_complete comment).
   const [editing, setEditing] = useState(false);
   const [editInput, setEditInput] = useState('');
+  // The edit form's penalty, held apart from the submitted one so Cancel
+  // leaves the solve alone: nothing here reaches the server until Update.
+  const [editPenalty, setEditPenalty] = useState<Penalty>('NONE');
+  const [editPlusTwoCount, setEditPlusTwoCount] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showChangeEvent, setShowChangeEvent] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -377,14 +381,31 @@ export default function BattleRoom() {
   }
 
   function openEdit() {
+    // The field holds the raw time; the penalty it carries lives in the
+    // buttons beside it, seeded from what was submitted.
     setEditInput(formatTime(pendingTime, 'NONE', settings.solvePrecision));
+    setEditPenalty(pendingPenalty);
+    setEditPlusTwoCount(pendingPlusTwoCount);
     setEditing(true);
   }
 
   function handleEditSubmit() {
     const parsed = parseTimeInput(editInput, settings.solvePrecision);
     if (!parsed) { toast.error('Invalid time format'); return; }
-    submitSolve(parsed.penalty, parsed.time, parsed.plusTwoCount);
+    // The buttons own the penalty, but typing one still works and wins when
+    // it's there ("dnf", or a trailing "+" per +2) — typing it is every bit
+    // as deliberate as clicking it, and it's the older of the two habits.
+    const typedPenalty = parsed.penalty === 'DNF' || parsed.plusTwoCount > 0;
+    // "dnf" parses to a zero time, so keep the time the solve already had
+    // rather than discarding it: the penalty is editable from here, and a
+    // DNF you can undo has to still know what it was. The main submit path
+    // sends the real time with a DNF too.
+    const time = parsed.penalty === 'DNF' ? pendingTime : parsed.time;
+    submitSolve(
+      typedPenalty ? parsed.penalty : editPenalty,
+      time,
+      typedPenalty ? parsed.plusTwoCount : editPlusTwoCount,
+    );
     setEditing(false);
   }
 
@@ -810,12 +831,22 @@ export default function BattleRoom() {
               )}
             </div>
           ) : submitted && editing ? (
-            /* Editing an already-submitted time/penalty */
-            <div className="flex flex-col items-center gap-4 w-full">
-              <div className="text-xs text-muted">Edit your time (e.g. 12.58 or 1:02.34, or DNF)</div>
+            /* Editing an already-submitted time/penalty. The button that
+               opens this says "Edit time/penalty" and for a while only the
+               first half was true: DNF was the one penalty reachable, as a
+               button that submitted the moment it was clicked, so there was
+               no way to add or clear a +2, and no way back to OK short of
+               retyping the time. It's the same PenaltyButtons the stopped
+               state uses now, and like there it only *selects* — Update is
+               what commits.
+
+               Same left/right split as that state, too: the form is four
+               rows tall stacked, which overflows this card at the height a
+               laptop leaves it, and the card would scroll. */
+            <div className="flex flex-col md:flex-row md:items-center md:justify-center gap-4 md:gap-8 w-full">
               <input
                 autoFocus
-                className="input text-center text-2xl font-mono w-56"
+                className="input text-center text-2xl font-mono w-56 md:shrink-0"
                 placeholder="0.00"
                 value={editInput}
                 onChange={(e) => setEditInput(e.target.value)}
@@ -824,22 +855,25 @@ export default function BattleRoom() {
                   if (e.key === 'Escape') setEditing(false);
                 }}
               />
-              <div className="flex gap-2">
-                <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors text-red-400"
-                  onClick={() => { submitSolve('DNF', 0); setEditing(false); }}
-                >
-                  DNF
-                </button>
-                <button className="btn-primary px-8" onClick={handleEditSubmit}>
-                  Update
-                </button>
-                <button
-                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors"
-                  onClick={() => setEditing(false)}
-                >
-                  Cancel
-                </button>
+              <div className="flex flex-col items-center gap-2 md:w-[240px] md:shrink-0">
+                <div className="text-xs text-muted text-center">Edit the time, then pick a penalty</div>
+                <PenaltyButtons
+                  penalty={editPenalty}
+                  plusTwoCount={editPlusTwoCount}
+                  onChange={(p, c) => { setEditPenalty(p); setEditPlusTwoCount(c); }}
+                  size="sm"
+                />
+                <div className="flex gap-2">
+                  <button className="btn-primary px-6" onClick={handleEditSubmit}>
+                    Update
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-border hover:bg-gray-100 dark:hover:bg-card-hover transition-colors"
+                    onClick={() => setEditing(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           ) : submitted ? (
