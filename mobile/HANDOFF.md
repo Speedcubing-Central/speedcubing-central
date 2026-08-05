@@ -325,6 +325,47 @@ The same reasoning is why the tab bar and the stats panel are never unmounted
 either. Anything that has to reappear the instant a solve ends should already
 exist.
 
+### Sessions are enormous, so anything O(session) per solve is a freeze
+
+Real sessions on this account hold **18,000 solves** and grow forever. Anything
+that walks the whole list when a solve is recorded is not a hot spot, it is a
+hang: measured on device, the Timer froze for **4.6 seconds** after every solve
+with input blocked, and a second tester saw worse, because it scales with what
+you have recorded rather than with the phone.
+
+What that ruled out, so nobody re-chases it:
+
+- **Not the scramble image.** It is prewarmed a solve ahead
+  (`lib/scrambleDrawing.ts`), preparing one costs about a millisecond, and
+  react-native-svg keys parsed children by index so a new scramble updates fills
+  in place instead of remounting a few hundred views. The trace confirms
+  `cube-was-prewarmed` on every solve. This was assumed to be the cause for
+  three rounds and never was.
+- **Not the animations.** The chrome returns in ~190ms, natively driven.
+
+What it actually was, and the shape to watch for: `bestAverageWithIndex` slides a
+window across the entire history, `AVERAGE_SIZES` ends at **1000**, and callers
+asked for it twice. Plus per-solve garbage: `singleStats` spread the whole
+session into `Math.min` (which *throws* past ~200k solves), the stats panel
+recomputed a session-length ordering nothing displayed, and recording a solve
+rebuilt the array through `map` twice.
+
+Before adding a stat or a derived value to the solve path, ask what it costs at
+20,000 solves, and prefer incremental or lazy over "recompute from the list".
+
+### Measure on the device before optimising, and use console.warn
+
+Three rounds were spent optimising things that were real but were not the
+problem, because the reasoning was plausible and untested. One trace settled it
+in a single round.
+
+The mechanism, since it is not obvious: `console.log` from the app **does not
+reach the Metro console** here, only `warn` and `error` do. A first attempt at
+instrumenting produced an empty log and looked like the trace had not run. Print
+timings with `console.warn`, print one line per step rather than batching them
+behind a timer that has to fire, and emit a marker at module load so "found
+nothing" can be told apart from "never ran".
+
 ### Never cache a failure
 
 `lib/cubingSvg.ts` caches each puzzle's artwork by promise, and `load()` catches
