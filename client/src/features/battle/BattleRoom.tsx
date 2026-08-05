@@ -746,7 +746,13 @@ export default function BattleRoom() {
     );
   }
 
-  if (!connected) {
+  // Only when there is nothing to show: the first connection, or an outage
+  // long enough that useBattleSocket gave up on its snapshot. A dropped
+  // connection that still has a room behind it renders the room, with the
+  // header saying "Reconnecting…" — this used to return here on `!connected`
+  // alone, which meant a one-second blip replaced the whole page, and made
+  // the header's own connection indicator (below) unreachable code.
+  if (!connected && !room) {
     return <div className="p-8 text-muted text-center">Connecting…</div>;
   }
 
@@ -775,7 +781,12 @@ export default function BattleRoom() {
               <span className="font-mono tracking-wider">{room.code}</span>
             </div>
           </div>
-          {!connected && <span className="text-xs text-red-400">Disconnected</span>}
+          {/* Reachable at last, and worded for what is actually happening:
+              socket.io is already retrying, and the room behind this is the
+              last known state, not a dead one. Inline in the header so it
+              costs the column no height — the scramble/timer budget below is
+              measured off this card. */}
+          {!connected && <span className="text-xs text-yellow-400 shrink-0">Reconnecting…</span>}
           {isHost && (
             <button
               className="text-muted hover:text-gray-700 dark:hover:text-gray-200 transition-colors p-1"

@@ -50,19 +50,55 @@ export function useBattleSocket() {
   // local history, instead of it carrying over from the old event.
   const prevEventKeyRef = useRef<string | null>(null);
 
+  // How long a dropped connection is allowed to keep its last room snapshot on
+  // screen. socket.io reconnects in about a second, and BattleRoom re-sends
+  // join_room the moment it does, so for an ordinary blip the snapshot is only
+  // ever a second stale and the room simply stays up. Past this, the
+  // connection is not blipping, it is down, and a snapshot that old is a lie —
+  // clear it and let the page fall back to its loading state.
+  const STALE_ROOM_MS = 10_000;
+  const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A solve completed while the connection is down. `emit` on a disconnected
+  // socket is a silent no-op, so without this the submission is simply lost —
+  // and the round then waits on a player who believes they have submitted.
+  // Held until the server has acknowledged us again (see room_state below).
+  const pendingSolveRef = useRef<
+    { code: string; time: number; penalty: Penalty; plusTwoCount: number } | null
+  >(null);
+
   useEffect(() => {
     const socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] }) as BattleSocket;
     socketRef.current = socket;
 
-    socket.on('connect', () => setConnected(true));
-    // Clearing `room` (not just flipping `connected`) matters: BattleRoom
-    // only special-cases a fully-null room ("Joining room…"), so without
-    // this a brief window between reconnecting and the fresh room_state
-    // arriving would render the *previous* (now possibly-stale) snapshot
-    // rather than a loading state.
-    socket.on('disconnect', () => {
+    socket.on('connect', () => {
+      if (staleTimerRef.current) {
+        clearTimeout(staleTimerRef.current);
+        staleTimerRef.current = null;
+      }
+      setConnected(true);
+    });
+    // The room snapshot deliberately outlives a disconnect now. It used to be
+    // cleared here, which sounds harmless — the page shows a loading state for
+    // the second or so a reconnect takes — except that BattleRoom bails out to
+    // a bare "Connecting…" line for a null room, so every transient blip tore
+    // the entire room off the screen and rebuilt it: scramble, timer,
+    // leaderboard, chat. Nothing was ever actually lost (the server has all of
+    // it, and this tab's own history never went anywhere), which is exactly
+    // how it was reported — "it keeps disconnecting and reconnecting, but the
+    // scramble and my results are still there". The reconnect was never the
+    // problem; demolishing the page over it was. Keep the snapshot, mark the
+    // connection, and let the header say so. Prolonged outages still clear it
+    // (STALE_ROOM_MS), so a genuinely dead connection can't sit there showing
+    // a room that may no longer resemble reality.
+    socket.on('disconnect', (reason) => {
       setConnected(false);
-      setRoom(null);
+      // Named reasons, because "some users keep getting disconnected" is only
+      // actionable once you know whether it's the browser suspending a
+      // backgrounded tab, a proxy closing the transport, or the server.
+      console.warn(`[battle] socket disconnected: ${reason}`);
+      if (staleTimerRef.current) clearTimeout(staleTimerRef.current);
+      staleTimerRef.current = setTimeout(() => setRoom(null), STALE_ROOM_MS);
     });
 
     socket.on('room_state', (r) => {
@@ -72,6 +108,14 @@ export function useBattleSocket() {
       }
       prevEventKeyRef.current = key;
       setRoom(r);
+      // The server only accepts a solve from a socket it has seen join, so a
+      // held submission waits for this rather than for `connect` — room_state
+      // is the first thing that follows the rejoin, and the proof it landed.
+      const pending = pendingSolveRef.current;
+      if (pending) {
+        pendingSolveRef.current = null;
+        socket.emit('solve_complete', pending);
+      }
     });
 
     socket.on('round_start', ({ scramble, roundNumber }) => {
@@ -114,6 +158,10 @@ export function useBattleSocket() {
     socket.on('error_msg', ({ message }) => setError(message));
 
     return () => {
+      if (staleTimerRef.current) {
+        clearTimeout(staleTimerRef.current);
+        staleTimerRef.current = null;
+      }
       socket.disconnect();
       socketRef.current = null;
     };
@@ -136,7 +184,16 @@ export function useBattleSocket() {
   }, []);
 
   const solveComplete = useCallback((code: string, time: number, penalty: Penalty, plusTwoCount: number) => {
-    socketRef.current?.emit('solve_complete', { code, time, penalty, plusTwoCount });
+    const payload = { code, time, penalty, plusTwoCount };
+    const socket = socketRef.current;
+    // Held rather than dropped — see pendingSolveRef. Re-submitting (editing a
+    // penalty) while still disconnected just replaces it, which is the right
+    // answer: the last thing you chose is the thing you meant to send.
+    if (!socket?.connected) {
+      pendingSolveRef.current = payload;
+      return;
+    }
+    socket.emit('solve_complete', payload);
   }, []);
 
   const leaveRoom = useCallback((code: string) => {
