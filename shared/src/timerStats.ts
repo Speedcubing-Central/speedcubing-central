@@ -51,30 +51,6 @@ export function currentAverage(solves: SolveDTO[], size: number): number | null 
   return r.value;
 }
 
-// Binary-search insert/remove into an ascending sorted array. O(size) per
-// call (array splice), but that's still far cheaper than the full re-sort
-// (O(size log size), with real per-comparison overhead) the naive version
-// below used to pay for every single window position.
-function sortedInsert(arr: number[], v: number): void {
-  let lo = 0;
-  let hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (arr[mid] < v) lo = mid + 1;
-    else hi = mid;
-  }
-  arr.splice(lo, 0, v);
-}
-function sortedRemove(arr: number[], v: number): void {
-  let lo = 0;
-  let hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (arr[mid] < v) lo = mid + 1;
-    else hi = mid;
-  }
-  arr.splice(lo, 1);
-}
 
 // Best average of `size` across the whole session, plus the index (in the
 // newest-first list) it starts at. Slides a `size`-wide window across
@@ -121,19 +97,86 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
   const trim = Math.max(1, Math.ceil(size * 0.05));
   const keptCount = size - 2 * trim;
   let dnfCount = 0;
-  const window: number[] = [];
+  // ── A typed array with copyWithin, not an array with splice ──
+  //
+  // Same algorithm, different container, and the difference is not academic:
+  // this shifts elements about twice per window, so ao1000 over a 14,700-solve
+  // session performs roughly 27,000 splices on a 1000-element array. On V8 that
+  // is fine. On Hermes, on a phone, the whole of detectNewPBs was measured on
+  // device at over four and a half seconds of frozen UI after every solve, and
+  // this was the bulk of it. Float64Array.copyWithin is a memmove; splice on a
+  // generic array is not.
+  //
+  // Float64Array also stores Infinity natively, which is how a DNF is carried
+  // through here, so nothing about the ordering or the DNF counting changes.
+  const window = new Float64Array(size);
+  let windowLen = 0;
+  const windowSeek = (v: number): number => {
+    let lo = 0;
+    let hi = windowLen;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (window[mid] < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const windowInsert = (v: number): void => {
+    const at = windowSeek(v);
+    window.copyWithin(at + 1, at, windowLen);
+    window[at] = v;
+    windowLen++;
+  };
+  const windowRemove = (v: number): void => {
+    const at = windowSeek(v);
+    if (window[at] !== v) return;
+    window.copyWithin(at, at + 1, windowLen);
+    windowLen--;
+  };
+  // Running sum of the FINITE values in the window, maintained as the window
+  // rolls. See evalWindow for why this exists and why it is finite-only.
+  let finiteSum = 0;
   for (let k = 0; k < size; k++) {
     const v = eff(solves[k]);
     if (v === Infinity) dnfCount++;
-    sortedInsert(window, v);
+    else finiteSum += v;
+    windowInsert(v);
   }
 
   let best: number | null = null;
   let idx: number | null = null;
+
+  // ── Why this does not walk the kept range ──
+  //
+  // It used to sum window[trim .. size-trim) for every window, which is O(size)
+  // per window and therefore O(n x size) overall. With AVERAGE_SIZES ending at
+  // 1000 and a real session holding 14,700 solves, that is about 14 million
+  // additions for ao1000 alone, twice per solve (detectNewPBs asks for the
+  // before and after). On V8 that is tens of milliseconds; on Hermes, on a
+  // phone, it was measured on device at over four and a half seconds of frozen
+  // UI after every single solve, with the timer blocked the whole time.
+  //
+  // The window is sorted, so the kept range is everything except `trim` from
+  // each end. Tracking the sum makes each window O(trim) instead of O(size):
+  // 100 operations for ao1000 rather than 1000.
+  //
+  // Finite-only because a DNF is Infinity, and Infinity - Infinity is NaN. The
+  // DNFs all sort to the end, and this branch is only reached when there are no
+  // more of them than `trim`, so they are always inside the trimmed-off top and
+  // never in the kept range. Subtracting just the finite part of that top slice
+  // gives exactly the same total.
+  //
+  // Exact, not approximate: effective times are whole milliseconds, and a
+  // session's worth of them stays far inside the range where integer addition
+  // and subtraction in a double are exact. The value produced is bit-identical
+  // to the old sum, which the differential test in the harness asserts.
   const evalWindow = (start: number) => {
     if (dnfCount > trim) return;
-    let sum = 0;
-    for (let k = trim; k < size - trim; k++) sum += window[k];
+    let sum = finiteSum;
+    for (let k = 0; k < trim; k++) sum -= window[k];
+    // The top `trim` slots hold the DNFs plus enough finite values to fill
+    // them; only the finite ones are in `finiteSum`.
+    for (let k = size - trim; k < size - dnfCount; k++) sum -= window[k];
     const value = sum / keptCount;
     if (best === null || value < best) {
       best = value;
@@ -146,9 +189,11 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
     const outV = eff(solves[start - 1]);
     const inV = eff(solves[start + size - 1]);
     if (outV === Infinity) dnfCount--;
-    sortedRemove(window, outV);
+    else finiteSum -= outV;
+    windowRemove(outV);
     if (inV === Infinity) dnfCount++;
-    sortedInsert(window, inV);
+    else finiteSum += inV;
+    windowInsert(inV);
     evalWindow(start);
   }
 
@@ -345,7 +390,18 @@ export function detectNewPBs(prevSolves: SolveDTO[], newSolve: SolveDTO): PbHit[
 
   for (const size of AVERAGE_SIZES) {
     const prevBest = bestAverage(prevSolves, size);
-    const newBest = bestAverage(newSolves, size);
+    // Only ONE window can be new: the one ending on the solve just recorded.
+    // Every other window of `newSolves` is a window of `prevSolves` and was
+    // already covered by `prevBest`, so scanning the whole history a second
+    // time re-derived an answer we are holding. At 14,700 solves that second
+    // scan was half of a multi-second freeze after every solve.
+    const newestWindow = newSolves.length >= size ? bestAverage(newSolves.slice(0, size), size) : null;
+    const newBest =
+      prevBest === null
+        ? newestWindow
+        : newestWindow === null
+          ? prevBest
+          : Math.min(prevBest, newestWindow);
     if (newBest !== null && isFinite(newBest) && (prevBest === null || newBest < prevBest)) {
       hits.push({ label: size === 3 ? 'mo3' : `ao${size}`, value: newBest });
     }

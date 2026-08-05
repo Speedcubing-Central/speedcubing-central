@@ -4,6 +4,7 @@ import { SvgAst } from 'react-native-svg';
 import { usePalette } from '../store/settings';
 import { hasScrambleImage } from '../lib/cubingSvg';
 import { prepareScrambleDrawing, preparedScrambleDrawing, type ScrambleDrawing } from '../lib/scrambleDrawing';
+import { mark } from '../lib/perfTrace';
 
 // The scramble image: the state the scramble produces, so you can check your
 // cube matches before starting.
@@ -62,6 +63,9 @@ export const ScrambleNet = memo(function ScrambleNet({
   const shown = prepared !== undefined ? prepared : held.event === eventId ? held.drawing : null;
 
   useEffect(() => {
+    // Temporary: was the drawing already prepared when the scramble changed, or
+    // did this scramble have to build one on demand?
+    mark(prepared !== undefined ? 'cube-was-prewarmed' : 'cube-MISS-preparing');
     if (prepared !== undefined) {
       // Already on screen; just record it as what to fall back to next time.
       setHeld((prev) =>
@@ -75,6 +79,7 @@ export const ScrambleNet = memo(function ScrambleNet({
     // ahead of it.
     let cancelled = false;
     prepareScrambleDrawing(eventId, scramble).then((drawing) => {
+      mark('cube-prepared');
       if (!cancelled) setHeld({ event: eventId, drawing });
     });
     return () => {
