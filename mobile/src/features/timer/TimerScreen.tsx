@@ -20,7 +20,6 @@ import { apiError } from '../../lib/api';
 import { parseTimeInput } from '../../lib/timeInput';
 import { eventBadge, scrambleImageHeight, scrambleImageWidth } from '../../lib/scramble';
 import { prewarmScrambleDrawing } from '../../lib/scrambleDrawing';
-import { mark, traceStart } from '../../lib/perfTrace';
 import { densityFor, useRhythm, useScreenScale } from '../../lib/scale';
 import { usePalette, useSettings } from '../../store/settings';
 import { useAuth } from '../../store/auth';
@@ -237,7 +236,6 @@ export default function TimerScreen({ navigation }: Props) {
 
   const onComplete = useCallback(
     async (timeMs: number, penalty: Penalty, plusTwoCount: number) => {
-      traceStart('stopped');
       setSubmitting(true);
       // The scramble this attempt used, captured before the display moves on.
       const used = scr.scramble;
@@ -249,7 +247,6 @@ export default function TimerScreen({ navigation }: Props) {
       // with the solved scramble still on screen. Nothing about picking the next
       // scramble depends on the save succeeding, so the two run together.
       scr.advance();
-      mark('advanced');
       try {
         let sessionId = data.currentId;
         if (!sessionId) {
@@ -261,11 +258,8 @@ export default function TimerScreen({ navigation }: Props) {
         // everything below happens at the speed of the phone rather than of the
         // network. See useTimerData's note on recording a solve.
         const solve = await data.addSolve(timeMs, penalty, plusTwoCount, used, sessionId);
-        mark('solve-added');
         if (solve && celebratePBs) {
-          mark('pb-start');
           const hits = detectNewPBs(prevSolves, solve);
-          mark('pb-done');
           // The overlay owns its own dismissal timing, so no timeout here.
           if (hits.length > 0) setPbHits(hits);
         }
@@ -291,7 +285,6 @@ export default function TimerScreen({ navigation }: Props) {
         Alert.alert('Solve not saved', apiError(e, 'Failed to save solve, try again'));
         return false;
       } finally {
-        mark('submitting-off');
         setSubmitting(false);
       }
     },
@@ -481,23 +474,6 @@ export default function TimerScreen({ navigation }: Props) {
     setTimerImmersion(immersive, immersive ? screenTint : null);
   }, [immersive, screenTint, setTimerImmersion]);
   useEffect(() => () => setTimerImmersion(false, null), [setTimerImmersion]);
-
-  // ── Temporary: where does the time after a solve actually go? ──
-  useEffect(() => {
-    mark(`scramble=${scr.scramble ? 'shown' : 'BLANK'}`);
-  }, [scr.scramble]);
-  useEffect(() => {
-    mark(`scrambleLoading=${scr.loading}`);
-  }, [scr.loading]);
-  useEffect(() => {
-    mark(`inputBlocked=${inputBlocked}`);
-  }, [inputBlocked]);
-  useEffect(() => {
-    mark(`immersive=${immersive}`);
-  }, [immersive]);
-  useEffect(() => {
-    mark(`solves=${data.solves.length}`);
-  }, [data.solves]);
 
   // One decision, read by the header and the panel, so they cannot disagree
   // about how much room there is.
