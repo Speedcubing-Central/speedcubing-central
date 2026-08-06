@@ -65,6 +65,31 @@ function mapEvent(scrType: string, name: string): string | null {
   return base;
 }
 
+// Largest value `Solve.time` can actually hold: the column is a Postgres
+// Int (32-bit), i.e. ~24.8 days in ms. Real exports do contain entries past
+// this. A corrupt row in a synced cstimer export can carry a time like
+// 3.6e26 ms alongside a matching nonsense unix stamp of -3.6e23 s. Such a
+// row is unstorable (it would 500 the bulk insert on integer overflow) and
+// unrenderable, so it's dropped like any other malformed entry.
+const MAX_SOLVE_MS = 2147483647;
+
+// The range a JS Date can represent (±100,000,000 days from the epoch).
+// Anything outside it yields an Invalid Date, and calling .toISOString() on
+// one throws a RangeError whose message is the bare string "Invalid time
+// value". That string is exactly what the import modal used to surface to
+// the user, aborting a 45,000-solve import over one bad row.
+const MAX_TIMESTAMP_MS = 8640000000000000;
+
+function isRepresentableDate(ms: number): boolean {
+  return Number.isFinite(ms) && Math.abs(ms) <= MAX_TIMESTAMP_MS;
+}
+
+// A parsed entry before its timestamp is finalized. `createdAtMs` is null
+// when the export's own stamp was missing or unrepresentable. The solve
+// itself is still kept, and enforceDocumentOrder places it right after the
+// solve above it, which is where cstimer lists it anyway.
+type PendingSolve = Omit<CstimerSolveEntry, 'createdAt'> & { createdAtMs: number | null };
+
 // The DB orders solves purely by createdAt, so the import needs each solve's
 // timestamp to be strictly increasing in the same sequence cstimer lists
 // them in — matching cstimer's own display order exactly, rather than
@@ -75,13 +100,16 @@ function mapEvent(scrType: string, name: string): string | null {
 // synced). Walk the list in document order and nudge any timestamp forward
 // by 1ms whenever it wouldn't otherwise be later than the previous solve —
 // this guarantees the stored order always matches cstimer's own list.
-function enforceDocumentOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] {
-  let prev = -Infinity;
-  return solves.map((s) => {
-    let t = new Date(s.createdAt).getTime();
+function enforceDocumentOrder(solves: PendingSolve[]): CstimerSolveEntry[] {
+  // Seeded from the first usable stamp so a leading run of unstamped solves
+  // still lands just before it rather than at -Infinity.
+  const firstKnown = solves.find((s) => s.createdAtMs !== null)?.createdAtMs ?? Date.now();
+  let prev = firstKnown - 1;
+  return solves.map(({ createdAtMs, ...rest }) => {
+    let t = createdAtMs ?? prev + 1;
     if (t <= prev) t = prev + 1;
     prev = t;
-    return { ...s, createdAt: new Date(t).toISOString() };
+    return { ...rest, createdAt: new Date(t).toISOString() };
   });
 }
 
@@ -95,6 +123,14 @@ function enforceDocumentOrder(solves: CstimerSolveEntry[]): CstimerSolveEntry[] 
 // +2s, so a 2000 entry always imports as plusTwoCount: 1 — this is a known
 // limitation of the import, not a lossy reduction of anything cstimer itself
 // could represent.
+//
+// Individual entries are *skipped*, never fatal: a real export can contain a
+// corrupt row (see MAX_SOLVE_MS), and one such row must not take the other
+// tens of thousands of solves down with it. Only a file that isn't JSON at
+// all throws.
+//
+// This is also why nothing here calls .toISOString() on an unvalidated
+// value: every timestamp goes through isRepresentableDate first.
 export function parseCstimerExport(raw: string): CstimerParsedSession[] {
   let data: Record<string, unknown>;
   try {
@@ -126,20 +162,21 @@ export function parseCstimerExport(raw: string): CstimerParsedSession[] {
     const eventId = mapEvent(scrType, name);
     if (!eventId) continue;
 
-    const solves: CstimerSolveEntry[] = [];
+    const solves: PendingSolve[] = [];
     for (const entry of rawSolves as unknown[]) {
       if (!Array.isArray(entry) || !Array.isArray(entry[0])) continue;
       const [code, timeMs] = entry[0] as [number, number];
+      if (typeof timeMs !== 'number' || !Number.isFinite(timeMs) || timeMs < 0 || timeMs > MAX_SOLVE_MS) continue;
       const penalty: Penalty = code === -1 ? 'DNF' : 'NONE';
       const plusTwoCount = code === 2000 ? 1 : 0;
       const scramble = typeof entry[1] === 'string' ? entry[1] : '';
-      const seconds = typeof entry[3] === 'number' ? entry[3] : Date.now() / 1000;
+      const ms = typeof entry[3] === 'number' ? entry[3] * 1000 : NaN;
       solves.push({
         time: Math.max(0, Math.round(timeMs)),
         penalty,
         plusTwoCount,
         scramble,
-        createdAt: new Date(seconds * 1000).toISOString(),
+        createdAtMs: isRepresentableDate(ms) ? ms : null,
       });
     }
     if (solves.length > 0) results.push({ key, name, scrType, eventId, solves: enforceDocumentOrder(solves) });
