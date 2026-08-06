@@ -319,6 +319,19 @@ async function main() {
   const result: Record<string, Record<string, { validAlts: string[]; totalAlts: number }>> = {};
 
   for (const set of ALG_SETS) {
+    // Square-1 sets use SQ1's "(x, y) /" tuple notation, entirely
+    // incompatible with this file's WCA-face-turn-specific verification
+    // (cleanAlgForDisplay/invertAlg/eliminateWideMoves all assume U/R/F-style
+    // tokens) — running it against them would throw or silently produce
+    // garbage. Their alts are already independently verified against the
+    // actual Square-1 puzzle in their own scripts/generate-sq1-*.ts, so
+    // there's nothing for this pass to add; skipping just means no
+    // VALID_ALTS entry for their case ids, which falls back to each case's
+    // own `moves`/`alts` — already correct, since those were pre-verified.
+    // Their caseIds/moves are still included in ALG_SET_INDEX/ALG_CASE_MOVES
+    // below (for the Trainer's prefs/selection/solves validation) — just not
+    // run through this loop.
+    if (set.kind.startsWith('sq1-')) continue;
     const is2x2 = IS_2x2(set.kind);
     const isEG = IS_EG(set.kind);
     const solved = is2x2 ? solved2 : solved3;
@@ -393,11 +406,20 @@ async function main() {
   fs.writeFileSync(new URL('../client/src/data/validAlts.generated.ts', import.meta.url), header);
   console.error('Wrote client/src/data/validAlts.generated.ts');
 
-  // Minimal, server-safe mirror of the same case data — used by Battle
-  // Mode's algorithm-set rounds (see shared/src/algScramble.ts). Only what
-  // a server needs to pick a random case + build its scramble: no
-  // diagram-only fields (name/group/oll/pll/slotAlts). Written from this
-  // same run (not a separate script) so there's one source of truth per
+  // Minimal, server-safe mirror of the same case data. Two independent
+  // consumers: Battle Mode's algorithm-set rounds (see
+  // shared/src/algScramble.ts's generateAlgSetScramble, which needs `puzzle`
+  // to build a WCA-notation scramble) and the Trainer's prefs/selection/
+  // solves routes (server/src/routes/alg.ts, algSolves.ts — `getAlgSet(id)
+  // ?.caseIds.includes(caseId)`), which only care whether a case id belongs
+  // to a set id at all, `puzzle` unused. Every set (Square-1 included) is
+  // included for the second purpose; `puzzle` is only meaningful for the
+  // first, and Square-1 sets get a nonsense '333' there since this mapping
+  // has no third option — harmless in practice because Battle Mode's own
+  // room-creation picker (client/src/features/battle/algSetOptions.ts) is a
+  // separate, hand-maintained list that doesn't offer Square-1 sets, so
+  // generateAlgSetScramble is never actually called with one. Written from
+  // this same run (not a separate script) so there's one source of truth per
   // generation rather than two independently-invoked bundle+validate passes
   // that could drift from each other.
   const setIndex = ALG_SETS.map((set: any) => ({
