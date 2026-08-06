@@ -172,6 +172,13 @@ export function useRelaySocket() {
     socketRef.current?.emit('relay_toggle_ready', { code, isReady });
   }, []);
 
+  // Distinct from toggleReady: that one approves the event distribution,
+  // this one is "cube in hand, count me down" from the start screen. Only
+  // this one can arm the countdown.
+  const toggleStartReady = useCallback((code: string, isReady: boolean) => {
+    socketRef.current?.emit('relay_toggle_start_ready', { code, isReady });
+  }, []);
+
   // The stop instant is stamped here, the moment the key/tap actually
   // happened, and sent along — not left for the server to infer from when
   // the message arrives. Stamped in server-clock terms (serverNow), so the
@@ -215,6 +222,7 @@ export function useRelaySocket() {
     startRoom,
     assignEvent,
     toggleReady,
+    toggleStartReady,
     markDone,
     adjustDistribution,
     runAgain,

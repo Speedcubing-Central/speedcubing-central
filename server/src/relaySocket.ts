@@ -39,7 +39,8 @@ type RoomWithRelations = NonNullable<Awaited<ReturnType<typeof fetchRoom>>>;
 // of which this validation looks at. It's asked on every ready-toggle and
 // again when the countdown actually fires, so it only selects what it
 // needs: whether every leg has an assignee AND a generated scramble, and
-// whether every participant is ready.
+// whether every participant has both approved the distribution and said
+// they're ready to solve.
 //
 // The scramble check specifically closes a real race: scrambles are
 // generated in the background once everyone's ready (see
@@ -57,7 +58,7 @@ async function fetchStartGateState(code: string) {
       id: true,
       status: true,
       legs: { select: { assignedToId: true, scramble: true } },
-      participants: { select: { id: true, isReady: true } },
+      participants: { select: { id: true, isReady: true, isStartReady: true } },
     },
   });
 }
@@ -103,6 +104,7 @@ function toRelayRoomDTO(room: RoomWithRelations, relayName: string, viewerPartic
       userId: p.userId,
       name: p.guestName ?? 'Player',
       isReady: p.isReady,
+      isStartReady: p.isStartReady,
       isDone: p.isDone,
       isHost: p.id === room.hostParticipantId,
     })),
@@ -318,15 +320,19 @@ export function registerRelayHandlers(io: RelayIO): void {
 
   // Arms the countdown if — and only if — the room is genuinely ready to
   // start: every leg assigned, every leg's background-generated scramble
-  // landed, and every participant readied up. Idempotent, because the two
-  // callers (a ready-toggle, and scramble generation settling) both fire
-  // for the same "everyone's ready now" moment and either can win.
+  // landed, everyone happy with the distribution, and — the one that
+  // actually gates this — everyone having separately confirmed on the start
+  // screen that they're ready to solve. Approving the distribution must not
+  // start anything on its own: doing that counted the team down while they
+  // were still reaching for their cubes. Idempotent, since several callers
+  // fire for the same "everyone's ready now" moment and any can win.
   async function maybeArmCountdown(code: string): Promise<void> {
     if (countdownTimers.has(code)) return;
     const gate = await fetchStartGateState(code);
     if (!gate || gate.status !== 'ASSIGNING') return;
     if (gate.legs.length === 0 || !gate.legs.every((l) => l.assignedToId && l.scramble)) return;
-    if (gate.participants.length === 0 || !gate.participants.every((p) => p.isReady)) return;
+    if (gate.participants.length === 0) return;
+    if (!gate.participants.every((p) => p.isReady && p.isStartReady)) return;
     // Re-checked after the await, then the slot is claimed synchronously
     // below — no await sits between this check and the countdownTimers.set,
     // so two concurrent calls can't both get past it. Without that, the
@@ -361,7 +367,7 @@ export function registerRelayHandlers(io: RelayIO): void {
       gate.legs.length > 0 &&
       gate.legs.every((l) => l.assignedToId && l.scramble) &&
       gate.participants.length > 0 &&
-      gate.participants.every((p) => p.isReady);
+      gate.participants.every((p) => p.isReady && p.isStartReady);
     if (!stillValid) {
       await cancelCountdown(code);
       return;
@@ -396,7 +402,10 @@ export function registerRelayHandlers(io: RelayIO): void {
     await prisma.relayRoomLeg.updateMany({ where: { roomId: room.id, assignedToId: participantId }, data: { assignedToId: null } });
     await prisma.relayParticipant.deleteMany({ where: { id: participantId } });
     if (room.status === 'ASSIGNING') {
-      await prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: false } });
+      await prisma.relayParticipant.updateMany({
+        where: { roomId: room.id },
+        data: { isReady: false, isStartReady: false },
+      });
       // Losing a participant just invalidated the readiness this countdown
       // was armed on, and their legs went back to unassigned besides.
       await cancelCountdown(code);
@@ -568,9 +577,14 @@ export function registerRelayHandlers(io: RelayIO): void {
         const targetId = parsed.data.participantId;
         if (targetId && !room.participants.some((p) => p.id === targetId)) return;
         await prisma.relayRoomLeg.update({ where: { id: leg.id }, data: { assignedToId: targetId } });
-        // Any assignment change requires everyone to re-confirm readiness,
-        // which also calls off a countdown armed on the old assignment.
-        await prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: false } });
+        // Any assignment change sends everyone back to square one — both
+        // the distribution approval and the ready-to-solve confirmation,
+        // since the legs someone confirmed against just changed — and calls
+        // off a countdown armed on the old assignment.
+        await prisma.relayParticipant.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: false, isStartReady: false },
+        });
         await cancelCountdown(code);
         await emitRelayRoomState(code);
       }),
@@ -597,23 +611,58 @@ export function registerRelayHandlers(io: RelayIO): void {
         // way, so the client's "Generating scrambles…" screen sees legs
         // fill in as they succeed instead of only updating at the very end.
         await emitRelayRoomState(code);
-        // Un-readying is the one escape hatch out of an armed countdown —
-        // it's what the old design's "let go of spacebar" was for.
+        // Withdrawing approval takes the whole team off the start screen, so
+        // nobody's "ready to solve" confirmation still means anything —
+        // clear them all rather than let a stale one survive and make the
+        // room start the moment approval comes back.
+        if (!parsed.data.isReady) {
+          await prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isStartReady: false } });
+          await cancelCountdown(code);
+          await emitRelayRoomState(code);
+          return;
+        }
+        // Approving the distribution does NOT start anything, even when it
+        // completes the set of approvals — that's relay_toggle_start_ready's
+        // job. All this does is get the scrambles generated so the start
+        // screen has something to show while everyone finds a cube.
+        //
+        // maybeArmCountdown still runs when generation settles, because the
+        // last scramble landing can genuinely be the final missing piece if
+        // everyone had already confirmed they were ready to solve. It
+        // re-checks every condition itself, so it simply declines until
+        // that's actually true.
+        generateScramblesIfReady(code, () => emitRelayRoomState(code))
+          .then(async () => {
+            await emitRelayRoomState(code);
+            await maybeArmCountdown(code);
+          })
+          .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
+      }),
+    );
+
+    socket.on(
+      'relay_toggle_start_ready',
+      safe(async (raw) => {
+        const parsed = toggleReadySchema.safeParse(raw);
+        if (!parsed.success || !myParticipantId) return;
+        const code = parsed.data.code.toUpperCase();
+        const room = await fetchRoom(code);
+        if (!room || room.status !== 'ASSIGNING') return;
+        // Only meaningful once the distribution is settled — otherwise this
+        // is a confirmation against legs that could still be dragged around.
+        if (!room.participants.every((p) => p.isReady)) return;
+        await prisma.relayParticipant.update({
+          where: { id: myParticipantId },
+          data: { isStartReady: parsed.data.isReady },
+        });
+        await emitRelayRoomState(code);
+        // Un-confirming is the escape hatch out of an armed countdown — it's
+        // what the old design's "let go of spacebar" was for.
         if (!parsed.data.isReady) {
           await cancelCountdown(code);
           return;
         }
-        generateScramblesIfReady(code, () => emitRelayRoomState(code))
-          .then(async () => {
-            await emitRelayRoomState(code);
-            // Both the last person readying up and the last scramble
-            // landing can be the moment a room becomes startable, and
-            // either can happen second — maybeArmCountdown re-checks the
-            // whole condition itself and is idempotent, so calling it here
-            // covers both without needing to know which one this was.
-            await maybeArmCountdown(code);
-          })
-          .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
+        await maybeArmCountdown(code);
       }),
     );
 
@@ -723,7 +772,14 @@ export function registerRelayHandlers(io: RelayIO): void {
           where: { id: room.id },
           data: { status: 'ASSIGNING', startedAt: null, finishedAt: null, countdownStartAt: null },
         }),
-        prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
+        // isStartReady is always cleared, even for "run it again" where the
+        // distribution approval carries over: a new round means new
+        // scrambles, so everyone confirms they're ready to solve again
+        // rather than being counted down the instant the legs regenerate.
+        prisma.relayParticipant.updateMany({
+          where: { roomId: room.id },
+          data: { isReady: keepReady, isStartReady: false, isDone: false },
+        }),
         // Blanking the previous attempt's scrambles is what makes
         // "everyone is ready" mean "ready to start *this* round". With
         // them left in place, "run it again" lands every participant
@@ -735,16 +791,17 @@ export function registerRelayHandlers(io: RelayIO): void {
       ]);
       clearCountdownTimer(code);
       await emitRelayRoomState(code);
-      // "Run it again" (keepReady) lands everyone back in an all-ready state
-      // without going through relay_toggle_ready, so it has to trigger
-      // scramble generation — and, once that lands, the countdown — itself.
-      // A no-op for "adjust distribution" (keepReady=false leaves the room
-      // not-all-ready, so both calls below decline). Not awaited, same
+      // "Run it again" (keepReady) lands everyone back on the start screen
+      // without going through relay_toggle_ready, so it has to kick off
+      // scramble generation itself. A no-op for "adjust distribution"
+      // (keepReady=false leaves the room unapproved). Not awaited, same
       // reasoning as relay_toggle_ready: generation can take several seconds
       // and nothing about landing on the ASSIGNING screen depends on
       // scrambles already existing. force=true is belt-and-braces now that
       // the transaction above blanks every leg (which by itself already
-      // defeats the "everything already has a scramble" early return).
+      // defeats the "everything already has a scramble" early return). The
+      // countdown call below declines either way until everyone has
+      // confirmed they're ready to solve this round.
       generateScramblesIfReady(code, () => emitRelayRoomState(code), true)
         .then(async () => {
           await emitRelayRoomState(code);

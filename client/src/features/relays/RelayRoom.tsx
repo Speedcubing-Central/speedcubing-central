@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import clsx from 'clsx';
@@ -86,6 +86,7 @@ function MyRelayPanel({
   startedAt,
   serverNow,
   code,
+  toggleStartReady,
   markDone,
 }: {
   room: RelayRoomDTO;
@@ -94,6 +95,7 @@ function MyRelayPanel({
   startedAt: string | null;
   serverNow: () => number;
   code: string;
+  toggleStartReady: (code: string, isReady: boolean) => void;
   markDone: (code: string) => void;
 }) {
   // The instant this relay starts (or started), on the server's clock. The
@@ -135,8 +137,18 @@ function MyRelayPanel({
   // serverNow()'s offset correction. See useRelaySocket for why.
   const [now, setNow] = useState(serverNow);
 
-  useEffect(() => {
+  // useLayoutEffect, and seeded before the loop rather than leaving the first
+  // value to the first animation frame: `now` is deliberately not ticking
+  // before there's a clock to show, so by the time the countdown is armed it
+  // still holds whatever the time was when this panel mounted — potentially
+  // a minute earlier, while the team sorted out their events. Left to
+  // useEffect, React would paint one frame of `startMs - thatStaleNow` (a
+  // countdown reading 33, say) before the first frame corrected it to 3.
+  // A layout effect's state update is flushed before the browser paints, so
+  // that frame never reaches the screen.
+  useLayoutEffect(() => {
     if (startMs === null) return;
+    setNow(serverNow());
     let raf = 0;
     const tick = () => {
       setNow(serverNow());
@@ -165,6 +177,12 @@ function MyRelayPanel({
   const isCountingDown = !serverStarted && untilStartMs > 0;
   const isRunning = serverStarted || (startMs !== null && untilStartMs <= 0);
   const doneCount = room.participants.filter((p) => p.isDone).length;
+  // The gate the countdown actually waits on. Everyone reaching this screen
+  // only means the event split was agreed — this is each person separately
+  // saying they've got their cube and are ready to go.
+  const startReadyCount = room.participants.filter((p) => p.isStartReady).length;
+  const meIsStartReady = !!me?.isStartReady;
+  const awaitingStartReady = !isRunning && !isCountingDown && scramblesReady;
 
   function legLabel(eventId: string, order: number): string {
     const before = room.legs.filter((l) => l.eventId === eventId && l.order < order).length;
@@ -209,16 +227,23 @@ function MyRelayPanel({
         ref={clockRef}
         className={clsx(
           'card relative shrink-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none',
-          isRunning && !me?.isDone && 'cursor-pointer',
+          ((isRunning && !me?.isDone) || awaitingStartReady || isCountingDown) && 'cursor-pointer',
         )}
         style={{ height: isDesktop ? layout.clockHeight : undefined }}
-        // Only meaningful action left on this surface is stopping — the
-        // start is the countdown's job now, so there's nothing to press
-        // before then.
         onPointerDown={(e) => {
-          if (!isRunning || me?.isDone) return;
-          e.preventDefault();
-          markDone(code);
+          if (isRunning) {
+            if (me?.isDone) return;
+            e.preventDefault();
+            markDone(code);
+            return;
+          }
+          // Before the start this surface is the ready-up control, and
+          // during the countdown it's the abort — un-confirming calls the
+          // countdown off, which is what letting go of spacebar used to do.
+          if (awaitingStartReady || isCountingDown) {
+            e.preventDefault();
+            toggleStartReady(code, !meIsStartReady);
+          }
         }}
       >
         {isRunning ? (
@@ -253,8 +278,20 @@ function MyRelayPanel({
           </>
         ) : (
           <>
-            <div className="h-10 w-10 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">Everyone's ready. Starting…</p>
+            <div
+              className={clsx(
+                'font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0',
+                meIsStartReady && 'text-green-400',
+              )}
+              style={{ fontSize: digitFontSize }}
+            >
+              {startReadyCount}/{room.participants.length}
+            </div>
+            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
+              {meIsStartReady
+                ? 'Waiting for everyone else. Press Space to cancel.'
+                : 'Look at your scramble. Press Space (or tap) when you have your cube and are ready.'}
+            </p>
           </>
         )}
       </div>
@@ -346,6 +383,7 @@ export default function RelayRoom() {
     startRoom,
     assignEvent,
     toggleReady,
+    toggleStartReady,
     markDone,
     adjustDistribution,
     runAgain,
@@ -391,12 +429,34 @@ export default function RelayRoom() {
   const showAssigningScreen = room?.status === 'ASSIGNING' && !showMyRelayPanel;
   const me = room?.participants.find((p) => p.id === myParticipantId);
   const meIsReady = me?.isReady ?? false;
+  const meIsStartReady = me?.isStartReady ?? false;
   const meIsDone = me?.isDone ?? false;
+  // Scrambles have to be on screen before anyone can say they're ready to
+  // solve — confirming against a scramble you can't see yet is meaningless.
+  const scramblesReady = !!room && room.legs.every((l) => !!l.scramble);
+  const canStartReady = readyToShowPanel && scramblesReady && room?.status !== 'ACTIVE';
 
-  // Starting is entirely the server's countdown now — there is no key to
-  // press for it. During ACTIVE, a single Space press signals "I'm done
-  // with my events"; the relay stops once every participant has done this
-  // (see relaySocket.ts's relay_mark_done).
+  // On the start screen, Space toggles "ready to solve" — the gate the
+  // countdown waits on. It stays live during the countdown so the same key
+  // aborts it, which is what releasing spacebar used to do.
+  useEffect(() => {
+    if (!canStartReady || !code) return;
+    const isTextTarget = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || isTextTarget(e.target)) return;
+      e.preventDefault();
+      toggleStartReady(code.toUpperCase(), !meIsStartReady);
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  }, [canStartReady, meIsStartReady, code, toggleStartReady]);
+
+  // During ACTIVE, a single Space press signals "I'm done with my events";
+  // the relay stops once every participant has done this (see
+  // relaySocket.ts's relay_mark_done).
   useEffect(() => {
     if (room?.status !== 'ACTIVE' || meIsDone || !code) return;
     const isTextTarget = (t: EventTarget | null) => {
@@ -575,7 +635,7 @@ export default function RelayRoom() {
                   <div className="font-semibold">{readyCount} / {room.participants.length} ready</div>
                   <div className="text-xs text-muted">
                     {allAssigned
-                      ? 'Once everyone is ready, a 3 second countdown starts the relay for the whole team.'
+                      ? "Once everyone approves the split, you'll see your scramble and ready up from there."
                       : 'Assign every event to a person first.'}
                   </div>
                 </div>
@@ -635,6 +695,7 @@ export default function RelayRoom() {
             startedAt={startedAt}
             serverNow={serverNow}
             code={(code ?? '').toUpperCase()}
+            toggleStartReady={toggleStartReady}
             markDone={markDone}
           />
         </div>

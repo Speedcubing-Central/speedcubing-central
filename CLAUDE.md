@@ -202,8 +202,7 @@ There is no admin account or admin role — see Roles below.
      the server clamps it to a latency-sized correction instead of trusting it.
   2. **The start instant is announced before it happens, never raced for.** The old design
      had everyone hold spacebar and let the first release start the clock, which made the
-     shared t=0 a function of N clients' key events and round trips. Now: everyone readies
-     up, and once every leg is assigned *and* every scramble has landed, the server arms a
+     shared t=0 a function of N clients' key events and round trips. Now the server arms a
      ~3s countdown (`maybeArmCountdown`), broadcasts the instant, and starts at exactly
      that instant — `startedAt` is deliberately the announced `countdownStartAt`, not
      whenever the server's timer callback ran, because every client already committed to
@@ -211,6 +210,16 @@ There is no admin account or admin role — see Roles below.
      `relay_started`. View state still keys off server truth first (`room.status` /
      `startedAt`) and the local clock only second: `now` is driven by
      `requestAnimationFrame`, which a browser stops dead for a backgrounded tab.
+  3. **Readiness is two separate gates, and only the second one starts anything.**
+     `isReady` (the ASSIGNING screen's Ready button) approves the *event distribution*.
+     `isStartReady` is "cube in hand, count me down", confirmed per-person on the start
+     screen with the scramble already visible, and it is the only thing `maybeArmCountdown`
+     waits on. Collapsing them back into one flag recreates a reported bug: the last person
+     to approve the split counted the whole team down while they were still reaching for
+     their cubes. `isStartReady` is cleared on anything that invalidates it — a
+     reassignment, someone withdrawing approval, a participant leaving, and always on
+     "run it again" (a new round means new scrambles to look at, even though the
+     distribution approval carries over).
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
 - **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). See

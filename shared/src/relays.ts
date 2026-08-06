@@ -86,7 +86,11 @@ export interface RelayParticipantDTO {
   id: string;
   userId?: string | null;
   name: string;
+  // Approved the event distribution (the ASSIGNING screen's Ready button).
   isReady: boolean;
+  // Confirmed, on the start screen with their scramble in front of them,
+  // that they're ready to solve. The countdown waits on this one.
+  isStartReady: boolean;
   isDone: boolean;
   isHost: boolean;
 }
@@ -161,7 +165,13 @@ export interface RelayClientToServerEvents {
   leave_relay_room: (payload: { code: string }) => void;
   relay_start_room: (payload: { code: string }) => void; // host-only: LOBBY -> ASSIGNING
   relay_assign_event: (payload: { code: string; legId: string; participantId: string | null }) => void;
+  // Approve/withdraw approval of the event distribution. Gates leaving the
+  // ASSIGNING screen; does NOT by itself start anything.
   relay_toggle_ready: (payload: { code: string; isReady: boolean }) => void;
+  // "Cube in hand, count me down" — pressed on the start screen, with the
+  // scramble already visible. Only once every participant has sent this does
+  // the server arm the countdown.
+  relay_toggle_start_ready: (payload: { code: string; isReady: boolean }) => void;
   // NTP-style clock-offset probe. Relay clocks are shared across machines, so
   // every client has to render elapsed time against the *server's* clock, not
   // its own — see useRelaySocket's offset estimate.

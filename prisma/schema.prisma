@@ -352,6 +352,11 @@ model RelayParticipant {
   userId    String?
   guestName String?
   isReady   Boolean @default(false) // assignment-phase "I'm happy with this" checkbox
+  // Start-phase "cube in hand, count me down". Deliberately separate from
+  // isReady: approving the event split is not the same as being ready to
+  // solve, and conflating the two meant the last person to approve the
+  // distribution kicked off a countdown for a team still reaching for cubes.
+  isStartReady Boolean @default(false)
   isDone    Boolean @default(false) // pressed spacebar to signal "finished all my legs"
 
   room RelayRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
