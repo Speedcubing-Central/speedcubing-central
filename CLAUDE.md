@@ -153,7 +153,18 @@ There is no admin account or admin role — see Roles below.
   `rgb(var(--color-x) / <alpha-value>)`, so switching themes needs no rebuild. Light mode
   has its own separate hardcoded overrides and isn't affected by these presets.
 - **Averaging** lives in `shared/averaging.ts` so the client and server compute identical
-  Ao5/mean values (trim best + worst; >1 DNF in the trimmed set ⇒ DNF). Average/solve
+  Ao5/mean values (trim best + worst; >1 DNF in the trimmed set ⇒ DNF). **Every derived
+  average has to go through that same rule** (truncate each result to the hundredth, round
+  the average to the hundredth, WCA 9f), including the incremental sliding-window one in
+  `shared/timerStats.ts`. That one used to sum raw times and skip the rounding, so the
+  Timer's Best column and its Current column disagreed by up to a hundredth on the exact
+  same solves. Not just cosmetic: `targetForBest` measures a hypothetical next solve
+  (averaging.ts rule) against `best` (the other rule), and at ao1000 the systematic gap
+  across 900 counted solves exceeded the real difference between two overlapping windows,
+  so no solve could ever register as a PB and the Target search ran off its own upper
+  bound and printed it. That is the reported "target for best ao1000 = 1534:00.27", which
+  was just best x 1000. If you add another fast path over averages, it has to produce
+  values the slow path would agree with exactly. Average/solve
   lists (`AverageDetail`, its clipboard copy) render in chronological order (first solve
   first) even though the underlying solves array is stored newest-first.
 - **WCA API** is *only* called server-side, through `cache.ts` (1-hour TTL; Redis when

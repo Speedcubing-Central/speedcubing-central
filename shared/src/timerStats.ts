@@ -9,7 +9,7 @@
 // trim/DNF rules come from ./averaging.js; this module is the derived layer
 // on top of them.
 import type { SolveDTO } from './index.js';
-import { effectiveTime } from './index.js';
+import { effectiveTime, wcaRound, wcaTruncate } from './index.js';
 import { trimmedAverage, mean, type TimedSolve } from './averaging.js';
 
 export const AVERAGE_SIZES = [3, 5, 12, 50, 100, 1000] as const;
@@ -85,7 +85,21 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
   const n = solves.length;
   if (n < size) return { value: null, index: null };
 
-  const eff = (s: SolveDTO) => effectiveTime(s.time, s.penalty, s.plusTwoCount);
+  // Truncated per solve, exactly as averaging.ts's own `eff` does, because
+  // this has to be the same average the Current column shows. It wasn't: this
+  // function summed raw times and returned an unrounded quotient, while every
+  // other average in the app goes through averaging.ts (WCA 9f: truncate each
+  // recorded result to the hundredth, round the average to the hundredth). On
+  // one identical set of five solves the two paths returned 12.345 and 12.34.
+  //
+  // A hundredth of drift is invisible in a column but not harmless: it is
+  // measured against `avgAt()` inside targetForBest, which uses the
+  // averaging.ts rule, so the two disagreed about whether a result was a PB.
+  // At ao1000 the systematic gap (900 counted solves, each up to 9ms high)
+  // swamped the real difference between two overlapping windows, no next
+  // solve could ever "beat" the best, and the Target search ran off the end.
+  // That is the "1534:00.27" report: best x 1000, printed as a time.
+  const eff = (s: SolveDTO) => wcaTruncate(effectiveTime(s.time, s.penalty, s.plusTwoCount));
 
   if (size === 3) {
     // Mo3: mean of all 3, no trimming — any DNF makes the whole thing DNF.
@@ -96,7 +110,7 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
       const b = eff(solves[i + 1]);
       const c = eff(solves[i + 2]);
       if (isFinite(a) && isFinite(b) && isFinite(c)) {
-        const value = (a + b + c) / 3;
+        const value = wcaRound((a + b + c) / 3);
         if (best === null || value < best) {
           best = value;
           idx = i;
@@ -189,7 +203,10 @@ export function bestAverageWithIndex(solves: SolveDTO[], size: number): { value:
     // The top `trim` slots hold the DNFs plus enough finite values to fill
     // them; only the finite ones are in `finiteSum`.
     for (let k = size - trim; k < size - dnfCount; k++) sum -= window[k];
-    const value = sum / keptCount;
+    // Rounded per window, so `best` is exactly the smallest value
+    // trimmedAverage would report for any window, not a quotient no column
+    // ever displays. See `eff` above.
+    const value = wcaRound(sum / keptCount);
     if (best === null || value < best) {
       best = value;
       idx = start;
@@ -277,8 +294,41 @@ export function targetForBest(solves: SolveDTO[], size: number, precomputedBest?
     return r.value ?? Infinity;
   };
   if (avgAt(minValue) >= best) return null; // can't PB even with the best legitimately-possible next result
+
+  // Bracket the crossing, *then* bisect — the old code did not, and that was
+  // the "1534:00.27" bug. It opened at `Math.max(best * size, 600000)` and
+  // never checked that ceiling against `best`, so whenever the ceiling was
+  // still on the PB side the bisection just converged on it and returned it.
+  // At ao1000 that ceiling is best x 1000, which is how a target came out as
+  // 25 hours.
+  //
+  // `hi` opens at the slowest result already in the window, because for a
+  // trimmed average that is where avgAt() stops responding: past it the
+  // hypothetical is always one of the dropped worst, and every slower value
+  // gives an identical average. It then doubles until it really does sit on
+  // the no-PB side, which is what mo3 (no trimming at all) and a window that
+  // has already spent its trim slots on DNFs need — in both, the average
+  // keeps climbing past the window's slowest.
+  //
+  // Termination: avgAt() is non-decreasing and, because `best` and avgAt()
+  // now agree on how an average is computed (see bestAverageWithIndex),
+  // avgAt(infinity) >= avgAt(the actual next solve) = the newest complete
+  // average >= best. So the doubling always finds its bracket, in one or two
+  // steps on real data.
   let lo = minValue;
-  let hi = Math.max(best * size, 600000);
+  let hi = minValue;
+  for (const s of win) {
+    const v = effectiveTime(s.time, s.penalty, s.plusTwoCount);
+    if (isFinite(v) && v > hi) hi = v;
+  }
+  hi = Math.max(hi, minValue + 1000);
+  for (let i = 0; i < 64 && avgAt(hi) < best; i++) hi *= 2;
+  // Belt and braces: if the bracket somehow still doesn't hold, say there is
+  // no target rather than reporting a number that was never verified. The
+  // whole failure mode above was a bound being printed as if it were an
+  // answer, and no drift anywhere upstream should be able to resurrect it.
+  if (avgAt(hi) < best) return null;
+
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
     if (avgAt(mid) < best) lo = mid;
