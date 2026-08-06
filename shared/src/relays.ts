@@ -139,6 +139,24 @@ export interface RelayCompletedResult {
   legs: { eventId: string; order: number; assignedToId: string | null; splitMs: number | null }[];
 }
 
+// Bumped whenever a change to the relay socket contract leaves an older
+// client unable to take part correctly — not for additive changes an old
+// client can simply ignore.
+//
+// This exists because a team relay is one shared state machine driven by
+// several browsers, and a browser can be running a bundle from before the
+// last deploy (a cached index.html is enough). That is not a cosmetic
+// mismatch: when start-readiness was split out of distribution-readiness,
+// the previous build had no way to send `relay_toggle_start_ready` at all,
+// so a single stale tab could never become ready, the countdown could never
+// arm, and the room hung for everyone with no error and nothing to press.
+// Both sides compile this constant in, so an old bundle carries the old
+// value and is caught at join time rather than deadlocking the room.
+//
+// 1 — hold-to-start (everyone holds space, first release starts the clock)
+// 2 — server-announced countdown, and start-readiness as its own gate
+export const RELAY_PROTOCOL_VERSION = 2;
+
 // ---- Socket.io event payloads (merged into shared/src/index.ts's
 // ServerToClientEvents / ClientToServerEvents) ----
 
@@ -154,6 +172,10 @@ export interface RelayServerToClientEvents {
   relay_countdown_cancelled: () => void;
   relay_started: (payload: { startedAt: string }) => void;
   relay_completed: (payload: RelayCompletedResult) => void;
+  // This client's bundle predates the server's relay protocol, so its join
+  // was refused — letting it in is what hangs the room. The client's only
+  // move is to reload and pick up the current build.
+  relay_outdated_client: (payload: { serverVersion: number }) => void;
   // Reply to relay_time_sync. `clientSentAt` is echoed back untouched so the
   // client can compute this sample's round trip; `serverNow` is the server's
   // wall clock at the moment it replied.
@@ -161,7 +183,10 @@ export interface RelayServerToClientEvents {
 }
 
 export interface RelayClientToServerEvents {
-  join_relay_room: (payload: { code: string; name: string; password?: string }) => void;
+  // protocolVersion is optional only so the type admits the builds that
+  // predate it — the server treats a missing value as "too old" rather than
+  // as "skip the check", which is exactly the case that has to be caught.
+  join_relay_room: (payload: { code: string; name: string; password?: string; protocolVersion?: number }) => void;
   leave_relay_room: (payload: { code: string }) => void;
   relay_start_room: (payload: { code: string }) => void; // host-only: LOBBY -> ASSIGNING
   relay_assign_event: (payload: { code: string; legId: string; participantId: string | null }) => void;

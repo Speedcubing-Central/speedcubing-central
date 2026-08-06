@@ -7,6 +7,7 @@ import { censorMessage } from './profanity.js';
 import type { SocketData } from './socket.js';
 import {
   getRelayPreset,
+  RELAY_PROTOCOL_VERSION,
   type ClientToServerEvents,
   type ServerToClientEvents,
   type RelayRoomDTO,
@@ -251,7 +252,12 @@ export function registerRelayHandlers(io: RelayIO): void {
   // personalized per participant (each only ever sees their own legs' scrambles).
   const participantSockets = new Map<string, Map<string, string>>();
 
-  const joinSchema = z.object({ code: z.string().min(1).max(20), name: z.string().min(1).max(40), password: z.string().max(64).optional() });
+  const joinSchema = z.object({
+    code: z.string().min(1).max(20),
+    name: z.string().min(1).max(40),
+    password: z.string().max(64).optional(),
+    protocolVersion: z.number().int().optional(),
+  });
   const codeSchema = z.object({ code: z.string().min(1).max(20) });
   const assignEventSchema = z.object({
     code: z.string().min(1).max(20),
@@ -441,6 +447,16 @@ export function registerRelayHandlers(io: RelayIO): void {
         const parsed = joinSchema.safeParse(raw);
         if (!parsed.success) {
           socket.emit('error_msg', { message: 'Invalid request' });
+          return;
+        }
+        // Checked before anything else, and refused rather than tolerated.
+        // A stale bundle that gets into the room is precisely what breaks
+        // it: this participant counts towards every "has everyone…?" gate
+        // while being unable to satisfy the ones its build doesn't know
+        // about, so the room stalls for everybody with nothing on screen to
+        // explain why. Better to keep them out and tell them to reload.
+        if (parsed.data.protocolVersion !== RELAY_PROTOCOL_VERSION) {
+          socket.emit('relay_outdated_client', { serverVersion: RELAY_PROTOCOL_VERSION });
           return;
         }
         const { name, password } = parsed.data;

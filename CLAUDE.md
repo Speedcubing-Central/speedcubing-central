@@ -220,6 +220,19 @@ There is no admin account or admin role — see Roles below.
      reassignment, someone withdrawing approval, a participant leaving, and always on
      "run it again" (a new round means new scrambles to look at, even though the
      distribution approval carries over).
+  4. **Bump `RELAY_PROTOCOL_VERSION` when a change would strand an older client.** A team
+     relay is one state machine driven by several browsers, and a browser can be running a
+     bundle from before the last deploy — a cached `index.html` is enough. That is not
+     cosmetic: when rule 3 split the two ready flags, the previous build had no way to send
+     `relay_toggle_start_ready` at all, so one stale tab could never become ready, the
+     countdown could never arm, and the room hung for everyone with no error and nothing to
+     press (reported from a live session as "we see completely different things"). Both
+     sides compile the constant in, the client sends it with `join_relay_room`, and a
+     mismatch (**including a missing value** — that's what a pre-check build sends) is
+     *refused*, not tolerated: a stale participant counts toward every "has everyone…?"
+     gate while being unable to satisfy the ones its build doesn't know about. The client
+     shows a reload prompt instead of hanging on "Joining room…". Bump it for contract
+     changes an old client can't participate in, not for additive ones it can ignore.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
 - **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). See

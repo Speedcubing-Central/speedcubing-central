@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { RELAY_PROTOCOL_VERSION } from '@scc/shared';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -26,6 +27,10 @@ export function useRelaySocket() {
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [completed, setCompleted] = useState<RelayCompletedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set when the server refuses this bundle as too old to take part. Not a
+  // toast — nothing here works until the page is reloaded, so the room UI
+  // is replaced outright (see RelayRoom).
+  const [outdated, setOutdated] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessageDTO[]>([]);
   const [myParticipantId, setMyParticipantIdState] = useState<string | null>(null);
   const myParticipantIdRef = useRef<string | null>(null);
@@ -116,6 +121,7 @@ export function useRelaySocket() {
       setCountdownStartAt(null);
     });
     socket.on('relay_completed', (result) => setCompleted(result));
+    socket.on('relay_outdated_client', () => setOutdated(true));
     socket.on('chat_message', (msg) => setChatMessages((prev) => [...prev, msg]));
     socket.on('error_msg', ({ message }) => setError(message));
 
@@ -132,7 +138,7 @@ export function useRelaySocket() {
     const id = participantId ?? null;
     myParticipantIdRef.current = id;
     setMyParticipantIdState(id);
-    socketRef.current?.emit('join_relay_room', payload);
+    socketRef.current?.emit('join_relay_room', { ...payload, protocolVersion: RELAY_PROTOCOL_VERSION });
   }, []);
 
   const setMyParticipantId = useCallback((id: string) => {
@@ -214,6 +220,7 @@ export function useRelaySocket() {
     completed,
     error,
     setError,
+    outdated,
     chatMessages,
     myParticipantId,
     setMyParticipantId,

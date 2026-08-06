@@ -182,6 +182,7 @@ function MyRelayPanel({
   // saying they've got their cube and are ready to go.
   const startReadyCount = room.participants.filter((p) => p.isStartReady).length;
   const meIsStartReady = !!me?.isStartReady;
+  const waitingOn = room.participants.filter((p) => !p.isStartReady).map((p) => p.name);
   const awaitingStartReady = !isRunning && !isCountingDown && scramblesReady;
 
   function legLabel(eventId: string, order: number): string {
@@ -289,7 +290,10 @@ function MyRelayPanel({
             </div>
             <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
               {meIsStartReady
-                ? 'Waiting for everyone else. Press Space to cancel.'
+                ? // Named, not just counted. When this stalls, the whole
+                  // question is who everyone is waiting on, and a bare
+                  // "1/2 ready" makes that a guessing game.
+                  `Waiting for ${waitingOn.join(', ')}. Press Space to cancel.`
                 : 'Look at your scramble. Press Space (or tap) when you have your cube and are ready.'}
             </p>
           </>
@@ -375,6 +379,7 @@ export default function RelayRoom() {
     completed,
     error,
     setError,
+    outdated,
     chatMessages,
     myParticipantId,
     setMyParticipantId,
@@ -507,6 +512,25 @@ export default function RelayRoom() {
     const total = room.legs.filter((l) => l.eventId === eventId).length;
     const name = getEvent(eventId)?.name ?? eventId;
     return total > 1 ? `${name} #${before + 1}` : name;
+  }
+
+  // Ahead of every other screen, including the name prompt: this tab cannot
+  // take part at all, and the room it would have joined is better off
+  // without it (see relaySocket.ts's protocol check). "Joining room…"
+  // forever would read as a hang, which is the failure this replaces.
+  if (outdated) {
+    return (
+      <div className="max-w-sm mx-auto card p-6 space-y-4 text-center">
+        <h2 className="text-lg font-bold">This page is out of date</h2>
+        <p className="text-sm text-muted">
+          Team Relay was updated while this tab was open. Reload to get the current version — you can rejoin the room
+          straight after.
+        </p>
+        <button className="btn-primary w-full" onClick={() => window.location.reload()}>
+          Reload
+        </button>
+      </div>
+    );
   }
 
   if (namePrompt) {
