@@ -321,7 +321,7 @@ function MyRelayPanel({
       </div>
 
       {activeLeg && (
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 min-w-0">
           {/* Scrambles are generated as soon as everyone readies up, well
               before the countdown (see relaySocket.ts's
               generateScramblesIfReady) — but that generation is

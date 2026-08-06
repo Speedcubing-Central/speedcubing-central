@@ -319,7 +319,14 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
 
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
         {/* LEFT column */}
-        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
+        {/* min-w-0 for the same reason as TimerPage's columns: without it a
+            flex item's min-width is auto, so a wide child (a relay leg on a
+            big cube or megaminx, whose scramble diagram is now as wide as its
+            net) stretches the column past the 3:2 split and pushes the page
+            sideways — and ScramblePanel's width budget comes from measuring
+            this column, which only means anything if the column isn't sized
+            by its contents. */}
+        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0 min-w-0">
           {/* Master clock — a fixed height (see the layout effect above:
               CLOCK_SHARE of the column's leftover space, clamped), not a
               flex-1 that grows/shrinks with whatever else is on screen. No
@@ -447,7 +454,7 @@ function SoloRelayRunnerInner({ state }: { state: RunState }) {
         </div>
 
         {/* RIGHT column */}
-        <div className="flex flex-col gap-3 md:flex-[2] min-h-0">
+        <div className="flex flex-col gap-3 md:flex-[2] min-h-0 min-w-0">
           <div className="card p-5 shrink-0">
             <h3 className="font-bold text-lg mb-4">Statistics</h3>
             <div className="grid grid-cols-2 gap-3">

@@ -418,7 +418,15 @@ export default function TimerPage() {
       <div className="flex flex-col md:flex-row gap-3 flex-1 min-h-0">
 
         {/* LEFT column */}
-        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0">
+        {/* min-w-0 alongside min-h-0: a flex item's min-width defaults to auto,
+            so without it a wide child stretches its own column past the 3:2
+            split and pushes the page sideways. That was already true (the
+            stats table did it at narrow widths); it started to matter more
+            once the scramble diagram became as wide as its net instead of
+            square, because ScramblePanel budgets that diagram's width by
+            measuring this column — which is only a budget at all if the
+            column's width doesn't depend on what's in it. */}
+        <div ref={leftColRef} className="flex flex-col gap-3 md:flex-[3] min-h-0 min-w-0">
 
           {isFmc ? (
             // No scramble shown at all before Start — it should stay hidden
@@ -535,7 +543,7 @@ export default function TimerPage() {
         </div>
 
         {/* RIGHT column */}
-        <div className="flex flex-col gap-3 md:flex-[2] min-h-0">
+        <div className="flex flex-col gap-3 md:flex-[2] min-h-0 min-w-0">
 
           {/* Statistics */}
           <div className="card p-5 shrink-0">

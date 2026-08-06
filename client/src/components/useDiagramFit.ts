@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useState, type RefObject } from 'react';
 
 const MIN_DIAGRAM = 90;
 // Fixed p-6 padding (48px) + two gap-4 gaps (32px) around the diagram/text/
@@ -36,7 +36,7 @@ export function useDiagramFit(
 ): number {
   const [diagramSize, setDiagramSize] = useState(preferredDiagram);
 
-  useLayoutEffect(() => {
+  const measure = useCallback(() => {
     const text = textRef.current;
     // Horizontal budget. The text row is `w-full`, so its width IS the panel's
     // content width, and — the part that matters — it does not depend on the
@@ -63,6 +63,24 @@ export function useDiagramFit(
     setDiagramSize(Math.max(MIN_DIAGRAM, Math.min(preferredDiagram, available, widthCapped)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxHeight, preferredDiagram, extraOverhead, aspect, ...deps]);
+
+  useLayoutEffect(measure, [measure]);
+
+  // The height budget arrives as a prop, so it re-runs the effect on its own,
+  // but the width budget is measured here — and a window resize that changes
+  // the panel's width without changing `maxHeight` (any purely horizontal
+  // resize) would otherwise leave the diagram sized against a stale width.
+  // Observing the element that budget comes from covers it directly, rather
+  // than hoping something else re-renders. Setting the same number is a no-op
+  // in React, so a resize that doesn't move the answer costs nothing and this
+  // can't feed back on itself.
+  useLayoutEffect(() => {
+    const text = textRef.current;
+    if (!text || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(text);
+    return () => ro.disconnect();
+  }, [textRef, measure]);
 
   return diagramSize;
 }

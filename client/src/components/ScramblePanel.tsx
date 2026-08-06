@@ -13,7 +13,14 @@ import { validateCustomScramble } from '../lib/customScramble';
 // follows from the puzzle's net shape (ScrambleImage's DIAGRAM_ASPECT), so
 // these stay the budget for the scarce dimension: vertical space is what the
 // panel has to share with the timer card below it.
-const DIAGRAM_SIZE: Record<string, number> = { sq1: 200, minx: 320 };
+//
+// fto is the one puzzle where the default height buys too much diagram. Its
+// net is a 2.1:1 strip, so a height that gives a 4:3 cube net a sensible
+// diagram gives FTO one about twice as wide as it was before it stopped being
+// letterboxed, which is more than the panel wants to give it. 180 lands it
+// modestly above its old size (a 324x154 net against the old 278x132) rather
+// than at the 541x257 the shared default produces.
+const DIAGRAM_SIZE: Record<string, number> = { sq1: 200, minx: 320, fto: 180 };
 const DEFAULT_DIAGRAM_SIZE = 300;
 
 // Extra space (px) inserted between the diagram and the text below it, on
