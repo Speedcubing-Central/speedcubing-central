@@ -68,10 +68,10 @@ function DropZone({
   );
 }
 
-// ── The holding / active screen: mirrors SoloRelayRunner's layout language
-// (a dominant clock, a tile strip, a capped scramble panel) but scoped to
-// only this participant's own legs, and driven by the shared server clock
-// (startedAt) instead of an owned timer engine. ──
+// ── The countdown / active screen: mirrors SoloRelayRunner's layout
+// language (a dominant clock, a tile strip, a capped scramble panel) but
+// scoped to only this participant's own legs, and driven by the shared
+// server clock instead of an owned timer engine. ──
 const CLOCK_MIN_HEIGHT = 200;
 const CLOCK_MAX_HEIGHT = 360;
 const CLOCK_SHARE = 0.4;
@@ -82,37 +82,37 @@ const MAX_DIGIT_SIZE = 128;
 function MyRelayPanel({
   room,
   me,
-  holding,
+  countdownStartAt,
   startedAt,
+  serverNow,
   code,
-  press,
-  release,
   markDone,
 }: {
   room: RelayRoomDTO;
   me: RelayParticipantDTO | undefined;
-  holding: string[];
+  countdownStartAt: string | null;
   startedAt: string | null;
+  serverNow: () => number;
   code: string;
-  press: (code: string) => void;
-  release: (code: string) => void;
   markDone: (code: string) => void;
 }) {
-  // relay_started arrives before the (heavier) relay_room_state broadcast
-  // that flips room.status to 'ACTIVE' — keying off startedAt too means the
-  // clock visibly starts the instant that first, lighter event lands
-  // instead of waiting on the second one. Safe to do: by the time
-  // startedAt is set, every leg's scramble was already generated at the
-  // ready-up step (see relaySocket.ts's generateScramblesIfReady), so
-  // whatever `room` data is already in hand has what this screen needs.
-  const isActive = room.status === 'ACTIVE' || !!startedAt;
+  // The instant this relay starts (or started), on the server's clock. The
+  // countdown value is the same number the start will use — the server
+  // commits to it up front — so once it elapses this screen flips to a
+  // running clock on its own, without waiting for relay_started to make the
+  // round trip. That's the point of announcing it early: every client
+  // reaches t=0 together instead of each starting when its own packet lands.
+  const startMs = startedAt
+    ? new Date(startedAt).getTime()
+    : countdownStartAt
+      ? new Date(countdownStartAt).getTime()
+      : null;
   // Being on this screen only means everyone's readied up — scramble
   // generation runs in the background afterward (generateScramblesIfReady
   // in relaySocket.ts) and can take a few seconds for slower events, so
   // there's a real window where a leg's scramble genuinely isn't here yet.
-  // Hold-to-start is disabled client-side during that window (the server
-  // rejects it too — see relay_press/relay_release's scramble check) so a
-  // fast team can't start the clock before every leg's scramble has landed.
+  // The server won't arm the countdown until they've all landed, so this is
+  // just what fills the screen until then.
   const scramblesReady = room.legs.every((l) => !!l.scramble);
   // Generation now retries a slow/failed leg across a few rounds
   // server-side (see generateScramblesIfReady) rather than giving up
@@ -128,24 +128,42 @@ function MyRelayPanel({
     const t = setTimeout(() => setGenWaitingLong(true), 8000);
     return () => clearTimeout(t);
   }, [scramblesReady]);
-  const iAmHolding = !!me && holding.includes(me.id);
   const myLegs = room.legs.filter((l) => l.assignedToId === me?.id).sort((a, b) => a.order - b.order);
   const [selected, setSelected] = useState(0);
   const activeLeg = myLegs[selected];
-  const [now, setNow] = useState(Date.now());
+  // Server time, not Date.now() — this device's own clock is only used via
+  // serverNow()'s offset correction. See useRelaySocket for why.
+  const [now, setNow] = useState(serverNow);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (startMs === null) return;
     let raf = 0;
     const tick = () => {
-      setNow(Date.now());
+      setNow(serverNow());
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isActive]);
+  }, [startMs, serverNow]);
 
-  const elapsedMs = startedAt ? now - new Date(startedAt).getTime() : 0;
+  // Positive while counting down, so `3` covers the first whole second of a
+  // three-second countdown and it reads 3 → 2 → 1 before hitting zero.
+  const untilStartMs = startMs === null ? 0 : startMs - now;
+  const countdownSeconds = Math.ceil(untilStartMs / 1000);
+  // Clamped at zero so a client whose clock estimate is still settling can
+  // never paint a negative time — the original symptom this whole change
+  // exists to fix.
+  const elapsedMs = startMs === null ? 0 : Math.max(0, now - startMs);
+  // Which view this screen is in is decided by the server first and the
+  // local clock only second. The local expiry is what makes the flip feel
+  // instant (it beats relay_started's round trip), but it depends on `now`
+  // advancing — and `now` is driven by requestAnimationFrame, which a
+  // browser stops entirely for a backgrounded tab. Keyed on the local clock
+  // alone, a team-mate who tabbed away during the countdown would come back
+  // to a screen still counting down over an already-running relay.
+  const serverStarted = room.status === 'ACTIVE' || !!startedAt;
+  const isCountingDown = !serverStarted && untilStartMs > 0;
+  const isRunning = serverStarted || (startMs !== null && untilStartMs <= 0);
   const doneCount = room.participants.filter((p) => p.isDone).length;
 
   function legLabel(eventId: string, order: number): string {
@@ -189,24 +207,21 @@ function MyRelayPanel({
     <div ref={leftColRef} className="flex flex-col gap-3 h-full min-h-0">
       <div
         ref={clockRef}
-        className="card relative shrink-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none cursor-pointer"
+        className={clsx(
+          'card relative shrink-0 flex flex-col items-center justify-center overflow-y-auto select-none touch-none',
+          isRunning && !me?.isDone && 'cursor-pointer',
+        )}
         style={{ height: isDesktop ? layout.clockHeight : undefined }}
+        // Only meaningful action left on this surface is stopping — the
+        // start is the countdown's job now, so there's nothing to press
+        // before then.
         onPointerDown={(e) => {
+          if (!isRunning || me?.isDone) return;
           e.preventDefault();
-          if (isActive) {
-            if (!me?.isDone) markDone(code);
-          } else if (scramblesReady) {
-            press(code);
-          }
-        }}
-        onPointerUp={(e) => {
-          if (!isActive && scramblesReady) {
-            e.preventDefault();
-            release(code);
-          }
+          markDone(code);
         }}
       >
-        {isActive ? (
+        {isRunning ? (
           <>
             <div className="font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0" style={{ fontSize: digitFontSize }}>
               {formatTime(elapsedMs, 'NONE', 2)}
@@ -216,6 +231,16 @@ function MyRelayPanel({
                 ? 'Waiting for everyone else to finish…'
                 : `Press Space (or tap) when you finish your events (${doneCount}/${room.participants.length} done)`}
             </p>
+          </>
+        ) : isCountingDown ? (
+          <>
+            <div
+              className="font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0 text-accent"
+              style={{ fontSize: digitFontSize }}
+            >
+              {countdownSeconds}
+            </div>
+            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">Get ready — everyone starts together.</p>
           </>
         ) : !scramblesReady ? (
           <>
@@ -228,17 +253,8 @@ function MyRelayPanel({
           </>
         ) : (
           <>
-            <div
-              className={clsx('font-mono font-bold tabular-nums leading-none w-full text-center px-8 shrink-0', iAmHolding && 'text-red-400')}
-              style={{ fontSize: digitFontSize }}
-            >
-              {holding.length}/{room.participants.length}
-            </div>
-            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">
-              {holding.length === room.participants.length
-                ? 'Everyone is holding. Let go to start!'
-                : 'Hold spacebar (or tap and hold). Starts the instant everyone is holding and the first person lets go.'}
-            </p>
+            <div className="h-10 w-10 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            <p className="text-sm text-muted mt-6 text-center px-4 shrink-0">Everyone's ready. Starting…</p>
           </>
         )}
       </div>
@@ -265,15 +281,15 @@ function MyRelayPanel({
 
       {activeLeg && (
         <div className="flex-1 min-h-0">
-          {/* Scrambles are generated as soon as everyone readies up, not
-              deferred until the actual hold-to-start release (see
-              relaySocket.ts's generateScramblesIfReady) — but that
-              generation itself is backgrounded server-side and can
-              legitimately take a few seconds for some events, so there's a
-              brief real window where a leg's scramble genuinely isn't
-              here yet. `loading` shows the same "Scrambling…" state
-              SoloRelayRunner uses rather than an empty string reading as a
-              solved cube with no scramble at all. */}
+          {/* Scrambles are generated as soon as everyone readies up, well
+              before the countdown (see relaySocket.ts's
+              generateScramblesIfReady) — but that generation is
+              backgrounded server-side and can legitimately take a few
+              seconds for some events, so there's a brief real window where
+              a leg's scramble genuinely isn't here yet. `loading` shows the
+              same "Scrambling…" state SoloRelayRunner uses rather than an
+              empty string reading as a solved cube with no scramble at
+              all. */}
           <ScramblePanel
             eventId={activeLeg.eventId}
             scramble={activeLeg.scramble}
@@ -316,8 +332,9 @@ export default function RelayRoom() {
   const {
     connected,
     room,
-    holding,
+    countdownStartAt,
     startedAt,
+    serverNow,
     completed,
     error,
     setError,
@@ -329,8 +346,6 @@ export default function RelayRoom() {
     startRoom,
     assignEvent,
     toggleReady,
-    press,
-    release,
     markDone,
     adjustDistribution,
     runAgain,
@@ -367,59 +382,21 @@ export default function RelayRoom() {
   const allAssigned = !!room && room.legs.every((l) => l.assignedToId);
   const allReady = !!room && room.participants.length > 0 && room.participants.every((p) => p.isReady);
   const readyCount = room?.participants.filter((p) => p.isReady).length ?? 0;
-  // "Ready" and "scrambles actually generated" are not the same moment —
-  // generation runs in the background once everyone readies up (see
-  // generateScramblesIfReady in relaySocket.ts) and can take a few seconds
-  // for slower events. Without this, a fast team could hold-and-release
-  // before generation finished, starting the relay with a blank scramble
-  // for whichever leg hadn't committed yet. The server rejects the press/
-  // release in that case too, but gating here keeps the client from ever
-  // trying in the first place.
-  const scramblesReady = !!room && room.legs.every((l) => !!l.scramble);
   // Transitioning into the my-events panel only needs allAssigned/allReady —
-  // it shows a "Generating scrambles…" state itself while !scramblesReady
-  // (see MyRelayPanel below) rather than bouncing back to the assignment
-  // screen. canHold gates the actual hold-to-start behavior (keyboard
-  // listener + eligibility to press), which does need scramblesReady.
+  // it shows a "Generating scrambles…" state itself until every scramble has
+  // landed (see MyRelayPanel), then the countdown the server arms at that
+  // same moment, rather than bouncing back to the assignment screen.
   const readyToShowPanel = room?.status === 'ASSIGNING' && allAssigned && allReady;
-  const canHold = readyToShowPanel && scramblesReady;
   const showMyRelayPanel = readyToShowPanel || room?.status === 'ACTIVE';
   const showAssigningScreen = room?.status === 'ASSIGNING' && !showMyRelayPanel;
   const me = room?.participants.find((p) => p.id === myParticipantId);
   const meIsReady = me?.isReady ?? false;
   const meIsDone = me?.isDone ?? false;
 
-  // Hold-to-start is purely a signal to the server (which decides when
-  // everyone has simultaneously held and the first release starts the
-  // shared clock) — not a local timer state machine like the Timer page's.
-  useEffect(() => {
-    if (!canHold || !code) return;
-    const isTextTarget = (t: EventTarget | null) => {
-      const el = t as HTMLElement | null;
-      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
-    };
-    const down = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat || isTextTarget(e.target)) return;
-      e.preventDefault();
-      press(code.toUpperCase());
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || isTextTarget(e.target)) return;
-      e.preventDefault();
-      release(code.toUpperCase());
-    };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
-  }, [canHold, code, press, release]);
-
-  // During ACTIVE, a single Space press (not a hold) signals "I'm done with
-  // my events" — the relay itself stops once every participant has done
-  // this (see relaySocket.ts's relay_mark_done), not on any kind of
-  // simultaneous release the way starting requires.
+  // Starting is entirely the server's countdown now — there is no key to
+  // press for it. During ACTIVE, a single Space press signals "I'm done
+  // with my events"; the relay stops once every participant has done this
+  // (see relaySocket.ts's relay_mark_done).
   useEffect(() => {
     if (room?.status !== 'ACTIVE' || meIsDone || !code) return;
     const isTextTarget = (t: EventTarget | null) => {
@@ -597,7 +574,9 @@ export default function RelayRoom() {
                 <div>
                   <div className="font-semibold">{readyCount} / {room.participants.length} ready</div>
                   <div className="text-xs text-muted">
-                    {allAssigned ? 'Everyone must be ready before you can start holding spacebar.' : 'Assign every event to a person first.'}
+                    {allAssigned
+                      ? 'Once everyone is ready, a 3 second countdown starts the relay for the whole team.'
+                      : 'Assign every event to a person first.'}
                   </div>
                 </div>
                 <button
@@ -649,7 +628,15 @@ export default function RelayRoom() {
 
       {showMyRelayPanel && room && (
         <div className="flex-1 min-h-0">
-          <MyRelayPanel room={room} me={me} holding={holding} startedAt={startedAt} code={(code ?? '').toUpperCase()} press={press} release={release} markDone={markDone} />
+          <MyRelayPanel
+            room={room}
+            me={me}
+            countdownStartAt={countdownStartAt}
+            startedAt={startedAt}
+            serverNow={serverNow}
+            code={(code ?? '').toUpperCase()}
+            markDone={markDone}
+          />
         </div>
       )}
 

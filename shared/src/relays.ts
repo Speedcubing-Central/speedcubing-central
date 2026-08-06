@@ -111,6 +111,11 @@ export interface RelayRoomDTO {
   customRelayId: string | null;
   relayName: string;
   status: RelayRoomStatus;
+  // Set once everyone is ready and every leg's scramble has landed — the
+  // server-clock instant the relay will actually start. Present only during
+  // that countdown window (status is still 'ASSIGNING'); null before it and
+  // cleared once status flips to 'ACTIVE' (startedAt takes over from there).
+  countdownStartAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   participants: RelayParticipantDTO[];
@@ -135,10 +140,20 @@ export interface RelayCompletedResult {
 
 export interface RelayServerToClientEvents {
   relay_room_state: (room: RelayRoomDTO) => void;
-  // Current set of participantIds holding spacebar during the hold-to-start phase.
-  relay_hold_state: (payload: { holding: string[] }) => void;
+  // The relay will start at `startAt` (server clock). Every client renders
+  // the same countdown against its own clock-offset estimate (see
+  // relay_time_sync), so all of them hit zero at the same real instant
+  // regardless of how wrong their local clocks are.
+  relay_countdown: (payload: { startAt: string }) => void;
+  // The armed countdown was called off before it fired (someone left, or
+  // readiness/assignment stopped holding) — back to the ready screen.
+  relay_countdown_cancelled: () => void;
   relay_started: (payload: { startedAt: string }) => void;
   relay_completed: (payload: RelayCompletedResult) => void;
+  // Reply to relay_time_sync. `clientSentAt` is echoed back untouched so the
+  // client can compute this sample's round trip; `serverNow` is the server's
+  // wall clock at the moment it replied.
+  relay_time_sync_result: (payload: { clientSentAt: number; serverNow: number }) => void;
 }
 
 export interface RelayClientToServerEvents {
@@ -147,15 +162,22 @@ export interface RelayClientToServerEvents {
   relay_start_room: (payload: { code: string }) => void; // host-only: LOBBY -> ASSIGNING
   relay_assign_event: (payload: { code: string; legId: string; participantId: string | null }) => void;
   relay_toggle_ready: (payload: { code: string; isReady: boolean }) => void;
-  relay_press: (payload: { code: string }) => void;
-  relay_release: (payload: { code: string }) => void;
-  relay_mark_done: (payload: { code: string }) => void;
+  // NTP-style clock-offset probe. Relay clocks are shared across machines, so
+  // every client has to render elapsed time against the *server's* clock, not
+  // its own — see useRelaySocket's offset estimate.
+  relay_time_sync: (payload: { clientSentAt: number }) => void;
+  // `at` is the presser's own best estimate (in server-clock terms) of when
+  // they actually stopped. Sent so the recorded total matches the number that
+  // was on screen at that moment instead of including the trip to the server;
+  // the server clamps it to a plausible window rather than trusting it.
+  relay_mark_done: (payload: { code: string; at?: number }) => void;
   // host-only, room.status === 'FINISHED': back to ASSIGNING, keeping the
   // existing event assignments so the host can rearrange them — resets
   // everyone's ready/done state, since the assignments might change.
   relay_adjust_distribution: (payload: { code: string }) => void;
   // host-only, room.status === 'FINISHED': back to ASSIGNING with the exact
   // same assignments and everyone already marked ready (nothing changed, so
-  // there's nothing to re-confirm) — lands straight on the hold-to-start screen.
+  // there's nothing to re-confirm) — goes straight into a fresh countdown
+  // once the new scrambles land.
   relay_run_again: (payload: { code: string }) => void;
 }

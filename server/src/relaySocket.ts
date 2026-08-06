@@ -33,26 +33,24 @@ async function fetchRoom(code: string) {
 
 type RoomWithRelations = NonNullable<Awaited<ReturnType<typeof fetchRoom>>>;
 
-// A deliberately narrow query for the hold-to-start hot path (relay_press/
-// relay_release fire on every keypress and need to feel instant) — the full
-// fetchRoom() pulls every leg/participant field via roomInclude for the
-// broadcast DTO, most of which this validation never looks at. Every extra
-// round trip here is latency a user directly feels as "did my press
-// register yet", so this only selects the handful of fields actually
-// needed: whether every leg has an assignee AND a generated scramble,
-// whether every participant is ready, and the participant id list itself
-// (for the "was everyone in the holding set" check).
+// A deliberately narrow query for the one question that gates starting a
+// relay: is this room allowed to begin? The full fetchRoom() pulls every
+// leg/participant field via roomInclude for the broadcast DTO, almost none
+// of which this validation looks at. It's asked on every ready-toggle and
+// again when the countdown actually fires, so it only selects what it
+// needs: whether every leg has an assignee AND a generated scramble, and
+// whether every participant is ready.
 //
 // The scramble check specifically closes a real race: scrambles are
 // generated in the background once everyone's ready (see
 // generateScramblesIfReady), which can legitimately take several seconds
-// for some events — without gating on it here too, a fast team could
-// hold-and-release before that background write actually landed, starting
-// the relay with whichever legs' scrambles hadn't committed yet still
-// blank (a bug reported as "a random event's scramble just doesn't show up
-// sometimes, then fixes itself" — the "fixes itself" was the deferred
+// for some events — without gating on it here too, a fast team could start
+// before that background write actually landed, beginning the relay with
+// whichever legs' scrambles hadn't committed yet still blank (a bug
+// reported as "a random event's scramble just doesn't show up sometimes,
+// then fixes itself" — the "fixes itself" was the deferred
 // generateScramblesIfReady follow-up broadcast finally arriving).
-async function fetchHoldState(code: string) {
+async function fetchStartGateState(code: string) {
   return prisma.relayRoom.findUnique({
     where: { code },
     select: {
@@ -97,6 +95,7 @@ function toRelayRoomDTO(room: RoomWithRelations, relayName: string, viewerPartic
     customRelayId: room.customRelayId,
     relayName,
     status: room.status,
+    countdownStartAt: room.countdownStartAt?.toISOString() ?? null,
     startedAt: room.startedAt?.toISOString() ?? null,
     finishedAt: room.finishedAt?.toISOString() ?? null,
     participants: room.participants.map((p) => ({
@@ -130,10 +129,10 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 }
 
 // If every leg is assigned and every participant is ready, (re)generates
-// every leg's scramble right away instead of waiting for the actual
-// hold-to-start release — so the hold screen (and MyRelayPanel's tile
-// strip) shows real scrambles immediately rather than a blank placeholder
-// while everyone gets ready to go. Safe to do here specifically because
+// every leg's scramble right away rather than at the start itself — the
+// countdown is only armed once these have landed (see maybeArmCountdown),
+// so generating them here is what lets a team see real scrambles while they
+// get their hands on the cube. Safe to do here specifically because
 // reaching "everyone ready" already guarantees the assignments are final:
 // any further reassignment resets ready state straight back to false (see
 // relay_assign_event), which would just re-trigger this same generation
@@ -145,14 +144,14 @@ async function deleteRoomIfEmpty(code: string): Promise<void> {
 // same assignment session (a stray double-click, or "wait, let me check
 // something") — where the legs already generated for this session are
 // still exactly right and must NOT be silently swapped out, since a
-// teammate could already be staring at one of them mid hold-to-start. A
-// live reproduction confirmed this: everyone ready, scrambles land, one
-// participant un-readies and re-readies with no reassignment in between —
-// every leg's scramble changed a couple of seconds later. So force=false
-// skips straight past regeneration once every leg already has a scramble.
-// restartAssigning (force=true — "Run it again"/"Adjust distribution")
-// is a genuinely new attempt reusing the *previous* attempt's still-present
-// leg values, which really do need to be thrown away for fresh ones.
+// teammate could already be staring at one of them. A live reproduction
+// confirmed this: everyone ready, scrambles land, one participant
+// un-readies and re-readies with no reassignment in between — every leg's
+// scramble changed a couple of seconds later. So force=false skips
+// straight past regeneration once every leg already has a scramble.
+// restartAssigning passes force=true for "Run it again"/"Adjust
+// distribution", a genuinely new attempt that must not reuse the previous
+// one's scrambles.
 //
 // getScramble() itself retries transient cubing.js failures once (see
 // scramble.ts), but a few events (444, kilominx, fto, redi_cube) have no
@@ -228,13 +227,24 @@ const MAX_PASSWORD_ATTEMPTS = 5;
 const CHAT_RATE_LIMIT = 5;
 const CHAT_RATE_WINDOW_MS = 5000;
 const MAX_PARTICIPANTS = 20;
+// How far ahead the start instant is announced. Long enough for everyone to
+// get their hands on the cube, short enough not to drag.
+const COUNTDOWN_MS = 3_000;
+// The most a participant's self-reported stop instant is allowed to pull the
+// recorded finish earlier than the moment their relay_mark_done actually
+// reached this server. Sized to cover real network latency and nothing more,
+// so a wrong clock — or a doctored payload — can't invent a fast time.
+const MAX_STOP_CORRECTION_MS = 5_000;
 
 export function registerRelayHandlers(io: RelayIO): void {
   const pendingCleanup = new Map<string, ReturnType<typeof setTimeout>>();
   const failedPasswordAttempts = new Map<string, number>();
   const chatTimestamps = new Map<string, number[]>();
-  // code -> set of participantIds currently holding spacebar (hold-to-start phase).
-  const holding = new Map<string, Set<string>>();
+  // code -> the pending timer that will flip this room to ACTIVE when its
+  // announced countdown expires. Presence in this map is also what "a
+  // countdown is already armed" means, so it doubles as the lock that keeps
+  // two simultaneous ready-toggles from arming two overlapping countdowns.
+  const countdownTimers = new Map<string, ReturnType<typeof setTimeout>>();
   // code -> (participantId -> socketId), so ACTIVE-phase state can be
   // personalized per participant (each only ever sees their own legs' scrambles).
   const participantSockets = new Map<string, Map<string, string>>();
@@ -248,6 +258,8 @@ export function registerRelayHandlers(io: RelayIO): void {
   });
   const toggleReadySchema = z.object({ code: z.string().min(1).max(20), isReady: z.boolean() });
   const sendChatSchema = z.object({ code: z.string().min(1).max(20), message: z.string().min(1).max(500) });
+  const markDoneSchema = z.object({ code: z.string().min(1).max(20), at: z.number().int().positive().optional() });
+  const timeSyncSchema = z.object({ clientSentAt: z.number().int().positive() });
 
   async function emitRelayRoomState(code: string): Promise<void> {
     const room = await fetchRoom(code);
@@ -265,6 +277,108 @@ export function registerRelayHandlers(io: RelayIO): void {
     }
   }
 
+  // ── Starting a relay ──────────────────────────────────────────────────
+  // Replaces the old hold-to-start handshake (everyone holds spacebar, the
+  // first release starts the clock). That design made the shared start
+  // instant a consequence of a race between however many clients' key
+  // events and round trips, which is exactly the wrong thing to build a
+  // clock everyone shares on top of. It's now: everyone readies up, the
+  // server picks one instant three seconds out, announces it, and every
+  // client counts down to that same instant.
+  //
+  // The other half of the fix lives on the client (see useRelaySocket's
+  // clock-offset estimate). A server timestamp is meaningless to a client
+  // that renders it against its own wall clock — a device a few seconds
+  // behind the server computed a *negative* elapsed time, and one running
+  // ahead showed a total higher than the one the server recorded. Both were
+  // reported. Every instant crossing this boundary is server-clock; clients
+  // convert.
+
+  function clearCountdownTimer(code: string): void {
+    const timer = countdownTimers.get(code);
+    if (timer) {
+      clearTimeout(timer);
+      countdownTimers.delete(code);
+    }
+  }
+
+  // Calls off an armed countdown and puts everyone back on the ready
+  // screen. updateMany rather than update so this stays a no-op (instead of
+  // throwing) when the room has already been deleted — leaveRoomCleanup can
+  // reach here immediately after deleting the last participant's room.
+  async function cancelCountdown(code: string): Promise<void> {
+    const wasArmed = countdownTimers.has(code);
+    clearCountdownTimer(code);
+    const { count } = await prisma.relayRoom.updateMany({
+      where: { code, countdownStartAt: { not: null } },
+      data: { countdownStartAt: null },
+    });
+    if (wasArmed || count > 0) io.to(roomName(code)).emit('relay_countdown_cancelled');
+  }
+
+  // Arms the countdown if — and only if — the room is genuinely ready to
+  // start: every leg assigned, every leg's background-generated scramble
+  // landed, and every participant readied up. Idempotent, because the two
+  // callers (a ready-toggle, and scramble generation settling) both fire
+  // for the same "everyone's ready now" moment and either can win.
+  async function maybeArmCountdown(code: string): Promise<void> {
+    if (countdownTimers.has(code)) return;
+    const gate = await fetchStartGateState(code);
+    if (!gate || gate.status !== 'ASSIGNING') return;
+    if (gate.legs.length === 0 || !gate.legs.every((l) => l.assignedToId && l.scramble)) return;
+    if (gate.participants.length === 0 || !gate.participants.every((p) => p.isReady)) return;
+    // Re-checked after the await, then the slot is claimed synchronously
+    // below — no await sits between this check and the countdownTimers.set,
+    // so two concurrent calls can't both get past it. Without that, the
+    // second would overwrite the first's timer (leaking it, so the room
+    // starts twice) and announce a later instant than the one clients had
+    // already started counting down to.
+    if (countdownTimers.has(code)) return;
+
+    const startAt = new Date(Date.now() + COUNTDOWN_MS);
+    countdownTimers.set(
+      code,
+      setTimeout(() => {
+        fireCountdown(code, startAt).catch((e) =>
+          console.error('[relaySocket] countdown failed to start relay:', e instanceof Error ? e.message : e),
+        );
+      }, COUNTDOWN_MS),
+    );
+    await prisma.relayRoom.update({ where: { id: gate.id }, data: { countdownStartAt: startAt } });
+    io.to(roomName(code)).emit('relay_countdown', { startAt: startAt.toISOString() });
+    await emitRelayRoomState(code);
+  }
+
+  async function fireCountdown(code: string, startAt: Date): Promise<void> {
+    countdownTimers.delete(code);
+    const gate = await fetchStartGateState(code);
+    // Re-validated rather than assumed: three seconds is plenty of time for
+    // someone to drop out, and losing a participant mid-ASSIGNING resets
+    // everyone's ready state (see leaveRoomCleanup).
+    const stillValid =
+      !!gate &&
+      gate.status === 'ASSIGNING' &&
+      gate.legs.length > 0 &&
+      gate.legs.every((l) => l.assignedToId && l.scramble) &&
+      gate.participants.length > 0 &&
+      gate.participants.every((p) => p.isReady);
+    if (!stillValid) {
+      await cancelCountdown(code);
+      return;
+    }
+    // startedAt is the instant that was *announced*, not whenever this
+    // callback happened to run — every client already started its clock at
+    // the announced instant, so using the callback's own time would put the
+    // server's recorded total permanently out of step with what the whole
+    // team watched on screen.
+    await prisma.relayRoom.update({
+      where: { id: gate.id },
+      data: { status: 'ACTIVE', startedAt: startAt, countdownStartAt: null },
+    });
+    io.to(roomName(code)).emit('relay_started', { startedAt: startAt.toISOString() });
+    await emitRelayRoomState(code);
+  }
+
   // Removes a participant from their room. During ACTIVE, the row is
   // deliberately left in place instead of deleted — deleting it would let
   // "everyone has marked done" become vacuously true without them ever
@@ -277,13 +391,15 @@ export function registerRelayHandlers(io: RelayIO): void {
     if (!room) return;
     if (room.status === 'ACTIVE') {
       participantSockets.get(code)?.delete(participantId);
-      holding.get(code)?.delete(participantId);
       return;
     }
     await prisma.relayRoomLeg.updateMany({ where: { roomId: room.id, assignedToId: participantId }, data: { assignedToId: null } });
     await prisma.relayParticipant.deleteMany({ where: { id: participantId } });
     if (room.status === 'ASSIGNING') {
       await prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: false } });
+      // Losing a participant just invalidated the readiness this countdown
+      // was armed on, and their legs went back to unassigned besides.
+      await cancelCountdown(code);
     }
     if (room.hostParticipantId === participantId) {
       const remaining = room.participants
@@ -292,7 +408,6 @@ export function registerRelayHandlers(io: RelayIO): void {
       await prisma.relayRoom.update({ where: { id: room.id }, data: { hostParticipantId: remaining[0]?.id ?? null } });
     }
     participantSockets.get(code)?.delete(participantId);
-    holding.get(code)?.delete(participantId);
     await deleteRoomIfEmpty(code);
     await emitRelayRoomState(code);
   }
@@ -453,8 +568,10 @@ export function registerRelayHandlers(io: RelayIO): void {
         const targetId = parsed.data.participantId;
         if (targetId && !room.participants.some((p) => p.id === targetId)) return;
         await prisma.relayRoomLeg.update({ where: { id: leg.id }, data: { assignedToId: targetId } });
-        // Any assignment change requires everyone to re-confirm readiness.
+        // Any assignment change requires everyone to re-confirm readiness,
+        // which also calls off a countdown armed on the old assignment.
         await prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: false } });
+        await cancelCountdown(code);
         await emitRelayRoomState(code);
       }),
     );
@@ -480,131 +597,42 @@ export function registerRelayHandlers(io: RelayIO): void {
         // way, so the client's "Generating scrambles…" screen sees legs
         // fill in as they succeed instead of only updating at the very end.
         await emitRelayRoomState(code);
+        // Un-readying is the one escape hatch out of an armed countdown —
+        // it's what the old design's "let go of spacebar" was for.
+        if (!parsed.data.isReady) {
+          await cancelCountdown(code);
+          return;
+        }
         generateScramblesIfReady(code, () => emitRelayRoomState(code))
-          .then(() => emitRelayRoomState(code))
+          .then(async () => {
+            await emitRelayRoomState(code);
+            // Both the last person readying up and the last scramble
+            // landing can be the moment a room becomes startable, and
+            // either can happen second — maybeArmCountdown re-checks the
+            // whole condition itself and is idempotent, so calling it here
+            // covers both without needing to know which one this was.
+            await maybeArmCountdown(code);
+          })
           .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
       }),
     );
 
-    socket.on(
-      'relay_press',
-      safe(async (raw) => {
-        const parsed = codeSchema.safeParse(raw);
-        if (!parsed.success || !myParticipantId) return;
-        const code = parsed.data.code.toUpperCase();
-        let set = holding.get(code);
-        if (!set) {
-          set = new Set();
-          holding.set(code, set);
-        }
-        // Add synchronously, before the async validation below — a
-        // same-tick relay_release for this same participant checks
-        // set.has() synchronously too (JS's single-threaded event loop
-        // guarantees no other handler interleaves between two synchronous
-        // statements), so ordering between a fast press-then-release is
-        // always preserved exactly as received rather than decided by
-        // whichever one's own validation round trip happens to resolve
-        // first. Without this, a press still awaiting fetchHoldState below
-        // when its own release arrives moments later left that release
-        // seeing "not currently held" (a no-op, since the add hadn't
-        // landed yet) — and then the press's now-stale add landed anyway,
-        // stranding this participant shown as still holding even though
-        // they'd already let go. Reproduced directly with a fast tap —
-        // matches the reported "shows people pressing when they're not."
-        // Rolled back below if validation actually fails.
-        set.add(myParticipantId);
-        const room = await fetchHoldState(code);
-        // Only allowed once every leg is assigned, everyone has readied up,
-        // AND every leg's background-generated scramble has actually
-        // landed — validated server-side, never just trusted from the
-        // client. That last check matters: ready and "scrambles exist" are
-        // not the same moment (see generateScramblesIfReady / fetchHoldState's
-        // comment) — without it, a fast team could start holding before
-        // generation finished.
-        const stillValid =
-          !!room &&
-          room.status === 'ASSIGNING' &&
-          room.legs.every((l) => l.assignedToId && l.scramble) &&
-          room.participants.every((p) => p.isReady);
-        if (!stillValid) {
-          set.delete(myParticipantId);
-          return;
-        }
-        io.to(roomName(code)).emit('relay_hold_state', { holding: [...set] });
-      }),
-    );
-
-    socket.on(
-      'relay_release',
-      safe(async (raw) => {
-        const parsed = codeSchema.safeParse(raw);
-        if (!parsed.success || !myParticipantId) return;
-        const code = parsed.data.code.toUpperCase();
-        const set = holding.get(code);
-        if (!set || !set.has(myParticipantId)) return;
-        const room = await fetchHoldState(code);
-        if (!room || room.status !== 'ASSIGNING' || room.legs.some((l) => !l.assignedToId || !l.scramble)) {
-          set.delete(myParticipantId);
-          return;
-        }
-
-        // The trigger is a release observed while every participant was
-        // simultaneously holding — the first person to let go starts the
-        // shared clock. A release before everyone was holding just drops
-        // this participant out of the hold set (they must press again).
-        const everyoneWasHolding = room.participants.length > 0 && room.participants.every((p) => set.has(p.id));
-        set.delete(myParticipantId);
-
-        if (!everyoneWasHolding) {
-          io.to(roomName(code)).emit('relay_hold_state', { holding: [...set] });
-          // The client also guesses locally whether its own release is the
-          // triggering one (from its last-known holding set, to start the
-          // clock without waiting on a round trip — see useRelaySocket's
-          // release()). That guess can occasionally be wrong (e.g. someone
-          // else's release landed on the server microseconds earlier than
-          // this client's copy of the holding set reflected). A room_state
-          // broadcast here — cheap; the room is still just ASSIGNING, no
-          // personalized per-participant emits — is what corrects a wrong
-          // guess: it carries the real startedAt (still null), and the
-          // client resyncs its local state to it on every room_state.
-          await emitRelayRoomState(code);
-          return;
-        }
-
-        holding.delete(code);
-        // Tell every client the hold set is now empty — without this, each
-        // client's own locally-cached `holding` array (see useRelaySocket)
-        // is simply never updated again after this point (the UI that
-        // reads it is hidden once the room goes ACTIVE, but the stale value
-        // itself lives on in memory). If this same room later returns to a
-        // fresh hold-to-start screen ("Run it again"), that stale "everyone
-        // was holding" snapshot is still sitting there and renders
-        // immediately, before anyone has pressed anything in the new
-        // attempt — the reported "shows people pressing when they're not."
-        io.to(roomName(code)).emit('relay_hold_state', { holding: [] });
-        // Scrambles are guaranteed to exist by this point — both this
-        // handler and relay_press independently check every leg has one
-        // (see fetchHoldState's comment on why "ready" alone doesn't
-        // guarantee that).
-        //
-        // startedAt comes from this Update's own return value rather than a
-        // second fetch right after — an earlier version re-fetched the
-        // whole room here just to read back a timestamp it had just set,
-        // adding a full extra round trip to the one action (starting the
-        // shared clock) where latency is most noticeable.
-        const updated = await prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ACTIVE', startedAt: new Date() } });
-        if (updated.startedAt) {
-          io.to(roomName(code)).emit('relay_started', { startedAt: updated.startedAt.toISOString() });
-        }
-        await emitRelayRoomState(code);
-      }),
-    );
+    // Deliberately synchronous and DB-free: this measures the gap between
+    // the two clocks, so anything awaited between receiving the probe and
+    // reading Date.now() would be measured as clock difference and skew
+    // every client's elapsed time by however long it took.
+    socket.on('relay_time_sync', (raw) => {
+      const parsed = timeSyncSchema.safeParse(raw);
+      if (!parsed.success) return;
+      socket.emit('relay_time_sync_result', { clientSentAt: parsed.data.clientSentAt, serverNow: Date.now() });
+    });
 
     socket.on(
       'relay_mark_done',
       safe(async (raw) => {
-        const parsed = codeSchema.safeParse(raw);
+        const parsed = markDoneSchema.safeParse(raw);
         if (!parsed.success || !myParticipantId) return;
+        const arrivedAt = Date.now();
         const code = parsed.data.code.toUpperCase();
         const room = await fetchRoom(code);
         if (!room || room.status !== 'ACTIVE') return;
@@ -618,8 +646,21 @@ export function registerRelayHandlers(io: RelayIO): void {
           return;
         }
 
-        const finishedAt = new Date();
-        const totalTimeMs = finishedAt.getTime() - fresh.startedAt!.getTime();
+        // Prefer the presser's own clock-corrected stop instant over "when
+        // this message reached the server", so the recorded total is the
+        // number that was actually on their screen — a relay time shouldn't
+        // include the trip to a server. Clamped, never trusted: no earlier
+        // than the start, and no more than MAX_STOP_CORRECTION_MS before
+        // this message genuinely arrived, so the correction can only ever
+        // be latency-sized.
+        const startedMs = fresh.startedAt!.getTime();
+        const reportedAt = parsed.data.at;
+        const stoppedMs =
+          reportedAt === undefined
+            ? arrivedAt
+            : Math.min(arrivedAt, Math.max(reportedAt, startedMs, arrivedAt - MAX_STOP_CORRECTION_MS));
+        const finishedAt = new Date(stoppedMs);
+        const totalTimeMs = stoppedMs - startedMs;
         await prisma.relayRoom.update({ where: { id: fresh.id }, data: { status: 'FINISHED', finishedAt } });
 
         // The "everyone's done, clock stopped" signal every participant is
@@ -665,9 +706,10 @@ export function registerRelayHandlers(io: RelayIO): void {
     // Shared by relay_adjust_distribution/relay_run_again: both take a
     // FINISHED room back to ASSIGNING with the same leg assignments, just
     // differing in whether ready state carries over. `keepReady=true` is
-    // "run it again" (nothing changed, skip straight to hold-to-start);
-    // `keepReady=false` is "adjust distribution" (assignments might change,
-    // so everyone has to re-confirm).
+    // "run it again" (nothing changed, so it goes straight into a fresh
+    // countdown as soon as the new scrambles land); `keepReady=false` is
+    // "adjust distribution" (assignments might change, so everyone has to
+    // re-confirm).
     async function restartAssigning(code: string, participantId: string, keepReady: boolean): Promise<void> {
       const room = await fetchRoom(code);
       if (!room) return;
@@ -677,29 +719,37 @@ export function registerRelayHandlers(io: RelayIO): void {
       }
       if (room.status !== 'FINISHED') return;
       await prisma.$transaction([
-        prisma.relayRoom.update({ where: { id: room.id }, data: { status: 'ASSIGNING', startedAt: null, finishedAt: null } }),
+        prisma.relayRoom.update({
+          where: { id: room.id },
+          data: { status: 'ASSIGNING', startedAt: null, finishedAt: null, countdownStartAt: null },
+        }),
         prisma.relayParticipant.updateMany({ where: { roomId: room.id }, data: { isReady: keepReady, isDone: false } }),
+        // Blanking the previous attempt's scrambles is what makes
+        // "everyone is ready" mean "ready to start *this* round". With
+        // them left in place, "run it again" lands every participant
+        // already-ready against legs that still look fully scrambled, so
+        // maybeArmCountdown would happily start a countdown — and the
+        // relay — against the round they just finished, with the fresh
+        // scrambles swapping in underneath them mid-solve.
+        prisma.relayRoomLeg.updateMany({ where: { roomId: room.id }, data: { scramble: '' } }),
       ]);
-      // Belt-and-suspenders alongside relay_release's own reset when a
-      // round actually starts (the normal path this should already be
-      // clear by) — a fresh attempt should never inherit a stale "everyone
-      // was holding" snapshot from whatever happened in the last one.
-      holding.delete(code);
-      io.to(roomName(code)).emit('relay_hold_state', { holding: [] });
+      clearCountdownTimer(code);
       await emitRelayRoomState(code);
       // "Run it again" (keepReady) lands everyone back in an all-ready state
       // without going through relay_toggle_ready, so it has to trigger
-      // scramble generation itself — otherwise the hold screen would show
-      // the previous attempt's stale scrambles. A no-op for "adjust
-      // distribution" (keepReady=false leaves the room not-all-ready). Not
-      // awaited, same reasoning as relay_toggle_ready: generation can take
-      // several seconds and nothing about landing on the ASSIGNING screen
-      // depends on scrambles already existing. force=true — unlike
-      // relay_toggle_ready's own call, the legs here still hold the
-      // *previous* attempt's scrambles (restartAssigning never clears
-      // them), which is exactly the stale data this needs to overwrite.
+      // scramble generation — and, once that lands, the countdown — itself.
+      // A no-op for "adjust distribution" (keepReady=false leaves the room
+      // not-all-ready, so both calls below decline). Not awaited, same
+      // reasoning as relay_toggle_ready: generation can take several seconds
+      // and nothing about landing on the ASSIGNING screen depends on
+      // scrambles already existing. force=true is belt-and-braces now that
+      // the transaction above blanks every leg (which by itself already
+      // defeats the "everything already has a scramble" early return).
       generateScramblesIfReady(code, () => emitRelayRoomState(code), true)
-        .then(() => emitRelayRoomState(code))
+        .then(async () => {
+          await emitRelayRoomState(code);
+          await maybeArmCountdown(code);
+        })
         .catch((e) => console.error('[relaySocket] scramble generation failed:', e instanceof Error ? e.message : e));
     }
 

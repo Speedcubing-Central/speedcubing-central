@@ -316,7 +316,15 @@ model RelayRoom {
   presetId      String?
   customRelayId String?
   status        RelayStatus @default(LOBBY)
-  startedAt     DateTime? // set once, the moment the first holder releases — the shared clock's t=0
+  // Set the moment every leg is assigned, everyone is ready, and every
+  // scramble has landed: the future instant (server clock) the relay will
+  // actually begin, announced ~3s ahead so every client can render the same
+  // countdown. Cleared when the countdown fires or is cancelled.
+  countdownStartAt DateTime?
+  // The shared clock's t=0. Deliberately set to exactly the countdownStartAt
+  // that was announced, not to whenever the server's timer callback happened
+  // to run — every client already committed to that instant.
+  startedAt     DateTime?
   finishedAt    DateTime? // set once, the moment the last participant signals done
   createdAt     DateTime    @default(now())
 
@@ -329,7 +337,7 @@ model RelayRoomLeg {
   roomId       String
   eventId      String
   order        Int // position in the relay; disambiguates duplicate events (e.g. two 3x3 legs)
-  scramble     String  @default("") // filled in once assignment locks (on the start-triggering release)
+  scramble     String  @default("") // generated in the background once every leg is assigned and everyone is ready
   assignedToId String? // RelayParticipant.id, null until dragged onto someone
   splitMs      Int?
 

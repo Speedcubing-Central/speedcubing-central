@@ -185,6 +185,32 @@ There is no admin account or admin role — see Roles below.
   manual entry, gated on `enabled` (round active, not awaiting a penalty choice, correct
   entry mode). Inspection display for both count directions is capped at the same +2/DNF
   thresholds the engine uses internally when the solve actually starts.
+- **Team Relay's shared clock is server-time, and starts on a countdown.** Solo relays
+  own a normal hold-to-start timer engine (`useRelayTimerEngine`); a *team* relay can't,
+  because one clock spans many machines. Two rules follow, and breaking either one
+  reintroduces a bug testers actually hit:
+  1. **Every instant on the wire is the server's clock, and clients convert.** Consumer
+     device clocks are routinely seconds off, so rendering a server timestamp against
+     `Date.now()` directly produced a *negative* elapsed time on a device running behind
+     the server, and a displayed total higher than the recorded one on a device running
+     ahead. `useRelaySocket` estimates the offset NTP-style (`relay_time_sync` →
+     `relay_time_sync_result`, best-of-burst by lowest round trip, re-measured per burst
+     so a sleep/resume or NTP correction can't leave a stale offset locked in) and
+     exposes `serverNow()`. Nothing in the relay UI should call `Date.now()` directly.
+     `relay_mark_done` also carries the presser's own `serverNow()` stamp so the total is
+     the number that was on their screen rather than that plus the trip to the server;
+     the server clamps it to a latency-sized correction instead of trusting it.
+  2. **The start instant is announced before it happens, never raced for.** The old design
+     had everyone hold spacebar and let the first release start the clock, which made the
+     shared t=0 a function of N clients' key events and round trips. Now: everyone readies
+     up, and once every leg is assigned *and* every scramble has landed, the server arms a
+     ~3s countdown (`maybeArmCountdown`), broadcasts the instant, and starts at exactly
+     that instant — `startedAt` is deliberately the announced `countdownStartAt`, not
+     whenever the server's timer callback ran, because every client already committed to
+     it. Clients therefore flip to the running clock locally on expiry without waiting for
+     `relay_started`. View state still keys off server truth first (`room.status` /
+     `startedAt`) and the local clock only second: `now` is driven by
+     `requestAnimationFrame`, which a browser stops dead for a backgrounded tab.
 - **Security:** helmet, gzip `compression`, per-IP rate limiting on `/api`, CORS locked to
   `FRONTEND_URL`, and a central error handler that never leaks stack traces to clients.
 - **Mobile app** (`mobile/`, Expo SDK 54 / React Native, iOS + Android). See
