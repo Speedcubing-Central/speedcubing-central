@@ -20,6 +20,11 @@ const FIXED_OVERHEAD = 80;
 // Pass `maxHeight: undefined` where there's no such budget (Battle Mode, or
 // the Timer page on mobile where the whole page scrolls instead) — the
 // diagram just renders at its preferred size there.
+// The returned number is the diagram's HEIGHT. `aspect` (width / height, from
+// ScrambleImage's DIAGRAM_ASPECT) is 1 for the square nets, where height and
+// width are the same thing; for the wide ones it's what turns the height this
+// returns into a width, so this hook has to know it in order to keep that
+// width inside the panel.
 export function useDiagramFit(
   textRef: RefObject<HTMLElement>,
   btnRef: RefObject<HTMLElement>,
@@ -27,22 +32,37 @@ export function useDiagramFit(
   preferredDiagram: number,
   deps: readonly unknown[],
   extraOverhead = 0,
+  aspect = 1,
 ): number {
   const [diagramSize, setDiagramSize] = useState(preferredDiagram);
 
   useLayoutEffect(() => {
+    const text = textRef.current;
+    // Horizontal budget. The text row is `w-full`, so its width IS the panel's
+    // content width, and — the part that matters — it does not depend on the
+    // diagram, so reading it here doesn't reintroduce the circularity this
+    // hook's header warns about the way measuring the diagram's own container
+    // would. Infinity when it isn't mounted yet: Math.min then just ignores it,
+    // and the effect re-runs on the deps once it is.
+    //
+    // A width cap didn't exist before because the box was square and always
+    // smaller than the panel. A 1.6-wide megaminx box is not: at the preferred
+    // 320 height it wants 512px, which is wider than the panel on a phone, so
+    // without this it would overflow (the card clips) instead of shrinking.
+    const maxWidth = text?.clientWidth ?? Infinity;
+    const widthCapped = maxWidth / aspect;
+
     if (maxHeight === undefined) {
-      setDiagramSize(preferredDiagram);
+      setDiagramSize(Math.min(preferredDiagram, widthCapped));
       return;
     }
-    const text = textRef.current;
     if (!text) return;
     const textHeight = text.scrollHeight;
     const btnHeight = btnRef.current?.offsetHeight ?? 0;
     const available = maxHeight - FIXED_OVERHEAD - extraOverhead - textHeight - btnHeight;
-    setDiagramSize(Math.max(MIN_DIAGRAM, Math.min(preferredDiagram, available)));
+    setDiagramSize(Math.max(MIN_DIAGRAM, Math.min(preferredDiagram, available, widthCapped)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxHeight, preferredDiagram, extraOverhead, ...deps]);
+  }, [maxHeight, preferredDiagram, extraOverhead, aspect, ...deps]);
 
   return diagramSize;
 }

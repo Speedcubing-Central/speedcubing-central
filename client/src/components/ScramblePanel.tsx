@@ -2,14 +2,17 @@ import { useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
-import { ScrambleImage } from './ScrambleImage';
+import { ScrambleImage, DIAGRAM_ASPECT } from './ScrambleImage';
 import { ScrambleText } from './ScrambleText';
 import { useDiagramFit } from './useDiagramFit';
 import { validateCustomScramble } from '../lib/customScramble';
 
-// Per-puzzle preferred diagram size, in px — the size used whenever there's
+// Per-puzzle preferred diagram HEIGHT, in px — the size used whenever there's
 // room for it. sq1's 3D render is legible small; megaminx's 2D net needs to
-// be bigger to read; everything else gets a generously-sized default.
+// be bigger to read; everything else gets a generously-sized default. Width
+// follows from the puzzle's net shape (ScrambleImage's DIAGRAM_ASPECT), so
+// these stay the budget for the scarce dimension: vertical space is what the
+// panel has to share with the timer card below it.
 const DIAGRAM_SIZE: Record<string, number> = { sq1: 200, minx: 320 };
 const DEFAULT_DIAGRAM_SIZE = 300;
 
@@ -80,7 +83,9 @@ export function ScramblePanel({
   const font = textSize(scramble, eventId);
   const extraGap = EXTRA_GAP[eventId] ?? 0;
 
-  const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font], extraGap);
+  const aspect = DIAGRAM_ASPECT[eventId] ?? 1;
+
+  const diagramSize = useDiagramFit(textRef, btnRef, maxHeight, preferredDiagram, [eventId, scramble, loading, font], extraGap, aspect);
 
   function openEditor() {
     setDraft('');

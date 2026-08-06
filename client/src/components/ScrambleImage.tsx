@@ -12,6 +12,34 @@ const PUZZLE_MAP: Record<string, string> = {
   kilominx: 'kilominx', fto: 'fto', redi_cube: 'redi_cube',
 };
 
+// Aspect ratio (width / height) of the SVG canvas cubing.js draws each 2D net
+// on — its viewBox, read straight out of `puzzles[name].svg()` rather than
+// eyeballed. A <twisty-player> scales that canvas into its host element with
+// the default preserveAspectRatio (xMidYMid meet), so a host box that isn't
+// the canvas's shape letterboxes it and throws the difference away as padding
+// nobody asked for.
+//
+// The big cubes, megaminx, kilominx and skewb all draw on an 800x500 canvas,
+// so a square box rendered them at 62.5% of its own height: a 300px box put a
+// 5x5 net 175px tall on screen and padded the remaining 125px. Matching the
+// box to the canvas turns the same vertical budget into a 280px-tall net
+// (+60% height, +156% area), measured in a browser against the real SVGs.
+//
+// Only puzzles whose canvas is meaningfully wider than tall are listed;
+// anything absent keeps the square box it has always had. 2x2 (1.35), 3x3
+// (1.18), pyraminx (1.14) and redi cube (1.31) are close enough to square
+// that they're left alone.
+export const DIAGRAM_ASPECT: Record<string, number> = {
+  '444': 1.6, '444bf': 1.6,
+  '555': 1.6, '555bf': 1.6,
+  '666': 1.6, '666bf': 1.6,
+  '777': 1.6, '777bf': 1.6,
+  minx: 1.6,
+  kilominx: 1.6,
+  skewb: 1.6,
+  fto: 2368 / 1216,
+};
+
 const SIZE_MAP: Record<string, number> = {
   '222': 220, '222bf': 220,
   '333': 250, '333oh': 250, '333bf': 250, '333fm': 250, '333ft': 250, '333mbf': 250,
@@ -73,6 +101,11 @@ function ClockImage({ scramble }: { scramble: string }) {
   return <div ref={containerRef} style={{ width: RENDER_W, height: RENDER_H }} />;
 }
 
+// `size` is the diagram's HEIGHT. For everything not in DIAGRAM_ASPECT the
+// width matches it, exactly as when this box was always square; for the wide
+// nets the width follows from the aspect, so callers keep budgeting the one
+// dimension that's actually scarce (see ScramblePanel/useDiagramFit, where the
+// vertical space is what has to be shared with the timer).
 export function ScrambleImage({
   eventId,
   scramble,
@@ -86,7 +119,8 @@ export function ScrambleImage({
     return <ClockImage scramble={scramble} />;
   }
 
-  const resolvedSize = size ?? SIZE_MAP[eventId] ?? 160;
+  const height = size ?? SIZE_MAP[eventId] ?? 160;
+  const width = Math.round(height * (DIAGRAM_ASPECT[eventId] ?? 1));
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -95,8 +129,8 @@ export function ScrambleImage({
     const viz = eventId === 'sq1' ? 'PG3D' : '2D';
     const lat = eventId === 'sq1' ? 25 : undefined;
     const lon = eventId === 'sq1' ? 30 : undefined;
-    spawnPlayer(container, PUZZLE_MAP[eventId] ?? '3x3x3', scramble, resolvedSize, resolvedSize, viz, lat, lon);
-  }, [eventId, scramble, resolvedSize]);
+    spawnPlayer(container, PUZZLE_MAP[eventId] ?? '3x3x3', scramble, width, height, viz, lat, lon);
+  }, [eventId, scramble, width, height]);
 
-  return <div ref={containerRef} style={{ width: resolvedSize, height: resolvedSize }} />;
+  return <div ref={containerRef} style={{ width, height }} />;
 }
